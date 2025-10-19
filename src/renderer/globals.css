@@ -132,3 +132,17 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+body,
+html,
+#root {
+  background-color: transparent;
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
