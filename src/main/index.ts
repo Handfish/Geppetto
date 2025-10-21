@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, globalShortcut } from 'electron'
 import { join } from 'node:path'
 import { Effect, Layer } from 'effect'
 import { GitHubAuthService } from './github/auth-service'
@@ -27,7 +27,7 @@ const MainLayer = Layer.mergeAll(
 
 function createMainWindow() {
   const mainWindow = new BrowserWindow({
-    width: 800,
+    width: 1600,
     height: 600,
     show: false,
     center: true,
@@ -125,6 +125,23 @@ app.whenReady().then(async () => {
   if (process.env.NODE_ENV === 'development') {
     consoleWindow = createConsoleWindow()
   }
+
+  // Register global shortcuts for carousel navigation
+  globalShortcut.register('Left', () => {
+    console.log('[Hotkey] Left arrow pressed')
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('carousel:prev')
+    }
+  })
+
+  globalShortcut.register('Right', () => {
+    console.log('[Hotkey] Right arrow pressed')
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('carousel:next')
+    }
+  })
+
+  console.log('[Hotkeys] Registered: Left, Right for carousel navigation')
 })
 
 // Handle OAuth callback URLs on macOS
@@ -176,3 +193,9 @@ if (!gotTheLock) {
     }
   })
 }
+
+// Clean up global shortcuts when app quits
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
+  console.log('[Hotkeys] Unregistered all shortcuts')
+})
