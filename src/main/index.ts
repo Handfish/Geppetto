@@ -136,10 +136,11 @@ app.on('open-url', (event, url) => {
     // Forward to auth service via global event emitter
     app.emit('oauth-callback', url)
 
-    // Bring app to foreground
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
+    // Bring app to foreground - prefer console window in development
+    const targetWindow = consoleWindow || mainWindow
+    if (targetWindow) {
+      if (targetWindow.isMinimized()) targetWindow.restore()
+      targetWindow.focus()
     }
   }
 })
@@ -167,10 +168,11 @@ if (!gotTheLock) {
       console.log('[Protocol] No OAuth callback URL found in command line')
     }
 
-    // Focus the main window
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
+    // Focus the window - prefer console window in development
+    const targetWindow = consoleWindow || mainWindow
+    if (targetWindow) {
+      if (targetWindow.isMinimized()) targetWindow.restore()
+      targetWindow.focus()
     }
   })
 }
