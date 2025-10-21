@@ -1,5 +1,5 @@
 import { Schema as S } from 'effect'
-import { GitHubUser, GitHubRepository, GitHubIssue, AuthenticationError, NetworkError, NotFoundError } from './schemas'
+import { GitHubUser, GitHubRepository, GitHubIssue, GitHubPullRequest, AuthenticationError, NetworkError, NotFoundError } from './schemas'
 
 export const GitHubIpcContracts = {
   signIn: {
@@ -61,7 +61,7 @@ export const GitHubIpcContracts = {
       repo: S.String,
       state: S.optional(S.Literal('open', 'closed', 'all')),
     }),
-    output: S.Array(S.Unknown),
+    output: S.Array(GitHubPullRequest),
     errors: S.Union(AuthenticationError, NetworkError, NotFoundError),
   },
 } as const

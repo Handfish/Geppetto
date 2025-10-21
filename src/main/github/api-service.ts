@@ -1,6 +1,6 @@
 import { Effect, Option, Redacted, Schema as S } from 'effect'
 import { NotAuthenticatedError } from './errors'
-import { GitHubRepository, GitHubIssue } from '../../shared/schemas'
+import { GitHubRepository, GitHubIssue, GitHubPullRequest } from '../../shared/schemas'
 import { GitHubHttpService } from './http-service'
 import { SecureStoreService } from './store-service'
 
@@ -62,7 +62,7 @@ export class GitHubApiService extends Effect.Service<GitHubApiService>()('GitHub
           return yield* httpService.makeAuthenticatedRequest(
             `/repos/${owner}/${repo}/pulls?state=${state}`,
             token,
-            S.Array(S.Any)
+            S.Array(GitHubPullRequest)
           )
         }),
 
