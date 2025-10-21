@@ -24,7 +24,7 @@ export class GitHubApiService extends Effect.Service<GitHubApiService>()('GitHub
       })
     })
 
-    return GitHubApiService.make({
+    return {
       getRepos: (username?: string) =>
         Effect.gen(function* () {
           const token = yield* getToken
@@ -62,7 +62,7 @@ export class GitHubApiService extends Effect.Service<GitHubApiService>()('GitHub
           return yield* httpService.makeAuthenticatedRequest(
             `/repos/${owner}/${repo}/pulls?state=${state}`,
             token,
-            S.Array(S.Unknown)
+            S.Array(S.Any)
           )
         }),
 
@@ -77,7 +77,7 @@ export class GitHubApiService extends Effect.Service<GitHubApiService>()('GitHub
       signOut: Effect.gen(function* () {
         yield* storeService.clearAuth
       }),
-    })
+    }
   }),
 }) {}
 

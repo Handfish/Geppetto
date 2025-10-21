@@ -42,6 +42,13 @@ function createMainWindow() {
     }
   })
 
+  // Silence unnecessary Autofill errors in dev tools
+  mainWindow.webContents.on('console-message', (event, level, message) => {
+    if (message.includes('Autofill.enable') || message.includes('Autofill.setAddresses')) {
+      event.preventDefault()
+    }
+  })
+
   // Register the route with electron-router-dom
   registerRoute({
     id: 'main',
@@ -65,7 +72,8 @@ if (process.defaultApp) {
 let mainWindow: BrowserWindow | null = null
 
 app.whenReady().then(async () => {
-  Effect.runPromise(
+  // Wait for IPC handlers to be fully set up before creating the window
+  await Effect.runPromise(
     setupGitHubIpcHandlers.pipe(Effect.provide(MainLayer))
   )
 
@@ -94,16 +102,22 @@ app.on('open-url', (event, url) => {
 const gotTheLock = app.requestSingleInstanceLock()
 
 if (!gotTheLock) {
+  console.log('[Protocol] Second instance detected, quitting...')
   app.quit()
 } else {
-  app.on('second-instance', (_event, commandLine) => {
-    console.log('[Protocol] Received command line (Windows/Linux):', commandLine)
+  console.log('[Protocol] Got the lock, setting up second-instance handler')
+  app.on('second-instance', (_event, commandLine, workingDirectory) => {
+    console.log('[Protocol] Second instance triggered!')
+    console.log('[Protocol] Command line:', commandLine)
+    console.log('[Protocol] Working directory:', workingDirectory)
 
     // Find protocol URL in command line arguments
     const url = commandLine.find(arg => arg.startsWith(`${PROTOCOL_SCHEME}://`))
     if (url) {
       console.log('[Protocol] Found OAuth callback URL:', url)
       app.emit('oauth-callback', url)
+    } else {
+      console.log('[Protocol] No OAuth callback URL found in command line')
     }
 
     // Focus the main window

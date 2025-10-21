@@ -5,6 +5,6 @@ export class GitHubUser extends S.Class<GitHubUser>('GitHubUser')({
   id: S.Number,
   name: S.NullOr(S.String),
   avatar_url: S.String,
-  email: S.optional(S.String),
+  email: S.optional(S.NullOr(S.String)),
 }) {}
 

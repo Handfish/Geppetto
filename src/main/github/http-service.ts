@@ -5,11 +5,11 @@ import { GitHubTokenResponse } from './schemas'
 
 export class GitHubHttpService extends Effect.Service<GitHubHttpService>()('GitHubHttpService', {
   sync: () => ({
-    makeAuthenticatedRequest: <A>(
+    makeAuthenticatedRequest: <A, I = unknown, R = never>(
       endpoint: string,
       token: string,
-      schema: S.Schema<A, unknown>
-    ): Effect.Effect<A, GitHubApiError> =>
+      schema: S.Schema<A, I, R>
+    ): Effect.Effect<A, GitHubApiError, R> =>
       Effect.gen(function* () {
         const response = yield* Effect.tryPromise({
           try: () =>
@@ -30,9 +30,12 @@ export class GitHubHttpService extends Effect.Service<GitHubHttpService>()('GitH
         if (!response.ok) {
           const errorText = yield* Effect.tryPromise({
             try: () => response.text(),
-            catch: () => 'Unknown error',
+            catch: () => new GitHubApiError({
+              message: 'Unknown error',
+              endpoint,
+            }),
           })
-          
+
           return yield* Effect.fail(
             new GitHubApiError({
               message: `GitHub API error: ${response.status} ${response.statusText} - ${errorText}`,
@@ -133,7 +136,59 @@ export class GitHubHttpService extends Effect.Service<GitHubHttpService>()('GitH
 
     fetchUser: (token: string): Effect.Effect<GitHubUser, GitHubApiError> =>
       Effect.gen(function* () {
-        return yield* GitHubHttpService.makeAuthenticatedRequest('/user', token, GitHubUser)
+        const endpoint = '/user'
+        const response = yield* Effect.tryPromise({
+          try: () =>
+            fetch(`https://api.github.com${endpoint}`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'User-Agent': 'GitHub-Desktop-Clone',
+                Accept: 'application/vnd.github.v3+json',
+              },
+            }),
+          catch: (error) =>
+            new GitHubApiError({
+              message: error instanceof Error ? error.message : 'Request failed',
+              endpoint,
+            }),
+        })
+
+        if (!response.ok) {
+          const errorText = yield* Effect.tryPromise({
+            try: () => response.text(),
+            catch: () => new GitHubApiError({
+              message: 'Unknown error',
+              endpoint,
+            }),
+          })
+
+          return yield* Effect.fail(
+            new GitHubApiError({
+              message: `GitHub API error: ${response.status} ${response.statusText} - ${errorText}`,
+              status: response.status,
+              endpoint,
+            })
+          )
+        }
+
+        const data = yield* Effect.tryPromise({
+          try: () => response.json(),
+          catch: (error) =>
+            new GitHubApiError({
+              message: error instanceof Error ? error.message : 'Failed to parse response',
+              endpoint,
+            }),
+        })
+
+        return yield* S.decodeUnknown(GitHubUser)(data).pipe(
+          Effect.mapError(
+            (error) =>
+              new GitHubApiError({
+                message: `Schema validation failed: ${error.message}`,
+                endpoint,
+              })
+          )
+        )
       }),
   }),
 }) {}

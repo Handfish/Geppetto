@@ -36,13 +36,12 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
           yield* Effect.sync(() => shell.openExternal(authUrl.toString()))
 
           // Wait for OAuth callback via protocol handler
-          const code = yield* Effect.async<
-            string,
-            GitHubAuthError | GitHubAuthTimeout
-          >(resume => {
+          console.log('[Auth] Setting up oauth-callback listener...')
+          const code = yield* Effect.async<string, GitHubAuthError>(resume => {
             let hasResolved = false
 
             const handleCallback = (callbackUrl: string) => {
+              console.log('[Auth] handleCallback called with:', callbackUrl)
               if (hasResolved) {
                 console.log('[Auth] Ignoring duplicate callback')
                 return
@@ -70,7 +69,7 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
                 if (error) {
                   console.log('[Auth] OAuth error:', error)
                   hasResolved = true
-                  app.removeListener('oauth-callback', handleCallback)
+                  ;(app as any).removeListener('oauth-callback', handleCallback)
                   resume(
                     Effect.fail(
                       new GitHubAuthError({
@@ -82,10 +81,12 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
                 }
 
                 if (authCode) {
-                  console.log('[Auth] Authorization code received')
+                  console.log('[Auth] Authorization code received:', authCode)
                   hasResolved = true
-                  app.removeListener('oauth-callback', handleCallback)
+                  ;(app as any).removeListener('oauth-callback', handleCallback)
+                  console.log('[Auth] About to call resume with Effect.succeed')
                   resume(Effect.succeed(authCode))
+                  console.log('[Auth] Resume called successfully')
                   return
                 }
 
@@ -95,29 +96,40 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
               }
             }
 
-            app.on('oauth-callback', handleCallback)
+            console.log('[Auth] Registering oauth-callback event listener')
+            ;(app as any).on('oauth-callback', handleCallback)
+            console.log(
+              '[Auth] Event listener registered, waiting for callback...'
+            )
 
             // Cleanup function
             return Effect.sync(() => {
-              app.removeListener('oauth-callback', handleCallback)
+              console.log('[Auth] Cleaning up oauth-callback listener')
+              ;(app as any).removeListener('oauth-callback', handleCallback)
             })
-          }).pipe(
-            Effect.timeout(Duration.minutes(2)),
-            Effect.flatMap(
-              Option.match({
-                onNone: () =>
-                  Effect.fail(
-                    new GitHubAuthTimeout({
-                      message:
-                        'Authentication timed out after 2 minutes. Please try again.',
-                    })
-                  ),
-                onSome: authCode => Effect.succeed(authCode),
+          })
+
+          console.log(
+            '[Auth] Code extracted. Type:',
+            typeof code,
+            'Value:',
+            code
+          )
+          if (!code) {
+            console.error('[Auth] Code is falsy!', code)
+            return yield* Effect.fail(
+              new GitHubAuthError({
+                message: 'No authorization code received',
               })
             )
+          }
+          console.log(
+            '[Auth] Exchanging code for token. Code length:',
+            code.length
           )
-
+          console.log('[Auth] Code (first 10 chars):', code.substring(0, 10))
           const token = yield* httpService.exchangeCodeForToken(code)
+          console.log('[Auth] Token received, fetching user...')
           const user = yield* httpService.fetchUser(token)
 
           yield* storeService.setAuth(Redacted.make(token), user)
