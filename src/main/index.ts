@@ -27,11 +27,15 @@ const MainLayer = Layer.mergeAll(
 
 function createMainWindow() {
   const mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 800,
+    height: 600,
     show: false,
     center: true,
+    frame: false, // Borderless window
+    transparent: true, // Transparent background
     autoHideMenuBar: true,
+    backgroundColor: '#00000000', // Fully transparent
+    hasShadow: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -42,9 +46,8 @@ function createMainWindow() {
   mainWindow.webContents.on('did-finish-load', () => {
     mainWindow.show()
 
-    if (process.env.NODE_ENV === 'development') {
-      mainWindow.webContents.openDevTools()
-    }
+    // Don't automatically open dev tools for main window
+    // Console window will handle dev tools separately
   })
 
   // Silence unnecessary Autofill errors in dev tools
@@ -64,6 +67,36 @@ function createMainWindow() {
   return mainWindow
 }
 
+function createConsoleWindow() {
+  const consoleWindow = new BrowserWindow({
+    width: 1400,
+    height: 800,
+    show: false,
+    autoHideMenuBar: true,
+    title: 'Developer Console - Geppetto',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: require.resolve('../preload/index.js'),
+    },
+  })
+
+  consoleWindow.webContents.on('did-finish-load', () => {
+    consoleWindow.show()
+    // Open dev tools detached in a separate window
+    consoleWindow.webContents.openDevTools({ mode: 'detach' })
+  })
+
+  // Register separate route for console window
+  registerRoute({
+    id: 'console',
+    browserWindow: consoleWindow,
+    htmlFile: join(__dirname, '../renderer/index.html'),
+  })
+
+  return consoleWindow
+}
+
 // Register custom protocol handler for OAuth callbacks
 // This must be done before app is ready
 if (process.defaultApp) {
@@ -75,6 +108,7 @@ if (process.defaultApp) {
 }
 
 let mainWindow: BrowserWindow | null = null
+let consoleWindow: BrowserWindow | null = null
 
 app.whenReady().then(async () => {
   // Wait for IPC handlers to be fully set up before creating the window
@@ -86,6 +120,11 @@ app.whenReady().then(async () => {
   )
 
   mainWindow = await makeAppSetup(async () => createMainWindow())
+
+  // Create console window in development mode
+  if (process.env.NODE_ENV === 'development') {
+    consoleWindow = createConsoleWindow()
+  }
 })
 
 // Handle OAuth callback URLs on macOS
