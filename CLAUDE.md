@@ -185,6 +185,81 @@ export const GitHubIpcContracts = {
 } as const
 ```
 
+**CRITICAL: IPC Handler Type Safety Pattern**
+
+When implementing IPC handlers in `src/main/ipc/{domain}-handlers.ts`, you MUST follow this exact pattern to preserve type safety. **DO NOT use `unknown` or `any` types** - TypeScript's inability to narrow union types from indexed access is a known limitation that we work around using proper type assertions.
+
+```typescript
+const setupHandler = <K extends keyof typeof GitHubIpcContracts, E>(
+  key: K,
+  handler: (input: ContractInput<K>) => Effect.Effect<ContractOutput<K>, E>
+) => {
+  const contract = GitHubIpcContracts[key]
+
+  // REQUIRED: Define dual-type schemas preserving both decoded and encoded types
+  // TypeScript can't track the relationship between the generic key K and the indexed
+  // contract schemas. These type aliases preserve full type information for both:
+  // 1. Decoded type (ContractInput<K>) - used in application code
+  // 2. Encoded type (S.Schema.Encoded<...>) - used for IPC serialization
+  type InputSchema = S.Schema<ContractInput<K>, S.Schema.Encoded<typeof GitHubIpcContracts[K]['input']>>
+  type OutputSchema = S.Schema<ContractOutput<K>, S.Schema.Encoded<typeof GitHubIpcContracts[K]['output']>>
+
+  ipcMain.handle(contract.channel, async (_event, input: unknown) => {
+    const program = Effect.gen(function* () {
+      // Decode: validates and transforms from encoded (wire format) to decoded (app type)
+      // The `as unknown as InputSchema` is REQUIRED - TypeScript sees contract.input as a union
+      const validatedInput = yield* S.decodeUnknown(contract.input as unknown as InputSchema)(input)
+
+      // Execute handler - validatedInput is now properly typed as ContractInput<K>
+      const result = yield* handler(validatedInput)
+
+      // Encode: transforms from decoded type to encoded (serializable) type for IPC
+      const encoded = yield* S.encode(contract.output as unknown as OutputSchema)(result)
+      return encoded
+    }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
+
+    return await Effect.runPromise(program)
+  })
+}
+```
+
+**Why This Pattern is Required:**
+
+1. **Preserved Type Information**: The dual-type `S.Schema<Decoded, Encoded>` preserves both the runtime (decoded) and wire (encoded) types
+2. **No `unknown` Escape Hatch**: Using `as S.Schema<unknown>` would lose all type information - this is **forbidden**
+3. **Type Assertions Are Necessary**: The `as unknown as InputSchema` is the **correct** approach because:
+   - TypeScript cannot narrow `contract.input` from a union type based on the generic key `K`
+   - Runtime safety is guaranteed by Effect Schema validation
+   - The type assertion tells TypeScript what we know to be true at runtime
+4. **Full End-to-End Safety**: This pattern ensures type safety from main process → IPC → renderer process
+
+**Common Mistakes to Avoid:**
+
+❌ **WRONG** - Loses type information:
+```typescript
+const validatedInput = yield* S.decodeUnknown(contract.input as S.Schema<unknown>)(input)
+const result = yield* handler(validatedInput as ContractInput<K>)  // Now needs manual assertion
+```
+
+❌ **WRONG** - Omitting encoded type:
+```typescript
+type InputSchema = typeof contract.input  // Only the schema, not the types
+```
+
+❌ **WRONG** - Using `any`:
+```typescript
+const validatedInput = yield* S.decodeUnknown(contract.input as any)(input)
+```
+
+✅ **CORRECT** - Preserves both types:
+```typescript
+type InputSchema = S.Schema<ContractInput<K>, S.Schema.Encoded<typeof GitHubIpcContracts[K]['input']>>
+const validatedInput = yield* S.decodeUnknown(contract.input as unknown as InputSchema)(input)
+const result = yield* handler(validatedInput)  // No assertion needed!
+```
+
+This pattern applies to ALL IPC handler files: `github-handlers.ts`, `account-handlers.ts`, and any future domain handlers.
+
 ### Reactive State Management with Effect Atoms
 
 Uses `@effect-atom/atom-react` to replace React Query/Zustand patterns:
@@ -195,9 +270,98 @@ Uses `@effect-atom/atom-react` to replace React Query/Zustand patterns:
 - **Reactivity keys** for cache invalidation: `['account:context']`, `['github:auth']`, `['github:repos:user']`
 - **TTL caching**: `Atom.setIdleTTL(Duration.minutes(5))` for automatic cache expiration
 - **Result<T, E>** types for typed error handling in components
+- **Result.builder** pattern for rendering UI based on Result state
 - **Custom hooks** (`src/renderer/hooks/useGitHubAtoms.ts`) wrap atoms for clean React integration
 
 Example: `reposAtom` family caches repos per user for 5 minutes and invalidates on auth changes. When switching accounts, all relevant atoms invalidate via reactivity keys.
+
+**Result.builder Pattern for Components:**
+
+All atoms return `Result<T, E>` types which represent async operations with three possible states:
+- `Initial`: Operation hasn't started or is loading
+- `Success<T>`: Operation completed successfully with data of type T
+- `Failure<E>`: Operation failed with typed error E
+
+Use the **Result.builder** pattern in React components to handle all states declaratively:
+
+```typescript
+export function RepositoryList() {
+  const { repos } = useUserRepos()  // repos is Result<GitHubRepository[], IpcError>
+
+  return (
+    <div>
+      {Result.builder(repos)
+        .onInitial(() => (
+          <div>Loading repositories...</div>
+        ))
+        .onErrorTag('AuthenticationError', (error) => (
+          <div>Please authenticate first: {error.message}</div>
+        ))
+        .onErrorTag('NetworkError', (error) => (
+          <div>Network error: {error.message}</div>
+        ))
+        .onErrorTag('NotFoundError', (error) => (
+          <div>Not found: {error.message}</div>
+        ))
+        .onDefect((defect) => (
+          <div>Unexpected error: {String(defect)}</div>
+        ))
+        .onSuccess((repositories) => (
+          <div>
+            {repositories.map(repo => (
+              <div key={repo.id}>{repo.name}</div>
+            ))}
+          </div>
+        ))
+        .render()}
+    </div>
+  )
+}
+```
+
+**Result.builder API:**
+- `.onInitial(render)`: Handle loading state (before data is available)
+- `.onErrorTag(tag, render)`: Handle specific error types by their `_tag` field
+- `.onDefect(render)`: Handle unexpected errors (bugs, runtime errors)
+- `.onSuccess(render)`: Handle successful result with typed data
+- `.render()`: Required final call to produce React elements
+
+**Benefits:**
+1. **Exhaustive error handling**: TypeScript ensures all error types are handled
+2. **No manual loading states**: `onInitial` handles loading automatically
+3. **Type-safe success data**: Success callback receives properly typed data
+4. **Clear error boundaries**: Each error type can have custom UI
+
+**Common Patterns:**
+
+✅ **CORRECT** - Handle all error types:
+```typescript
+Result.builder(result)
+  .onInitial(() => <Spinner />)
+  .onErrorTag('AuthenticationError', () => <LoginPrompt />)
+  .onErrorTag('NetworkError', (error) => <ErrorAlert message={error.message} />)
+  .onErrorTag('NotFoundError', () => <NotFound />)
+  .onDefect((defect) => <ErrorBoundary error={defect} />)
+  .onSuccess((data) => <DataView data={data} />)
+  .render()
+```
+
+❌ **WRONG** - Using Result.getOrElse in components (lose error information):
+```typescript
+const data = Result.getOrElse(result, () => [])
+return <div>{data.map(...)}</div>  // No loading state, no error handling
+```
+
+❌ **WRONG** - Manual pattern matching (verbose and error-prone):
+```typescript
+if (Result.isInitial(result)) return <Spinner />
+if (Result.isFailure(result)) {
+  const error = Result.getFailure(result)
+  // ... manual error handling
+}
+const data = Result.getSuccess(result)
+return <DataView data={data} />
+```
 
 ### Shared Schemas (`src/shared/schemas/`)
 
@@ -273,6 +437,48 @@ const token = Redacted.make(tokenString)
 const value = Redacted.value(token)  // explicit unwrap required
 ```
 Used throughout for GitHub tokens in storage, IPC contracts, and API calls.
+
+### 6. TypeScript Type Safety - Avoid `unknown` and `any`
+
+**CRITICAL RULE: This codebase maintains strict type safety. DO NOT use `unknown` or `any` types except in very specific, justified cases.**
+
+**When `unknown` is Acceptable:**
+- ✅ External input boundaries (e.g., `ipcMain.handle(_event, input: unknown)`)
+- ✅ As part of necessary type assertions with Effect Schema (e.g., `as unknown as InputSchema`)
+- ✅ When dealing with truly unknown data that will be immediately validated
+
+**When `any` is NEVER Acceptable:**
+- ❌ NEVER use `any` to bypass type errors
+- ❌ NEVER use `any` in function parameters or return types
+- ❌ NEVER use `any` to avoid figuring out the correct type
+
+**Proper Type Assertion Pattern:**
+
+When TypeScript cannot infer types due to limitations (like indexed union types), use **double type assertion** with proper type definitions:
+
+```typescript
+// ✅ CORRECT: Proper type definition then double assertion
+type InputSchema = S.Schema<ContractInput<K>, S.Schema.Encoded<typeof Contracts[K]['input']>>
+const validated = yield* S.decodeUnknown(contract.input as unknown as InputSchema)(input)
+
+// ❌ WRONG: Using unknown without type definition
+const validated = yield* S.decodeUnknown(contract.input as S.Schema<unknown>)(input)
+
+// ❌ NEVER: Using any
+const validated = yield* S.decodeUnknown(contract.input as any)(input)
+```
+
+**Why This Matters:**
+1. **Type Safety is Runtime Safety**: Our Effect Schema validation relies on accurate types
+2. **Refactoring Confidence**: Proper types enable safe refactoring across the codebase
+3. **Documentation**: Types serve as inline documentation for future developers
+4. **Compiler Assistance**: TypeScript can catch bugs only if types are accurate
+
+**When You're Stuck:**
+- Use `S.Schema.Type<typeof Schema>` to extract types from schemas
+- Use `S.Schema.Encoded<typeof Schema>` to get the encoded (wire) type
+- Define intermediate type aliases to help TypeScript infer correctly
+- Ask for clarification rather than using `any` or overly broad `unknown`
 
 ## Environment Variables
 
