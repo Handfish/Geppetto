@@ -27,15 +27,16 @@ const MainLayer = Layer.mergeAll(
 
 function createMainWindow() {
   const mainWindow = new BrowserWindow({
-    width: 1600,
-    height: 600,
+    fullscreen: true, // True fullscreen mode
     show: false,
-    center: true,
     frame: false, // Borderless window
     transparent: true, // Transparent background
     autoHideMenuBar: true,
     backgroundColor: '#00000000', // Fully transparent
-    hasShadow: true,
+    hasShadow: false,
+    skipTaskbar: false, // Keep in taskbar
+    alwaysOnTop: false, // Will be controlled by focus state
+    focusable: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -126,17 +127,51 @@ app.whenReady().then(async () => {
     consoleWindow = createConsoleWindow()
   }
 
-  // Register global shortcuts for carousel navigation
-  globalShortcut.register('Left', () => {
-    console.log('[Hotkey] Left arrow pressed')
+  // Track focus state
+  let isMainWindowFocused = true
+
+  // Helper function to toggle window focus
+  const toggleWindowFocus = () => {
+    console.log('[Hotkey] Toggle focus pressed')
     if (mainWindow && !mainWindow.isDestroyed()) {
+      if (isMainWindowFocused) {
+        // Unfocus: fade out and make click-through
+        isMainWindowFocused = false
+        mainWindow.setIgnoreMouseEvents(true, { forward: true })
+        mainWindow.webContents.send('window:unfocus')
+        console.log('[Window] Unfocused - click-through enabled')
+      } else {
+        // Focus: fade in and restore click handling
+        isMainWindowFocused = true
+        mainWindow.setIgnoreMouseEvents(false)
+        mainWindow.focus()
+        mainWindow.webContents.send('window:focus')
+        console.log('[Window] Focused - click-through disabled')
+      }
+    }
+  }
+
+  // Register global shortcut to toggle focus (Cmd/Ctrl + Shift + G for Geppetto)
+  const toggleShortcut = 'CommandOrControl+Shift+G'
+  const registered = globalShortcut.register(toggleShortcut, toggleWindowFocus)
+
+  if (registered) {
+    console.log(`[Hotkeys] Successfully registered: ${toggleShortcut} for toggle focus`)
+  } else {
+    console.error(`[Hotkeys] Failed to register: ${toggleShortcut}`)
+  }
+
+  // Register global shortcuts for carousel navigation (only work when focused)
+  globalShortcut.register('Left', () => {
+    console.log('[Hotkey] Left arrow pressed, focused:', isMainWindowFocused)
+    if (mainWindow && !mainWindow.isDestroyed() && isMainWindowFocused) {
       mainWindow.webContents.send('carousel:prev')
     }
   })
 
   globalShortcut.register('Right', () => {
-    console.log('[Hotkey] Right arrow pressed')
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    console.log('[Hotkey] Right arrow pressed, focused:', isMainWindowFocused)
+    if (mainWindow && !mainWindow.isDestroyed() && isMainWindowFocused) {
       mainWindow.webContents.send('carousel:next')
     }
   })

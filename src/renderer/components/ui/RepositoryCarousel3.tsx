@@ -44,7 +44,7 @@ export function RepositoryCarousel3({ repos }: RepositoryCarouselProps) {
   const visibleOffsets = [-2, -1, 0, 1, 2]
 
   return (
-    <div className="relative w-full h-36 flex items-center justify-center overflow-hidden">
+    <div className="relative w-full flex items-center justify-center" style={{ height: '160px', overflow: 'visible' }}>
       {Result.builder(repos)
         .onSuccess(repositories => {
           const total = repositories.length

@@ -1,6 +1,6 @@
 import { Terminal } from 'lucide-react'
 import { Option } from 'effect'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
   Alert,
@@ -17,6 +17,7 @@ import { useGitHubAuth, useUserRepos } from '../hooks/useGitHubAtoms'
 export function MainScreen() {
   const { currentUser, refresh } = useGitHubAuth()
   const { repos } = useUserRepos()
+  const [isFocused, setIsFocused] = useState(true)
 
   // Listen for auth changes from other windows
   useEffect(() => {
@@ -35,6 +36,27 @@ export function MainScreen() {
     }
   }, [refresh])
 
+  // Listen for focus/unfocus events
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('[MainScreen] Window focused')
+      setIsFocused(true)
+    }
+
+    const handleUnfocus = () => {
+      console.log('[MainScreen] Window unfocused')
+      setIsFocused(false)
+    }
+
+    window.electron.ipcRenderer.on('window:focus', handleFocus)
+    window.electron.ipcRenderer.on('window:unfocus', handleUnfocus)
+
+    return () => {
+      window.electron.ipcRenderer.removeListener('window:focus', handleFocus)
+      window.electron.ipcRenderer.removeListener('window:unfocus', handleUnfocus)
+    }
+  }, [])
+
   // Extract username from currentUser Option
   const userName = Option.match(currentUser, {
     onNone: () => null as string | null,
@@ -42,9 +64,12 @@ export function MainScreen() {
   })
 
   return (
-    <main className="flex flex-col items-center justify-center h-screen bg-transparent drag-region gap-8">
-      <div className="flex flex-col items-center gap-4">
-        <SleepLight color="#00ffff" speed={8} />
+    <main
+      className="relative h-screen w-screen bg-transparent drag-region transition-opacity duration-500"
+      style={{ opacity: isFocused ? 1 : 0.2 }}
+    >
+      {/* Hi message - top left */}
+      <div className="absolute top-8 left-8">
         <Alert className="bg-transparent border-transparent text-accent w-fit">
           <AlertTitle className="text-5xl text-teal-400">
             Hi{userName ? `, ${userName}` : ','}
@@ -62,19 +87,22 @@ export function MainScreen() {
         </Alert>
       </div>
 
-      {/* {userName && <RepositoryCarousel repos={repos} />} */}
-      {/* {userName && <RepositoryCarousel2 repos={repos} />} */}
-      {userName && <RepositoryCarousel3 repos={repos} />}
-
+      {/* Carousel and SleepLight - bottom left quadrant, bottom 6th of screen */}
       {userName && (
-        <div className="text-gray-500 text-sm flex items-center gap-2">
-          <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
-            ←
-          </kbd>
-          <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
-            →
-          </kbd>
-          <span>Navigate repositories</span>
+        <div className="absolute bottom-0 left-0 w-1/2 flex flex-col items-start justify-end pb-8 pl-8 pr-8 gap-4" style={{ height: '25vh', paddingTop: '3rem' }}>
+          <SleepLight color="#00ffff" speed={8} />
+          <div className="w-full" style={{ minHeight: '180px' }}>
+            <RepositoryCarousel3 repos={repos} />
+          </div>
+          <div className="text-gray-500 text-sm flex items-center gap-2">
+            <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
+              ←
+            </kbd>
+            <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
+              →
+            </kbd>
+            <span>Navigate repositories</span>
+          </div>
         </div>
       )}
     </main>
