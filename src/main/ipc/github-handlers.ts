@@ -1,9 +1,16 @@
-import { ipcMain } from 'electron'
+import { ipcMain, BrowserWindow } from 'electron'
 import { Effect, Schema as S } from 'effect'
 import { GitHubIpcContracts } from '../../shared/ipc-contracts'
 import { GitHubAuthService } from '../github/auth-service'
 import { GitHubApiService } from '../github/api-service'
 import { mapDomainErrorToIpcError } from './error-mapper'
+
+// Helper to broadcast events to all windows
+function broadcastToAllWindows(channel: string, ...args: unknown[]) {
+  BrowserWindow.getAllWindows().forEach((window) => {
+    window.webContents.send(channel, ...args)
+  })
+}
 
 export const setupGitHubIpcHandlers = Effect.gen(function* () {
   const authService = yield* GitHubAuthService
@@ -50,9 +57,22 @@ export const setupGitHubIpcHandlers = Effect.gen(function* () {
   }
 
   // Register all handlers with full type safety
-  setupHandler('signIn', (_input: ContractInput<'signIn'>) => authService.startAuthFlow)
+  setupHandler('signIn', (_input: ContractInput<'signIn'>) =>
+    Effect.gen(function* () {
+      const result = yield* authService.startAuthFlow
+      // Broadcast auth change to all windows
+      broadcastToAllWindows('github:auth-changed', result)
+      return result
+    })
+  )
   setupHandler('checkAuth', (_input: ContractInput<'checkAuth'>) => apiService.checkAuth)
-  setupHandler('signOut', (_input: ContractInput<'signOut'>) => apiService.signOut)
+  setupHandler('signOut', (_input: ContractInput<'signOut'>) =>
+    Effect.gen(function* () {
+      yield* apiService.signOut
+      // Broadcast auth change to all windows
+      broadcastToAllWindows('github:auth-changed', null)
+    })
+  )
   setupHandler('getRepos', (input: ContractInput<'getRepos'>) => apiService.getRepos(input.username))
   setupHandler('getRepo', (input: ContractInput<'getRepo'>) => apiService.getRepo(input.owner, input.repo))
   setupHandler('getIssues', (input: ContractInput<'getIssues'>) =>
