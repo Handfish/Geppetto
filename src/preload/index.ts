@@ -1,14 +1,21 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
+
+const electronAPI = {
+  ipcRenderer: {
+    invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
+    on: (channel: string, listener: (...args: any[]) => void) => {
+      ipcRenderer.on(channel, (event, ...args) => listener(...args))
+    },
+    removeListener: (channel: string, listener: (...args: any[]) => void) => {
+      ipcRenderer.removeListener(channel, listener)
+    },
+  },
+}
+
+contextBridge.exposeInMainWorld('electron', electronAPI)
 
 declare global {
   interface Window {
-    App: typeof API
+    electron: typeof electronAPI
   }
 }
-
-const API = {
-  sayHelloFromBridge: () => console.log('\nHello from bridgeAPI! 👋\n\n'),
-  username: process.env.USER,
-}
-
-contextBridge.exposeInMainWorld('App', API)

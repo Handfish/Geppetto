@@ -31,9 +31,15 @@
     "lint:fix": "biome check --write --no-errors-on-unmatched --assist-enabled=true"
   },
   "dependencies": {
+    "@effect-atom/atom-react": "^0.3.4",
+    "@effect/platform": "^0.92.1",
+    "@effect/schema": "^0.75.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.2.3",
+    "effect": "^3.18.4",
     "electron-router-dom": "^2.1.0",
+    "electron-store": "^8.2.0",
     "lucide-react": "^0.541.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

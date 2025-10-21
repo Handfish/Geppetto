@@ -1,0 +1,441 @@
+// src/renderer/lib/ipc-client.ts
+import { Effect, Schema as S, Context, Layer } from 'effect'
+import type { IpcContracts, IpcChannels } from '../../shared/ipc-contracts'
+import { GitHubIpcContracts } from '../../shared/ipc-contracts'
+import { NetworkError } from '../../shared/schemas/errors'
+
+export class ElectronIpcClient extends Effect.Service<ElectronIpcClient>()('ElectronIpcClient', {
+  sync: () => ({
+    invoke: <T extends IpcChannels>(
+      channel: T,
+      input: S.Schema.Type<IpcContracts[T]['input']>
+    ): Effect.Effect<
+      S.Schema.Type<IpcContracts[T]['output']>,
+      S.Schema.Type<IpcContracts[T]['errors']> | NetworkError
+    > =>
+      Effect.gen(function* () {
+        const contract = GitHubIpcContracts[channel]
+        
+        const validatedInput = yield* S.decodeUnknown(contract.input)(input)
+        
+        const rawResult = yield* Effect.tryPromise({
+          try: () => window.electron.ipcRenderer.invoke(contract.channel, validatedInput),
+          catch: (error) => new NetworkError({ 
+            message: error instanceof Error ? error.message : 'IPC communication failed' 
+          })
+        })
+
+        if (rawResult && typeof rawResult === 'object' && rawResult._tag === 'Error') {
+          return yield* Effect.fail(rawResult.error)
+        }
+
+        return yield* S.decodeUnknown(contract.output)(rawResult)
+      })
+  })
+}) {}
+
+export class GitHubClient extends Effect.Service<GitHubClient>()('GitHubClient', {
+  dependencies: [ElectronIpcClient.Default],
+  effect: Effect.gen(function* () {
+    const ipc = yield* ElectronIpcClient
+
+    return {
+      signIn: () => ipc.invoke('signIn', undefined),
+      checkAuth: () => ipc.invoke('checkAuth', undefined),
+      signOut: () => ipc.invoke('signOut', undefined),
+      getRepos: (username?: string) => ipc.invoke('getRepos', { username }),
+      getRepo: (owner: string, repo: string) => ipc.invoke('getRepo', { owner, repo }),
+      getIssues: (owner: string, repo: string, state?: 'open' | 'closed' | 'all') =>
+        ipc.invoke('getIssues', { owner, repo, state: state ?? 'open' }),
+      getPullRequests: (owner: string, repo: string, state?: 'open' | 'closed' | 'all') =>
+        ipc.invoke('getPullRequests', { owner, repo, state: state ?? 'open' }),
+    } as const
+  }),
+}) {}
+
+// src/renderer/atoms/github-atoms.ts
+import { Atom, Result } from '@effect-atom/atom-react'
+import { Effect, Option, Duration } from 'effect'
+import { GitHubClient } from '../lib/ipc-client'
+import type { GitHubRepository, GitHubUser } from '../../shared/schemas'
+
+const githubRuntime = Atom.runtime(GitHubClient.Default)
+
+export const authStateAtom = githubRuntime
+  .atom(
+    Effect.gen(function* () {
+      const github = yield* GitHubClient
+      return yield* github.checkAuth()
+    })
+  )
+  .pipe(
+    Atom.withReactivity(['github:auth']),
+    Atom.keepAlive
+  )
+
+export const isAuthenticatedAtom = Atom.make((get) => {
+  const authResult = get(authStateAtom)
+  const auth = Result.getOrElse(authResult, () => ({
+    authenticated: false as const,
+  }))
+  return auth.authenticated
+})
+
+export const currentUserAtom = Atom.make((get) => {
+  const authResult = get(authStateAtom)
+  const auth = Result.getOrElse(authResult, () => ({
+    authenticated: false as const,
+  }))
+  return auth.authenticated && 'user' in auth && auth.user
+    ? Option.some(auth.user)
+    : Option.none()
+})
+
+export const signInAtom = githubRuntime.fn(
+  Effect.fnUntraced(function* () {
+    const github = yield* GitHubClient
+    return yield* github.signIn()
+  }),
+  { reactivityKeys: ['github:auth'] }
+)
+
+export const signOutAtom = githubRuntime.fn(
+  Effect.fnUntraced(function* () {
+    const github = yield* GitHubClient
+    yield* github.signOut()
+  }),
+  { reactivityKeys: ['github:auth'] }
+)
+
+export const userReposAtom = Atom.make((get) => {
+  const userOption = get(currentUserAtom)
+  if (Option.isNone(userOption)) {
+    return Result.success([] as GitHubRepository[])
+  }
+  const user = userOption.value
+  return get(reposAtom(user.login))
+})
+
+export const reposAtom = Atom.family((username?: string) =>
+  githubRuntime
+    .atom(
+      Effect.gen(function* () {
+        const github = yield* GitHubClient
+        return yield* github.getRepos(username)
+      })
+    )
+    .pipe(
+      Atom.withReactivity([`github:repos:${username || 'user'}`]),
+      Atom.setIdleTTL(Duration.minutes(5))
+    )
+)
+
+export const repoAtom = Atom.family(
+  ({ owner, repo }: { owner: string; repo: string }) =>
+    githubRuntime
+      .atom(
+        Effect.gen(function* () {
+          const github = yield* GitHubClient
+          return yield* github.getRepo(owner, repo)
+        })
+      )
+      .pipe(
+        Atom.withReactivity([`github:repo:${owner}/${repo}`]),
+        Atom.setIdleTTL(Duration.minutes(10))
+      )
+)
+
+export const issuesAtom = Atom.family(
+  ({
+    owner,
+    repo,
+    state = 'open',
+  }: {
+    owner: string
+    repo: string
+    state?: 'open' | 'closed' | 'all'
+  }) =>
+    githubRuntime
+      .atom(
+        Effect.gen(function* () {
+          const github = yield* GitHubClient
+          return yield* github.getIssues(owner, repo, state)
+        })
+      )
+      .pipe(
+        Atom.withReactivity([`github:issues:${owner}/${repo}:${state}`]),
+        Atom.setIdleTTL(Duration.minutes(3))
+      )
+)
+
+export const pullRequestsAtom = Atom.family(
+  ({
+    owner,
+    repo,
+    state = 'open',
+  }: {
+    owner: string
+    repo: string
+    state?: 'open' | 'closed' | 'all'
+  }) =>
+    githubRuntime
+      .atom(
+        Effect.gen(function* () {
+          const github = yield* GitHubClient
+          return yield* github.getPullRequests(owner, repo, state)
+        })
+      )
+      .pipe(
+        Atom.withReactivity([`github:prs:${owner}/${repo}:${state}`]),
+        Atom.setIdleTTL(Duration.minutes(3))
+      )
+)
+
+// src/renderer/hooks/useGitHubAtoms.ts
+import { useAtomValue, useAtomSet, useAtom, useAtomRefresh } from '@effect-atom/atom-react'
+import {
+  authStateAtom,
+  isAuthenticatedAtom,
+  currentUserAtom,
+  signInAtom,
+  signOutAtom,
+  userReposAtom,
+  reposAtom,
+  repoAtom,
+  issuesAtom,
+  pullRequestsAtom,
+} from '../atoms/github-atoms'
+
+export function useGitHubAuth() {
+  const authState = useAtomValue(authStateAtom)
+  const isAuthenticated = useAtomValue(isAuthenticatedAtom)
+  const currentUser = useAtomValue(currentUserAtom)
+  
+  const [signInResult, signIn] = useAtom(signInAtom)
+  const signOut = useAtomSet(signOutAtom)
+  const refreshAuth = useAtomRefresh(authStateAtom)
+
+  return {
+    authState,
+    isAuthenticated,
+    currentUser,
+    signIn: () => signIn(),
+    signOut: () => signOut(),
+    refresh: refreshAuth,
+    isSigningIn: signInResult.waiting,
+  }
+}
+
+export function useGitHubRepos(username?: string) {
+  const reposResult = useAtomValue(reposAtom(username))
+  const refreshRepos = useAtomRefresh(reposAtom(username))
+  
+  return {
+    repos: reposResult,
+    refresh: refreshRepos,
+    isLoading: reposResult._tag === 'Initial' && reposResult.waiting,
+    isFetching: reposResult.waiting,
+  }
+}
+
+export function useUserRepos() {
+  const userReposResult = useAtomValue(userReposAtom)
+  
+  return {
+    repos: userReposResult,
+    isLoading: userReposResult._tag === 'Initial' && userReposResult.waiting,
+  }
+}
+
+export function useGitHubRepo(owner: string, repo: string) {
+  const repoResult = useAtomValue(repoAtom({ owner, repo }))
+  const refreshRepo = useAtomRefresh(repoAtom({ owner, repo }))
+  
+  return {
+    repo: repoResult,
+    refresh: refreshRepo,
+    isLoading: repoResult._tag === 'Initial' && repoResult.waiting,
+  }
+}
+
+export function useGitHubIssues(
+  owner: string, 
+  repo: string, 
+  state: 'open' | 'closed' | 'all' = 'open'
+) {
+  const issuesResult = useAtomValue(issuesAtom({ owner, repo, state }))
+  const refreshIssues = useAtomRefresh(issuesAtom({ owner, repo, state }))
+  
+  return {
+    issues: issuesResult,
+    refresh: refreshIssues,
+    isLoading: issuesResult._tag === 'Initial' && issuesResult.waiting,
+  }
+}
+
+// src/renderer/components/AuthCard.tsx
+import React from 'react'
+import { Result } from '@effect-atom/atom-react'
+import { Option } from 'effect'
+import { useGitHubAuth } from '../hooks/useGitHubAtoms'
+
+export function AuthCard() {
+  const { isAuthenticated, currentUser, signIn, signOut, isSigningIn } = useGitHubAuth()
+
+  if (isAuthenticated) {
+    return (
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <div className="flex items-center space-x-4">
+          {Option.isSome(currentUser) && (
+            <>
+              <img
+                src={currentUser.value.avatar_url}
+                alt={currentUser.value.login}
+                className="w-12 h-12 rounded-full"
+              />
+              <div>
+                <h3 className="text-white font-medium">{currentUser.value.name || currentUser.value.login}</h3>
+                <p className="text-gray-400">@{currentUser.value.login}</p>
+              </div>
+            </>
+          )}
+          <button
+            onClick={signOut}
+            className="ml-auto px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 text-center">
+      <h2 className="text-xl font-semibold text-white mb-4">GitHub Integration</h2>
+      <p className="text-gray-300 mb-6">
+        Connect your GitHub account to access repositories and issues.
+      </p>
+      <button
+        onClick={signIn}
+        disabled={isSigningIn}
+        className="px-6 py-2 bg-gray-900 text-white rounded-md border border-gray-600 hover:bg-gray-700 transition-colors disabled:opacity-50"
+      >
+        {isSigningIn ? 'Connecting...' : 'Connect GitHub'}
+      </button>
+    </div>
+  )
+}
+
+// src/renderer/components/RepositoryList.tsx
+import React from 'react'
+import { Result } from '@effect-atom/atom-react'
+import { useUserRepos } from '../hooks/useGitHubAtoms'
+
+export function RepositoryList() {
+  const { repos } = useUserRepos()
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-semibold text-white">Your Repositories</h2>
+      
+      {Result.builder(repos)
+        .onInitial(() => (
+          <div className="text-gray-400">Loading repositories...</div>
+        ))
+        .onError('AuthenticationError', () => (
+          <div className="text-red-400">Please authenticate first</div>
+        ))
+        .onError('NetworkError', (error) => (
+          <div className="text-red-400">Network error: {error.message}</div>
+        ))
+        .onDefect(() => (
+          <div className="text-red-400">Unexpected error occurred</div>
+        ))
+        .onSuccess((repositories) => {
+          if (repositories.length === 0) {
+            return <div className="text-gray-400">No repositories found</div>
+          }
+          
+          return (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {repositories.map((repo) => (
+                <div
+                  key={repo.id}
+                  className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-medium text-white truncate">
+                        {repo.name}
+                      </h3>
+                      {repo.description && (
+                        <p className="text-sm text-gray-400 mt-1 line-clamp-2">
+                          {repo.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between mt-4 text-sm text-gray-400">
+                    <div className="flex items-center space-x-4">
+                      {repo.language && (
+                        <span className="flex items-center">
+                          <span className="w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
+                          {repo.language}
+                        </span>
+                      )}
+                      <span className="flex items-center">
+                        ⭐ {repo.stargazers_count}
+                      </span>
+                    </div>
+                    
+                    <a
+                      href={repo.html_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300"
+                    >
+                      View →
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        })
+        .render()}
+    </div>
+  )
+}
+
+// src/renderer/App.tsx
+import React from 'react'
+import { AuthCard } from './components/AuthCard'
+import { RepositoryList } from './components/RepositoryList'
+import { useGitHubAuth } from './hooks/useGitHubAtoms'
+
+export function App() {
+  const { isAuthenticated } = useGitHubAuth()
+
+  return (
+    <div className="min-h-screen bg-gray-900 p-6">
+      <div className="max-w-6xl mx-auto space-y-8">
+        <header>
+          <h1 className="text-3xl font-bold text-white">GitHub Desktop Clone</h1>
+          <p className="text-gray-400 mt-2">
+            Manage your GitHub repositories with Effect and Electron
+          </p>
+        </header>
+
+        <AuthCard />
+        
+        {isAuthenticated && (
+          <>
+            <RepositoryList />
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
