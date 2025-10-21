@@ -1,5 +1,5 @@
 import { Schema as S } from 'effect'
-import { GitHubUser } from '../user'
+import { GitHubUser } from './user'
 
 // Branch reference in a pull request
 export class PullRequestBranch extends S.Class<PullRequestBranch>('PullRequestBranch')({
