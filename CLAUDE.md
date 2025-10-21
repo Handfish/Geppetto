@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A modern GitHub Desktop clone demonstrating type-safe IPC communication in Electron using Effect and @effect-atom/atom-react for state management. This application showcases functional programming patterns with end-to-end type safety from the main process to UI components.
+A modern GitHub Desktop clone with **tiered deployment** (Free/Pro) demonstrating type-safe IPC communication in Electron using Effect and @effect-atom/atom-react for state management. This application showcases functional programming patterns with end-to-end type safety, DDD-based multi-account management, and tier-based feature gating from the main process to UI components.
 
 ## Key Technologies
 
@@ -18,10 +18,29 @@ A modern GitHub Desktop clone demonstrating type-safe IPC communication in Elect
 
 ```bash
 # Development with hot reload
-pnpm dev
+pnpm dev              # Default (free tier)
+pnpm dev:free         # Free tier build
+pnpm dev:pro          # Pro tier build
 
-# Build the application
-pnpm compile:app
+# Compile application
+pnpm compile:app       # Default
+pnpm compile:app:free  # Free tier
+pnpm compile:app:pro   # Pro tier
+
+# Build packages
+pnpm prebuild          # Default
+pnpm prebuild:free     # Free tier prebuild
+pnpm prebuild:pro      # Pro tier prebuild
+
+pnpm build             # Default
+pnpm build:free        # Free tier package
+pnpm build:pro         # Pro tier package
+pnpm build:all         # Build both tiers
+
+# Release (publish to GitHub/stores)
+pnpm release           # Default
+pnpm release:free      # Release free tier
+pnpm release:pro       # Release pro tier
 
 # Lint code
 pnpm lint
@@ -29,10 +48,6 @@ pnpm lint:fix  # with auto-fix
 
 # Preview built application
 pnpm start
-
-# Full build with packaging
-pnpm prebuild
-pnpm build
 
 # Clean development artifacts
 pnpm clean:dev
@@ -48,6 +63,61 @@ pnpm clean:dev
 4. **Shared Layer** (`src/shared/`): Type-safe IPC contracts and schemas shared between processes
 
 This architecture demonstrates a custom Effect-based abstraction over Electron's ipcMain/ipcRenderer for type-safe cross-process communication.
+
+### Tiered Architecture (Free vs Pro)
+
+The application supports **two deployment tiers** with separate builds and feature sets:
+
+**Free Tier** (`APP_TIER=free`):
+- Single GitHub account authentication
+- No account switching UI
+- No GitLab or Bitbucket support
+- Build artifacts: `my-electron-app-free-v{version}-{os}.{ext}`
+- App ID: `com.{author}.{name}.free`
+- Product name: "Geppetto Free"
+
+**Pro Tier** (`APP_TIER=pro`):
+- Unlimited GitHub accounts with account switching
+- Future: Unlimited GitLab accounts
+- Future: Unlimited Bitbucket accounts
+- Account switcher UI enabled
+- Build artifacts: `my-electron-app-pro-v{version}-{os}.{ext}`
+- App ID: `com.{author}.{name}.pro`
+- Product name: "Geppetto Pro"
+
+**Tier Configuration:**
+- `src/shared/tier-config.ts`: Central tier configuration and limits
+- `src/main/tier/tier-service.ts`: TierService for runtime feature gating
+- Environment variables: `APP_TIER`, `APP_NAME`, `APP_ID_SUFFIX`
+- Build-time injection via Vite (`process.env.APP_TIER`)
+- Separate electron-builder configs per tier
+
+**Feature Gating:**
+```typescript
+// TierService validates operations against tier limits
+const tierService = yield* TierService
+yield* tierService.checkCanAddAccount('github', accountContext) // Fails if limit exceeded
+yield* tierService.checkFeatureAvailable('account-switcher') // Fails if free tier
+```
+
+**Multi-Account Architecture:**
+- `AccountContext` aggregate root (DDD pattern) manages all accounts
+- `Account` entities with unique `AccountId` format: `{provider}:{userId}` (e.g., `github:12345`)
+- `AccountContextService` handles account CRUD operations with tier validation
+- `SecureStoreService` stores tokens per account ID (encrypted with `electron-store`)
+- IPC contracts: `AccountIpcContracts` for account management operations
+- Renderer atoms: `accountContextAtom`, `activeAccountAtom`, `tierLimitsAtom`
+
+**Key Files:**
+- `src/shared/tier-config.ts`: Tier limits configuration
+- `src/shared/schemas/account-context.ts`: AccountContext domain aggregate
+- `src/main/tier/tier-service.ts`: Tier validation service
+- `src/main/account/account-context-service.ts`: Account management service
+- `src/main/ipc/account-handlers.ts`: Account IPC handlers
+- `src/renderer/atoms/account-atoms.ts`: Account state atoms
+- `.env.free`, `.env.pro`: Tier-specific environment variables
+- `electron.vite.config.ts`: Tier-aware build configuration
+- `electron-builder.ts`: Tier-aware packaging configuration
 
 ### Domain-Driven Organization
 
@@ -72,15 +142,21 @@ The application uses Effect's dependency injection via services and layers:
 - `GitHubAuthService`: OAuth flow with local callback server (port 3000)
 - `GitHubApiService`: High-level GitHub operations (repos, issues, PRs)
 
-All services are composed into `MainLayer` in `src/main/index(1).ts`:
+All services are composed into `MainLayer` in `src/main/index.ts`:
 ```typescript
 const MainLayer = Layer.mergeAll(
   GitHubHttpService.Default,
   SecureStoreService.Default,
+  TierService.Default,
+  AccountContextService.Default,
   GitHubAuthService.Default,
   GitHubApiService.Default
 )
 ```
+
+**Core Services** (`src/main/`):
+- `TierService` (`tier/tier-service.ts`): Feature gating and tier limit enforcement
+- `AccountContextService` (`account/account-context-service.ts`): Multi-account management with DDD aggregate
 
 **Renderer Services** (`src/renderer/lib/`):
 - `ElectronIpcClient`: Type-safe IPC communication
@@ -89,11 +165,11 @@ const MainLayer = Layer.mergeAll(
 ### Type-Safe IPC with Effect Schema
 
 All IPC communication is contract-based via domain-specific contract files in `src/shared/`:
-- `ipc-contracts.ts` exports all contracts (currently `GitHubIpcContracts`)
+- `ipc-contracts.ts` exports all contracts: `AccountIpcContracts`, `GitHubIpcContracts`
 - Each contract defines: `channel`, `input` schema, `output` schema, and `errors` schema
 - Uses Effect Schema for runtime validation at process boundaries
 - Handlers in `src/main/ipc/{domain}-handlers.ts` auto-decode/encode messages
-- Error mapping in `src/main/ipc/error-mapper.ts` transforms domain errors to IPC errors
+- Error mapping in `src/main/ipc/error-mapper.ts` transforms domain errors (including tier errors) to IPC errors
 - Ensures end-to-end type safety across process boundary
 
 **IPC Contract Structure:**
@@ -112,20 +188,24 @@ export const GitHubIpcContracts = {
 ### Reactive State Management with Effect Atoms
 
 Uses `@effect-atom/atom-react` to replace React Query/Zustand patterns:
-- **Atoms** defined in `src/renderer/atoms/github-atoms.ts` integrate Effect runtime with React
+- **Atoms** defined in `src/renderer/atoms/` integrate Effect runtime with React
+  - `account-atoms.ts`: Account management (`accountContextAtom`, `activeAccountAtom`, `tierLimitsAtom`)
+  - `github-atoms.ts`: GitHub data (`reposAtom`, `issuesAtom`, etc.)
 - **Atom families** for parameterized queries (similar to React Query keys): `reposAtom(username)`, `issuesAtom({ owner, repo, state })`
-- **Reactivity keys** for cache invalidation: `['github:auth']`, `['github:repos:user']`
+- **Reactivity keys** for cache invalidation: `['account:context']`, `['github:auth']`, `['github:repos:user']`
 - **TTL caching**: `Atom.setIdleTTL(Duration.minutes(5))` for automatic cache expiration
 - **Result<T, E>** types for typed error handling in components
 - **Custom hooks** (`src/renderer/hooks/useGitHubAtoms.ts`) wrap atoms for clean React integration
 
-Example: `reposAtom` family caches repos per user for 5 minutes and invalidates on auth changes.
+Example: `reposAtom` family caches repos per user for 5 minutes and invalidates on auth changes. When switching accounts, all relevant atoms invalidate via reactivity keys.
 
 ### Shared Schemas (`src/shared/schemas/`)
 
 All data models use Effect Schema:
-- `GitHubUser`, `GitHubRepository`, `GitHubIssue`
-- Error types: `AuthenticationError`, `NetworkError`, `NotFoundError`
+- **Account schemas**: `AccountContext`, `Account`, `AccountId`, `ProviderType` (`schemas/account-context.ts`)
+- **GitHub schemas**: `GitHubUser`, `GitHubRepository`, `GitHubIssue`, `GitHubPullRequest`
+- **Error types**: `AuthenticationError`, `NetworkError`, `NotFoundError`
+- **Tier errors**: `AccountLimitExceededError`, `FeatureNotAvailableError`
 - Ensures runtime type safety and validation across all layers
 
 ## Key Patterns & Conventions
@@ -168,9 +248,10 @@ All errors are typed and tracked through Effect's error channel using a three-la
 
 **Layer 2: IPC Error Mapping** (`src/main/ipc/error-mapper.ts`)
 - Maps domain errors to shared error types that cross process boundaries
+- Handles tier errors: `AccountLimitExceededError`, `FeatureNotAvailableError`
 - Uses `instanceof` checks with actual error classes (not string tags)
 - Type-safe error transformation with `mapDomainErrorToIpcError`
-- Returns `IpcErrorResult = { _tag: 'Error'; error: AuthenticationError | NetworkError }`
+- Returns `IpcErrorResult = { _tag: 'Error'; error: AuthenticationError | NetworkError | NotFoundError }`
 
 **Layer 3: Shared Error Types** (`src/shared/schemas/errors.ts`)
 - Process-boundary-safe error schemas: `AuthenticationError`, `NetworkError`, `NotFoundError`
@@ -199,6 +280,11 @@ Required in `.env`:
 - `GITHUB_CLIENT_ID`: GitHub OAuth app client ID
 - `GITHUB_CLIENT_SECRET`: GitHub OAuth app client secret
 - `STORE_ENCRYPTION_KEY`: Key for encrypting stored credentials (use secure value in production)
+
+Tier-specific (`.env.free`, `.env.pro`):
+- `APP_TIER`: `free` or `pro`
+- `APP_NAME`: Application display name (e.g., "Geppetto Free", "Geppetto Pro")
+- `APP_ID_SUFFIX`: Suffix for app ID (e.g., `free`, `pro`)
 
 ## Implementation Guidelines
 
@@ -400,48 +486,66 @@ Effect.runPromise(
 
 ```
 src/
-├── shared/                    # IPC contracts and schemas (cross-process types)
-│   ├── ipc-contracts.ts      # All IPC contract exports (GitHubIpcContracts, etc.)
+├── shared/                      # IPC contracts and schemas (cross-process types)
+│   ├── tier-config.ts          # Tier configuration (Free/Pro limits)
+│   ├── ipc-contracts.ts        # All IPC contract exports (AccountIpcContracts, GitHubIpcContracts)
 │   └── schemas/
-│       ├── errors.ts          # Shared error types (AuthenticationError, NetworkError)
-│       ├── github/            # GitHub domain schemas
+│       ├── errors.ts            # Shared error types (AuthenticationError, NetworkError, NotFoundError)
+│       ├── account-context.ts   # AccountContext aggregate, Account entity, domain events
+│       ├── github/              # GitHub domain schemas
 │       │   ├── user.ts
 │       │   ├── repository.ts
-│       │   └── issue.ts
-│       └── gitlab/            # Future: GitLab domain schemas
+│       │   ├── issue.ts
+│       │   └── pull-request.ts
+│       └── gitlab/              # Future: GitLab domain schemas
 │
-├── main/                      # Main process (Node.js, Effect services)
-│   ├── github/                # GitHub domain
-│   │   ├── errors.ts          # GitHubAuthError, GitHubApiError, etc.
-│   │   ├── http-service.ts    # HTTP client for GitHub API
-│   │   ├── auth-service.ts    # OAuth flow (geppetto:// protocol)
-│   │   ├── store-service.ts   # Encrypted credential storage
-│   │   ├── api-service.ts     # High-level GitHub operations
-│   │   └── schemas.ts         # Domain-specific types (StoredGitHubAuth, etc.)
+├── main/                        # Main process (Node.js, Effect services)
+│   ├── tier/                    # Tier management
+│   │   └── tier-service.ts      # TierService - feature gating and limit enforcement
 │   │
-│   ├── gitlab/                # Future: GitLab domain (same structure as github/)
+│   ├── account/                 # Multi-account management
+│   │   └── account-context-service.ts  # AccountContextService - DDD aggregate management
 │   │
-│   └── ipc/                   # IPC handler registration
-│       ├── error-mapper.ts    # Maps all domain errors to IPC errors
-│       ├── github-handlers.ts # Registers GitHub IPC handlers
-│       └── gitlab-handlers.ts # Future: GitLab IPC handlers
+│   ├── github/                  # GitHub domain
+│   │   ├── errors.ts            # GitHubAuthError, GitHubApiError, etc.
+│   │   ├── http-service.ts      # HTTP client for GitHub API
+│   │   ├── auth-service.ts      # OAuth flow (geppetto:// protocol) with account integration
+│   │   ├── store-service.ts     # Multi-account encrypted token storage
+│   │   ├── api-service.ts       # High-level GitHub operations
+│   │   └── schemas.ts           # Domain-specific types (StoredGitHubAuth, etc.)
+│   │
+│   ├── gitlab/                  # Future: GitLab domain (same structure as github/)
+│   │
+│   └── ipc/                     # IPC handler registration
+│       ├── error-mapper.ts      # Maps all domain errors (GitHub, tier) to IPC errors
+│       ├── account-handlers.ts  # Account management IPC handlers
+│       ├── github-handlers.ts   # GitHub IPC handlers
+│       └── gitlab-handlers.ts   # Future: GitLab IPC handlers
 │
-├── renderer/                  # Renderer process (React + atoms)
+├── renderer/                    # Renderer process (React + atoms)
 │   ├── atoms/
-│   │   ├── github-atoms.ts    # GitHub state atoms
-│   │   └── gitlab-atoms.ts    # Future: GitLab state atoms
+│   │   ├── account-atoms.ts     # Account management state atoms
+│   │   ├── github-atoms.ts      # GitHub state atoms
+│   │   └── gitlab-atoms.ts      # Future: GitLab state atoms
 │   ├── hooks/
-│   │   └── useGitHubAtoms.ts  # GitHub custom hooks
-│   ├── components/            # UI components
+│   │   └── useGitHubAtoms.ts    # GitHub custom hooks
+│   ├── components/              # UI components
 │   └── lib/
-│       ├── ipc-client.ts      # Base IPC client
-│       └── github-client.ts   # GitHub-specific client wrapper
+│       ├── ipc-client.ts        # Base IPC client
+│       └── github-client.ts     # GitHub-specific client wrapper
 │
 └── preload/
-    └── index.ts               # IPC bridge (contextBridge)
+    └── index.ts                 # IPC bridge (contextBridge)
 ```
 
 ### Architecture Decisions & Rationale
+
+**Why Tiered Architecture?**
+- **Monetization**: Clear free/pro distinction enables business model
+- **Feature Gating**: Compile-time tier configuration prevents feature leakage
+- **User Segmentation**: Different app IDs allow free and pro to coexist on same system
+- **Account Limits**: DDD AccountContext aggregate enforces tier limits with domain events
+- **Scalability**: Easy to add new tiers or adjust limits per tier
 
 **Why Domain-Driven Organization?**
 - **Scalability**: Easy to add new OAuth providers (GitLab, Bitbucket, Azure DevOps)

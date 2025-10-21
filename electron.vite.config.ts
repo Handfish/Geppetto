@@ -17,6 +17,10 @@ const tsconfigPaths = tsconfigPathsPlugin({
   projects: [resolve('tsconfig.json')],
 })
 
+// Tier configuration - defaults to 'free' if not specified
+const APP_TIER = process.env.APP_TIER || 'free'
+const APP_NAME = process.env.APP_NAME || 'Geppetto'
+
 export default defineConfig({
   main: {
     plugins: [tsconfigPaths, externalizeDepsPlugin()],
@@ -45,6 +49,8 @@ export default defineConfig({
   renderer: {
     define: {
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
+      'process.env.APP_TIER': JSON.stringify(APP_TIER),
+      'process.env.APP_NAME': JSON.stringify(APP_NAME),
       'process.platform': JSON.stringify(process.platform),
     },
 
@@ -73,6 +79,8 @@ export default defineConfig({
         plugins: [
           injectProcessEnvPlugin({
             NODE_ENV: 'production',
+            APP_TIER,
+            APP_NAME,
             platform: process.platform,
           }),
         ],

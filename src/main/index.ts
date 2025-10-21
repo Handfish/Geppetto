@@ -6,7 +6,10 @@ import { GitHubAuthService } from './github/auth-service'
 import { GitHubApiService } from './github/api-service'
 import { GitHubHttpService } from './github/http-service'
 import { SecureStoreService } from './github/store-service'
+import { TierService } from './tier/tier-service'
+import { AccountContextService } from './account/account-context-service'
 import { setupGitHubIpcHandlers } from './ipc/github-handlers'
+import { setupAccountIpcHandlers } from './ipc/account-handlers'
 import { registerRoute } from '../lib/electron-router-dom'
 import { makeAppSetup } from '../lib/electron-app/factories/app/setup'
 
@@ -16,6 +19,8 @@ const PROTOCOL_SCHEME = 'geppetto'
 const MainLayer = Layer.mergeAll(
   GitHubHttpService.Default,
   SecureStoreService.Default,
+  TierService.Default,
+  AccountContextService.Default,
   GitHubAuthService.Default,
   GitHubApiService.Default
 )
@@ -74,7 +79,10 @@ let mainWindow: BrowserWindow | null = null
 app.whenReady().then(async () => {
   // Wait for IPC handlers to be fully set up before creating the window
   await Effect.runPromise(
-    setupGitHubIpcHandlers.pipe(Effect.provide(MainLayer))
+    Effect.gen(function* () {
+      yield* setupAccountIpcHandlers
+      yield* setupGitHubIpcHandlers
+    }).pipe(Effect.provide(MainLayer))
   )
 
   mainWindow = await makeAppSetup(async () => createMainWindow())

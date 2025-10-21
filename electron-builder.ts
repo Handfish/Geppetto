@@ -16,13 +16,18 @@ import { getDevFolder } from './src/lib/electron-app/release/utils/path'
 const author = _author?.name ?? _author
 const currentYear = new Date().getFullYear()
 const authorInKebabCase = author.replace(/\s+/g, '-')
-const appId = `com.${authorInKebabCase}.${name}`.toLowerCase()
 
-const artifactName = [`${name}-v${version}`, '-${os}.${ext}'].join('')
+// Tier-based configuration
+const appTier = (process.env.APP_TIER || 'free') as 'free' | 'pro'
+const appIdSuffix = process.env.APP_ID_SUFFIX || appTier
+const appName = process.env.APP_NAME || displayName
+const appId = `com.${authorInKebabCase}.${name}.${appIdSuffix}`.toLowerCase()
+
+const artifactName = [`${name}-${appTier}-v${version}`, '-${os}.${ext}'].join('')
 
 export default {
   appId,
-  productName: displayName,
+  productName: appName,
   copyright: `Copyright © ${currentYear} — ${author}`,
 
   directories: {

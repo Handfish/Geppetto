@@ -4,6 +4,7 @@ import { URL } from 'url'
 import { GitHubAuthError, GitHubAuthTimeout } from './errors'
 import { GitHubHttpService } from './http-service'
 import { SecureStoreService } from './store-service'
+import { AccountContextService } from '../account/account-context-service'
 
 const PROTOCOL_SCHEME = 'geppetto'
 
@@ -16,10 +17,15 @@ interface OAuthApp {
 export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
   'GitHubAuthService',
   {
-    dependencies: [GitHubHttpService.Default, SecureStoreService.Default],
+    dependencies: [
+      GitHubHttpService.Default,
+      SecureStoreService.Default,
+      AccountContextService.Default,
+    ],
     effect: Effect.gen(function* () {
       const httpService = yield* GitHubHttpService
       const storeService = yield* SecureStoreService
+      const accountService = yield* AccountContextService
 
       const generateRandomState = () =>
         Math.random().toString(36).substring(2, 15)
@@ -138,9 +144,55 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
           console.log('[Auth] Token received, fetching user...')
           const user = yield* httpService.fetchUser(token)
 
+          // Add account to AccountContext
+          const account = yield* accountService.addAccount({
+            provider: 'github',
+            providerId: user.id.toString(),
+            username: user.login,
+            displayName: user.name ?? undefined,
+            avatarUrl: user.avatar_url ?? undefined,
+          })
+
+          // Store token for this account
+          yield* storeService.setAuthForAccount(account.id, Redacted.make(token))
+
+          // Legacy: Also store in old format for backward compatibility
           yield* storeService.setAuth(Redacted.make(token), user)
 
           return { token: Redacted.make(token), user }
+        }),
+
+        /**
+         * Sign out - removes the active account
+         */
+        signOut: Effect.gen(function* () {
+          const activeAccount = yield* accountService.getActiveAccountForProvider('github')
+          if (activeAccount) {
+            yield* storeService.clearAuthForAccount(activeAccount.id)
+            yield* accountService.removeAccount(activeAccount.id)
+          }
+          // Legacy cleanup
+          yield* storeService.clearAuth
+        }),
+
+        /**
+         * Check authentication status
+         */
+        checkAuth: Effect.gen(function* () {
+          const activeAccount = yield* accountService.getActiveAccountForProvider('github')
+          if (!activeAccount) {
+            return { authenticated: false, user: Option.none() }
+          }
+
+          const tokenOption = yield* storeService.getAuthForAccount(activeAccount.id)
+          if (Option.isNone(tokenOption)) {
+            return { authenticated: false, user: Option.none() }
+          }
+
+          const token = Option.getOrThrow(tokenOption)
+          const user = yield* httpService.fetchUser(Redacted.value(token))
+
+          return { authenticated: true, user: Option.some(user) }
         }),
       }
     }),
