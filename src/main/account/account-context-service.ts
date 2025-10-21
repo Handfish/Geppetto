@@ -5,7 +5,7 @@
  * Handles adding, removing, switching between accounts with tier enforcement.
  */
 
-import { Effect, Context } from 'effect'
+import { Effect, Context, Schema as S } from 'effect'
 import Store from 'electron-store'
 import {
   AccountContext,
@@ -17,23 +17,10 @@ import {
 import { TierService, AccountLimitExceededError } from '../tier/tier-service'
 
 /**
- * Stored account context schema
+ * Stored account context schema (auto-derived from AccountContext Schema)
+ * Effect.Schema handles serialization of Dates to ISO strings automatically
  */
-interface StoredAccountContext {
-  accounts: Array<{
-    id: string
-    provider: string
-    providerId: string
-    username: string
-    displayName?: string
-    avatarUrl?: string
-    status: string
-    createdAt: string
-    lastUsedAt: string
-  }>
-  activeAccountId: string | null
-  lastModified: string
-}
+type StoredAccountContext = S.Schema.Encoded<typeof AccountContext>
 
 /**
  * AccountContextService implementation
@@ -44,61 +31,37 @@ export class AccountContextService extends Effect.Service<AccountContextService>
     dependencies: [TierService.Default],
     effect: Effect.gen(function* () {
       const tierService = yield* TierService
+
+      /**
+       * Default empty context for initial store state
+       * Encoded using Schema for consistency
+       */
+      const defaultContext = S.encodeSync(AccountContext)(AccountContext.empty())
+
       const store = new Store<{ accountContext: StoredAccountContext }>({
-      name: 'account-context',
-      defaults: {
-        accountContext: {
-          accounts: [],
-          activeAccountId: null,
-          lastModified: new Date().toISOString(),
+        name: 'account-context',
+        defaults: {
+          accountContext: defaultContext,
         },
-      },
-    })
+      })
 
     /**
      * Load AccountContext from store
+     * Uses Effect.Schema decode for automatic validation and type conversion
      */
     const loadContext = (): AccountContext => {
       const stored = store.get('accountContext')
-      return new AccountContext({
-        accounts: stored.accounts.map(
-          (acc) =>
-            new Account({
-              id: acc.id as AccountId,
-              provider: acc.provider as ProviderType,
-              providerId: acc.providerId,
-              username: acc.username,
-              displayName: acc.displayName,
-              avatarUrl: acc.avatarUrl,
-              status: acc.status as AccountStatus,
-              createdAt: new Date(acc.createdAt),
-              lastUsedAt: new Date(acc.lastUsedAt),
-            })
-        ),
-        activeAccountId: stored.activeAccountId as AccountId | null,
-        lastModified: new Date(stored.lastModified),
-      })
+      // S.decodeUnknownSync validates and decodes (ISO strings -> Dates, etc.)
+      return S.decodeUnknownSync(AccountContext)(stored)
     }
 
       /**
        * Save AccountContext to store
+       * Uses Effect.Schema encode for automatic serialization (Dates -> ISO strings, etc.)
        */
       const saveContext = (context: AccountContext): void => {
-        const stored: StoredAccountContext = {
-          accounts: context.accounts.map((acc) => ({
-            id: acc.id,
-            provider: acc.provider,
-            providerId: acc.providerId,
-            username: acc.username,
-            displayName: acc.displayName,
-            avatarUrl: acc.avatarUrl,
-            status: acc.status,
-            createdAt: acc.createdAt.toISOString(),
-            lastUsedAt: acc.lastUsedAt.toISOString(),
-          })),
-          activeAccountId: context.activeAccountId,
-          lastModified: new Date().toISOString(),
-        }
+        // S.encodeSync converts AccountContext to StoredAccountContext format
+        const stored = S.encodeSync(AccountContext)(context)
         store.set('accountContext', stored)
       }
 

@@ -25,6 +25,11 @@ export default defineConfig({
   main: {
     plugins: [tsconfigPaths, externalizeDepsPlugin()],
 
+    define: {
+      'process.env.APP_TIER': JSON.stringify(APP_TIER),
+      'process.env.APP_NAME': JSON.stringify(APP_NAME),
+    },
+
     build: {
       rollupOptions: {
         input: {
@@ -40,6 +45,11 @@ export default defineConfig({
 
   preload: {
     plugins: [tsconfigPaths, externalizeDepsPlugin()],
+
+    define: {
+      'process.env.APP_TIER': JSON.stringify(APP_TIER),
+      'process.env.APP_NAME': JSON.stringify(APP_NAME),
+    },
 
     build: {
       outDir: resolve(devPath, 'preload'),

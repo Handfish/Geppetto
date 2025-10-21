@@ -30,37 +30,40 @@ export class TierLimits extends S.Class<TierLimits>('TierLimits')({
 }) {}
 
 /**
- * Tier configurations
+ * Free tier configuration
+ * Tree-shaken out in pro builds
  */
-export const TIER_CONFIGS: Record<AppTier, TierLimits> = {
-  free: new TierLimits({
-    maxGitHubAccounts: 1,
-    maxGitLabAccounts: 0,
-    maxBitbucketAccounts: 0,
-    enableAccountSwitcher: false,
-    tier: 'free',
-  }),
-  pro: new TierLimits({
-    maxGitHubAccounts: Number.POSITIVE_INFINITY,
-    maxGitLabAccounts: Number.POSITIVE_INFINITY,
-    maxBitbucketAccounts: Number.POSITIVE_INFINITY,
-    enableAccountSwitcher: true,
-    tier: 'pro',
-  }),
-}
+const FREE_TIER_LIMITS = new TierLimits({
+  maxGitHubAccounts: 1,
+  maxGitLabAccounts: 0,
+  maxBitbucketAccounts: 0,
+  enableAccountSwitcher: false,
+  tier: 'free',
+})
 
 /**
- * Get current application tier from environment
- * Falls back to 'free' if not specified
+ * Pro tier configuration
+ * Tree-shaken out in free builds
  */
-export const getCurrentTier = (): AppTier => {
-  const tier = process.env.APP_TIER as AppTier | undefined
-  return tier === 'pro' ? 'pro' : 'free'
-}
+const PRO_TIER_LIMITS = new TierLimits({
+  maxGitHubAccounts: Number.POSITIVE_INFINITY,
+  maxGitLabAccounts: Number.POSITIVE_INFINITY,
+  maxBitbucketAccounts: Number.POSITIVE_INFINITY,
+  enableAccountSwitcher: true,
+  tier: 'pro',
+})
 
 /**
  * Get tier limits for current build
+ * Uses build-time constant propagation for tree-shaking.
+ * In free builds, PRO_TIER_LIMITS is eliminated.
+ * In pro builds, FREE_TIER_LIMITS is eliminated.
  */
 export const getCurrentTierLimits = (): TierLimits => {
-  return TIER_CONFIGS[getCurrentTier()]
+  // Vite replaces process.env.APP_TIER with literal 'free' or 'pro'
+  // This enables dead code elimination of the unused branch
+  if (process.env.APP_TIER === 'pro') {
+    return PRO_TIER_LIMITS
+  }
+  return FREE_TIER_LIMITS
 }
