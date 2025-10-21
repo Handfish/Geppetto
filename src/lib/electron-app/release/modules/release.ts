@@ -65,7 +65,8 @@ async function makeRelease() {
     await open(`https://github.com/${ownerAndRepo}/actions`)
 
     console.log(`\n${COLORS.GREEN}Done!${COLORS.RESET}\n`)
-  } catch ({ message }: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     console.log(`
     🛑 Something went wrong!\n
       👀 Error: ${message}

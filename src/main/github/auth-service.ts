@@ -7,6 +7,12 @@ import { SecureStoreService } from './store-service'
 
 const PROTOCOL_SCHEME = 'geppetto'
 
+// Augment Electron's app with custom oauth-callback event
+interface OAuthApp {
+  on(event: 'oauth-callback', listener: (url: string) => void): this
+  removeListener(event: 'oauth-callback', listener: (url: string) => void): this
+}
+
 export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
   'GitHubAuthService',
   {
@@ -69,7 +75,7 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
                 if (error) {
                   console.log('[Auth] OAuth error:', error)
                   hasResolved = true
-                  ;(app as any).removeListener('oauth-callback', handleCallback)
+                  ;(app as unknown as OAuthApp).removeListener('oauth-callback', handleCallback)
                   resume(
                     Effect.fail(
                       new GitHubAuthError({
@@ -83,7 +89,7 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
                 if (authCode) {
                   console.log('[Auth] Authorization code received:', authCode)
                   hasResolved = true
-                  ;(app as any).removeListener('oauth-callback', handleCallback)
+                  ;(app as unknown as OAuthApp).removeListener('oauth-callback', handleCallback)
                   console.log('[Auth] About to call resume with Effect.succeed')
                   resume(Effect.succeed(authCode))
                   console.log('[Auth] Resume called successfully')
@@ -97,7 +103,7 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
             }
 
             console.log('[Auth] Registering oauth-callback event listener')
-            ;(app as any).on('oauth-callback', handleCallback)
+            ;(app as unknown as OAuthApp).on('oauth-callback', handleCallback)
             console.log(
               '[Auth] Event listener registered, waiting for callback...'
             )
@@ -105,7 +111,7 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
             // Cleanup function
             return Effect.sync(() => {
               console.log('[Auth] Cleaning up oauth-callback listener')
-              ;(app as any).removeListener('oauth-callback', handleCallback)
+              ;(app as unknown as OAuthApp).removeListener('oauth-callback', handleCallback)
             })
           })
 

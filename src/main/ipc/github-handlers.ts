@@ -3,67 +3,59 @@ import { Effect, Schema as S } from 'effect'
 import { GitHubIpcContracts, type IpcContracts } from '../../shared/ipc-contracts'
 import { GitHubAuthService } from '../github/auth-service'
 import { GitHubApiService } from '../github/api-service'
-import { AuthenticationError, NetworkError } from '../../shared/schemas/errors'
+import { mapDomainErrorToIpcError } from './error-mapper'
 
 export const setupGitHubIpcHandlers = Effect.gen(function* () {
   const authService = yield* GitHubAuthService
   const apiService = yield* GitHubApiService
 
-  const handlers = {
-    signIn: () => authService.startAuthFlow,
-    checkAuth: () => apiService.checkAuth,
-    signOut: () => apiService.signOut,
-    getRepos: ({ username }: { username?: string }) => apiService.getRepos(username),
-    getRepo: ({ owner, repo }: { owner: string; repo: string }) => apiService.getRepo(owner, repo),
-    getIssues: ({ owner, repo, state }: { owner: string; repo: string; state?: 'open' | 'closed' | 'all' }) =>
-      apiService.getIssues(owner, repo, state),
-    getPullRequests: ({ owner, repo, state }: { owner: string; repo: string; state?: 'open' | 'closed' | 'all' }) =>
-      apiService.getPullRequests(owner, repo, state),
-  } as const
+  // Extract schema types for each contract
+  type ContractInput<K extends keyof IpcContracts> = S.Schema.Type<IpcContracts[K]['input']>
+  type ContractOutput<K extends keyof IpcContracts> = S.Schema.Type<IpcContracts[K]['output']>
 
-  for (const [name, contract] of Object.entries(GitHubIpcContracts)) {
-    const handler = handlers[name as keyof typeof handlers]
-    
-    ipcMain.handle(contract.channel, async (event, input) => {
+  // Type-safe handler setup using generics properly
+  // Handler can return any Effect with proper output type - errors are caught and mapped
+  const setupHandler = <K extends keyof IpcContracts, E>(
+    key: K,
+    handler: (input: ContractInput<K>) => Effect.Effect<ContractOutput<K>, E>
+  ) => {
+    const contract = GitHubIpcContracts[key]
+    // Type assertions needed because TypeScript can't track the relationship between
+    // the key and the contract schemas in the union type. Runtime safety is guaranteed
+    // by the schema validation.
+    type InputSchema = S.Schema<ContractInput<K>, S.Schema.Encoded<IpcContracts[K]['input']>>
+    type OutputSchema = S.Schema<ContractOutput<K>, S.Schema.Encoded<IpcContracts[K]['output']>>
+
+    ipcMain.handle(contract.channel, async (_event, input: unknown) => {
       const program = Effect.gen(function* () {
-        const validatedInput = yield* S.decodeUnknown(contract.input)(input)
-        const result = yield* handler(validatedInput as any)
-        console.log(`[IPC Handler ${name}] Result:`, result)
-        const encoded = yield* S.encode(contract.output)(result)
-        console.log(`[IPC Handler ${name}] Encoded:`, encoded)
+        // Decode input using the contract's input schema
+        const validatedInput = yield* S.decodeUnknown(contract.input as unknown as InputSchema)(input)
+        // Execute handler with properly typed input
+        const result = yield* handler(validatedInput)
+        console.log(`[IPC Handler ${key}] Result:`, result)
+        // Encode output using the contract's output schema
+        const encoded = yield* S.encode(contract.output as unknown as OutputSchema)(result)
+        console.log(`[IPC Handler ${key}] Encoded:`, encoded)
         return encoded
       }).pipe(
-        Effect.catchAll((error) => {
-          console.error(`[IPC Handler ${name}] Error:`, error)
-          if (error._tag === 'GitHubAuthError' || error._tag === 'GitHubAuthTimeout') {
-            return Effect.succeed({
-              _tag: 'Error' as const,
-              error: new AuthenticationError({ message: error.message }),
-            })
-          }
-          if (error._tag === 'GitHubTokenExchangeError') {
-            return Effect.succeed({
-              _tag: 'Error' as const,
-              error: new AuthenticationError({ message: error.message }),
-            })
-          }
-          if (error._tag === 'GitHubApiError' || error._tag === 'NotAuthenticatedError') {
-            return Effect.succeed({
-              _tag: 'Error' as const,
-              error: new NetworkError({ message: error.message }),
-            })
-          }
-          return Effect.succeed({
-            _tag: 'Error' as const,
-            error: new NetworkError({ message: `Unexpected error occurred: ${error.message || JSON.stringify(error)}` }),
-          })
-        })
+        Effect.catchAll(mapDomainErrorToIpcError)
       )
 
       const finalResult = await Effect.runPromise(program)
-      console.log(`[IPC Handler ${name}] Final result being sent:`, finalResult)
+      console.log(`[IPC Handler ${key}] Final result being sent:`, finalResult)
       return finalResult
     })
   }
+
+  // Register all handlers with full type safety
+  setupHandler('signIn', (_input: ContractInput<'signIn'>) => authService.startAuthFlow)
+  setupHandler('checkAuth', (_input: ContractInput<'checkAuth'>) => apiService.checkAuth)
+  setupHandler('signOut', (_input: ContractInput<'signOut'>) => apiService.signOut)
+  setupHandler('getRepos', (input: ContractInput<'getRepos'>) => apiService.getRepos(input.username))
+  setupHandler('getRepo', (input: ContractInput<'getRepo'>) => apiService.getRepo(input.owner, input.repo))
+  setupHandler('getIssues', (input: ContractInput<'getIssues'>) =>
+    apiService.getIssues(input.owner, input.repo, input.state))
+  setupHandler('getPullRequests', (input: ContractInput<'getPullRequests'>) =>
+    apiService.getPullRequests(input.owner, input.repo, input.state))
 })
 

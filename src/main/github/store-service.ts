@@ -1,7 +1,10 @@
-import { Effect, Option, Redacted } from 'effect'
+import { Effect, Option, Redacted, Schema as S } from 'effect'
 import Store from 'electron-store'
 import { GitHubUser } from '../../shared/schemas'
 import { StoredGitHubAuth } from './schemas'
+
+// Type for the raw user data stored in electron-store
+type StoredUserData = S.Schema.Type<typeof GitHubUser>
 
 export class SecureStoreService extends Effect.Service<SecureStoreService>()('SecureStoreService', {
   sync: () => {
@@ -14,7 +17,7 @@ export class SecureStoreService extends Effect.Service<SecureStoreService>()('Se
     return {
       getAuth: Effect.sync(() => {
         const token = store.get('githubToken') as string | undefined
-        const user = store.get('githubUser') as any
+        const user = store.get('githubUser') as StoredUserData | undefined
 
         if (!token || !user) {
           return Option.none()

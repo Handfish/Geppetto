@@ -26,7 +26,8 @@ async function createPackageJSONDistVersion() {
         JSON.stringify(trustedDependencies, null, 2)
       ),
     ])
-  } catch ({ message }: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     console.log(`
     🛑 Something went wrong!\n
       🧐 There was a problem creating the package.json dist version...\n
