@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Geppetto
+Comment=GitHub Desktop Clone
+Exec=/home/ken-udovic/Workspace/node/geppetto/node_modules/.bin/electron /home/ken-udovic/Workspace/node/geppetto %U
+Icon=/home/ken-udovic/Workspace/node/geppetto/src/resources/icon.png
+Terminal=false
+Categories=Development;
+MimeType=x-scheme-handler/geppetto;
