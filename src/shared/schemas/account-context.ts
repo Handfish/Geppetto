@@ -49,9 +49,9 @@ export class Account extends S.Class<Account>('Account')({
   /** Account status */
   status: AccountStatus,
   /** When the account was added */
-  createdAt: S.DateFromSelf,
+  createdAt: S.Date,
   /** Last time the account was used */
-  lastUsedAt: S.DateFromSelf,
+  lastUsedAt: S.Date,
 }) {
   /**
    * Create an AccountId from provider and providerId
@@ -81,7 +81,7 @@ export class AccountContext extends S.Class<AccountContext>('AccountContext')({
   /** Currently active account ID (null if no accounts) */
   activeAccountId: S.NullOr(AccountId),
   /** When the context was last modified */
-  lastModified: S.DateFromSelf,
+  lastModified: S.Date,
 }) {
   /**
    * Get the currently active account
@@ -153,22 +153,22 @@ export class AccountContext extends S.Class<AccountContext>('AccountContext')({
 export class AccountAddedEvent extends S.Class<AccountAddedEvent>('AccountAddedEvent')({
   accountId: AccountId,
   provider: ProviderType,
-  occurredAt: S.DateFromSelf,
+  occurredAt: S.Date,
 }) {}
 
 export class AccountRemovedEvent extends S.Class<AccountRemovedEvent>('AccountRemovedEvent')({
   accountId: AccountId,
   provider: ProviderType,
-  occurredAt: S.DateFromSelf,
+  occurredAt: S.Date,
 }) {}
 
 export class AccountSwitchedEvent extends S.Class<AccountSwitchedEvent>('AccountSwitchedEvent')({
   fromAccountId: S.NullOr(AccountId),
   toAccountId: AccountId,
-  occurredAt: S.DateFromSelf,
+  occurredAt: S.Date,
 }) {}
 
 export class AccountExpiredEvent extends S.Class<AccountExpiredEvent>('AccountExpiredEvent')({
   accountId: AccountId,
-  occurredAt: S.DateFromSelf,
+  occurredAt: S.Date,
 }) {}

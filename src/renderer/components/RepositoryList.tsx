@@ -3,30 +3,26 @@ import { Result } from '@effect-atom/atom-react'
 import { useUserRepos } from '../hooks/useGitHubAtoms'
 
 export function RepositoryList() {
-  const { repos } = useUserRepos()
+  const { repos, isLoading } = useUserRepos()
 
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold text-white">Your Repositories</h2>
-      
+
       {Result.builder(repos)
-        .onInitial(() => (
-          <div className="text-gray-400">Loading repositories...</div>
-        ))
-        .onError('AuthenticationError', () => (
+        .onInitial(() => <div className="text-gray-400">Loading repositories...</div>)
+        .onErrorTag('AuthenticationError', () => (
           <div className="text-red-400">Please authenticate first</div>
         ))
-        .onError('NetworkError', (error) => (
+        .onErrorTag('NetworkError', (error) => (
           <div className="text-red-400">Network error: {error.message}</div>
         ))
-        .onDefect(() => (
-          <div className="text-red-400">Unexpected error occurred</div>
-        ))
+        .onDefect(() => <div className="text-red-400">Unexpected error occurred</div>)
         .onSuccess((repositories) => {
           if (repositories.length === 0) {
             return <div className="text-gray-400">No repositories found</div>
           }
-          
+
           return (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {repositories.map((repo) => (
@@ -36,9 +32,7 @@ export function RepositoryList() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h3 className="font-medium text-white truncate">
-                        {repo.name}
-                      </h3>
+                      <h3 className="font-medium text-white truncate">{repo.name}</h3>
                       {repo.description && (
                         <p className="text-sm text-gray-400 mt-1 line-clamp-2">
                           {repo.description}
@@ -46,7 +40,7 @@ export function RepositoryList() {
                       )}
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center justify-between mt-4 text-sm text-gray-400">
                     <div className="flex items-center space-x-4">
                       {repo.language && (
@@ -55,11 +49,9 @@ export function RepositoryList() {
                           {repo.language}
                         </span>
                       )}
-                      <span className="flex items-center">
-                        ⭐ {repo.stargazers_count}
-                      </span>
+                      <span className="flex items-center">⭐ {repo.stargazers_count}</span>
                     </div>
-                    
+
                     <a
                       href={repo.html_url}
                       target="_blank"

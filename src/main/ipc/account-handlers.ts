@@ -35,9 +35,10 @@ export const setupAccountIpcHandlers = Effect.gen(function* () {
     const contract = AccountIpcContracts[key]
 
     ipcMain.handle(contract.channel, async (_event, input: unknown) => {
-      // Decode input
-      const decodeInput = S.decodeUnknown(contract.input)
-      const decodedInput = await Effect.runPromise(decodeInput(input))
+      // Decode input using Schema.decodeUnknown
+      const decodedInput = await Effect.runPromise(
+        S.decodeUnknown(contract.input as S.Schema<unknown>)(input)
+      )
 
       // Execute handler with error mapping
       const result = await Effect.runPromise(

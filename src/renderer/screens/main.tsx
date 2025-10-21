@@ -1,5 +1,4 @@
 import { Terminal } from 'lucide-react'
-import { useEffect } from 'react'
 
 import {
   Alert,
@@ -9,16 +8,7 @@ import {
 
 import SleepLight from 'renderer/components/ui/SleepLight'
 
-// The "App" comes from the context bridge in preload/index.ts
-const { App } = window
-
 export function MainScreen() {
-  useEffect(() => {
-    // check the console on dev tools
-    App.sayHelloFromBridge()
-  }, [])
-
-  // const userName = App.username || 'there'
   const userName = 'Handfish'
 
   return (

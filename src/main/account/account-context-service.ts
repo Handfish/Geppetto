@@ -5,7 +5,7 @@
  * Handles adding, removing, switching between accounts with tier enforcement.
  */
 
-import { Effect, Context, Schema as S } from 'effect'
+import { Effect, Schema as S } from 'effect'
 import Store from 'electron-store'
 import {
   AccountContext,
@@ -14,7 +14,7 @@ import {
   type ProviderType,
   AccountStatus,
 } from '../../shared/schemas/account-context'
-import { TierService, AccountLimitExceededError } from '../tier/tier-service'
+import { TierService } from '../tier/tier-service'
 
 /**
  * Stored account context schema (auto-derived from AccountContext Schema)
@@ -78,9 +78,6 @@ export class AccountContextService extends Effect.Service<AccountContextService>
           Effect.gen(function* () {
             const context = loadContext()
 
-            // Check tier limits
-            yield* tierService.checkCanAddAccount(params.provider, context)
-
             // Create new account
             const now = new Date()
             const accountId = Account.makeAccountId(params.provider, params.providerId)
@@ -98,7 +95,8 @@ export class AccountContextService extends Effect.Service<AccountContextService>
 
             // Check if account already exists
             if (context.hasAccount(accountId)) {
-              // Update existing account instead of adding
+              // Update existing account instead of adding (re-authentication)
+              // No tier check needed since we're not adding a new account
               const updatedAccounts = context.accounts.map((acc: Account) =>
                 acc.id === accountId ? account : acc
               )
@@ -111,6 +109,9 @@ export class AccountContextService extends Effect.Service<AccountContextService>
               saveContext(updatedContext)
               return account
             }
+
+            // Check tier limits ONLY when adding a new account
+            yield* tierService.checkCanAddAccount(params.provider, context)
 
             // Add new account
             const updatedContext = new AccountContext({
@@ -146,7 +147,7 @@ export class AccountContextService extends Effect.Service<AccountContextService>
           }),
 
         switchAccount: (accountId: AccountId) =>
-          Effect.gen(function* () {
+          Effect.sync(() => {
             const context = loadContext()
 
             if (!context.hasAccount(accountId)) {
@@ -163,13 +164,13 @@ export class AccountContextService extends Effect.Service<AccountContextService>
           }),
 
         getActiveAccount: () =>
-          Effect.gen(function* () {
+          Effect.sync(() => {
             const context = loadContext()
             return context.getActiveAccount()
           }),
 
         getActiveAccountForProvider: (provider: ProviderType) =>
-          Effect.gen(function* () {
+          Effect.sync(() => {
             const context = loadContext()
             return context.getActiveAccountForProvider(provider)
           }),
@@ -217,7 +218,7 @@ export class AccountContextService extends Effect.Service<AccountContextService>
           }),
 
           getAccountsByProvider: (provider: ProviderType) =>
-            Effect.gen(function* () {
+            Effect.sync(() => {
               const context = loadContext()
               return context.getAccountsByProvider(provider)
             }),

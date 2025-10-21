@@ -1,20 +1,19 @@
 import { Effect, Schema as S, ParseResult } from 'effect'
-import type { IpcContracts, IpcChannels } from '../../shared/ipc-contracts'
-import { GitHubIpcContracts } from '../../shared/ipc-contracts'
+import { IpcContracts, type IpcChannels } from '../../shared/ipc-contracts'
 import { NetworkError } from '../../shared/schemas/errors'
 
 export class ElectronIpcClient extends Effect.Service<ElectronIpcClient>()('ElectronIpcClient', {
   sync: () => ({
     invoke: <T extends IpcChannels>(
       channel: T,
-      input: S.Schema.Type<IpcContracts[T]['input']>
+      input: S.Schema.Type<(typeof IpcContracts)[T]['input']>
     ): Effect.Effect<
-      S.Schema.Type<IpcContracts[T]['output']>,
-      S.Schema.Type<IpcContracts[T]['errors']> | NetworkError,
+      S.Schema.Type<(typeof IpcContracts)[T]['output']>,
+      S.Schema.Type<(typeof IpcContracts)[T]['errors']> | NetworkError,
       never
     > =>
       Effect.gen(function* () {
-        const contract = GitHubIpcContracts[channel]
+        const contract = IpcContracts[channel]
 
         // Validate input using the contract's input schema
         // Use S.Schema.Any to handle polymorphic schemas properly
@@ -34,10 +33,10 @@ export class ElectronIpcClient extends Effect.Service<ElectronIpcClient>()('Elec
 
         console.log(`[IPC Client ${channel}] Raw result:`, rawResult)
 
-        if (rawResult && typeof rawResult === 'object' && rawResult._tag === 'Error') {
-          console.log(`[IPC Client ${channel}] Received error:`, rawResult.error)
+        if (rawResult && typeof rawResult === 'object' && '_tag' in rawResult && rawResult._tag === 'Error') {
+          console.log(`[IPC Client ${channel}] Received error:`, 'error' in rawResult ? rawResult.error : 'Unknown error')
           // Type the error properly as it comes from the IPC contract
-          return yield* Effect.fail(rawResult.error as S.Schema.Type<IpcContracts[T]['errors']>)
+          return yield* Effect.fail(('error' in rawResult ? rawResult.error : new NetworkError({ message: 'Unknown error' })) as S.Schema.Type<(typeof IpcContracts)[T]['errors']>)
         }
 
         // Decode output using the contract's output schema
@@ -48,10 +47,10 @@ export class ElectronIpcClient extends Effect.Service<ElectronIpcClient>()('Elec
           }))
         )
         console.log(`[IPC Client ${channel}] Decoded result:`, decoded)
-        return decoded as S.Schema.Type<IpcContracts[T]['output']>
+        return decoded as S.Schema.Type<(typeof IpcContracts)[T]['output']>
       }) as Effect.Effect<
-        S.Schema.Type<IpcContracts[T]['output']>,
-        S.Schema.Type<IpcContracts[T]['errors']> | NetworkError,
+        S.Schema.Type<(typeof IpcContracts)[T]['output']>,
+        S.Schema.Type<(typeof IpcContracts)[T]['errors']> | NetworkError,
         never
       >
   })
