@@ -33,22 +33,29 @@ export const setupAccountIpcHandlers = Effect.gen(function* () {
     handler: (input: ContractInput<K>) => Effect.Effect<ContractOutput<K>, E>
   ) => {
     const contract = AccountIpcContracts[key]
+    // Type assertions needed because TypeScript can't track the relationship between
+    // the key and the contract schemas in the union type. Runtime safety is guaranteed
+    // by the schema validation. We preserve both the decoded type and the encoded type.
+    type InputSchema = S.Schema<ContractInput<K>, S.Schema.Encoded<typeof AccountIpcContracts[K]['input']>>
+    type OutputSchema = S.Schema<ContractOutput<K>, S.Schema.Encoded<typeof AccountIpcContracts[K]['output']>>
 
     ipcMain.handle(contract.channel, async (_event, input: unknown) => {
-      // Decode input using Schema.decodeUnknown
-      const decodedInput = await Effect.runPromise(
-        S.decodeUnknown(contract.input as S.Schema<unknown>)(input)
+      const program = Effect.gen(function* () {
+        // Decode input using the contract's input schema
+        // Runtime: validates and transforms from encoded to decoded type
+        const validatedInput = yield* S.decodeUnknown(contract.input as unknown as InputSchema)(input)
+        // Execute handler with properly typed input (now properly inferred as ContractInput<K>)
+        const result = yield* handler(validatedInput)
+        // Encode output using the contract's output schema
+        // Runtime: transforms from decoded type to encoded (serializable) type
+        const encoded = yield* S.encode(contract.output as unknown as OutputSchema)(result)
+        return encoded
+      }).pipe(
+        Effect.catchAll(mapDomainErrorToIpcError)
       )
 
-      // Execute handler with error mapping
-      const result = await Effect.runPromise(
-        handler(decodedInput as ContractInput<K>).pipe(
-          Effect.mapError(mapDomainErrorToIpcError),
-          Effect.either
-        )
-      )
-
-      return result
+      const finalResult = await Effect.runPromise(program)
+      return finalResult
     })
   }
 
