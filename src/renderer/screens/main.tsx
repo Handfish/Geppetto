@@ -72,7 +72,7 @@ export function MainScreen() {
 
   return (
     <main
-      className="relative h-screen w-screen bg-transparent drag-region transition-opacity duration-500"
+      className="relative h-screen w-screen bg-transparent drag-region transition-opacity duration-500 overflow-hidden"
       style={{ opacity: isFocused ? 1 : 0 }}
     >
       {/* Click spark effect - only when focused */}

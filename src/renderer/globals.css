@@ -146,3 +146,27 @@ html,
 .no-drag {
   -webkit-app-region: no-drag;
 }
+
+/* Custom scrollbar for repository search */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(31, 41, 55, 0.5); /* gray-800 with opacity */
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(45, 212, 191, 0.4); /* teal-400 with opacity */
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(45, 212, 191, 0.6); /* teal-400 with more opacity on hover */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: rgba(45, 212, 191, 0.8); /* teal-400 even more visible on click */
+}

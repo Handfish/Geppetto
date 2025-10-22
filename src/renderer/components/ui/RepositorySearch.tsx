@@ -47,8 +47,7 @@ export function RepositorySearch({
   // Filter repos based on search query
   const filteredRepos = searchQuery.trim()
     ? repos.filter(repo =>
-        repo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (repo.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+        repo.name.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : []
 
@@ -122,19 +121,19 @@ export function RepositorySearch({
 
   // Auto-scroll selected item into view
   useEffect(() => {
-    const selectedElement = document.getElementById(`repo-item-${selectedIndex}`)
+    const selectedElement = document.getElementById(
+      `repo-item-${selectedIndex}`
+    )
     selectedElement?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [selectedIndex])
 
   return (
     <div className="flex items-center gap-2">
-      <div ref={refs.setReference} className="relative">
+      <div className="relative" ref={refs.setReference}>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-teal-400" />
           <input
-            ref={inputRef}
-            type="text"
-            value={searchQuery}
+            className="pl-10 pr-4 py-2 bg-gray-800/50 rounded border border-gray-700/50 text-gray-300 placeholder:text-gray-500 focus:outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/50 transition-colors"
             onChange={e => {
               setSearchQuery(e.target.value)
               setIsOpen(e.target.value.trim().length > 0)
@@ -145,23 +144,30 @@ export function RepositorySearch({
               }
             }}
             placeholder="Search repos"
-            className="pl-10 pr-4 py-2 bg-gray-800/50 rounded border border-gray-700/50 text-gray-300 placeholder:text-gray-500 focus:outline-none focus:border-teal-400/50 focus:ring-1 focus:ring-teal-400/50 transition-colors"
+            ref={inputRef}
             style={{ width: '250px' }}
+            type="text"
+            value={searchQuery}
           />
         </div>
 
         {/* Floating dropdown */}
         {isOpen && filteredRepos.length > 0 && (
           <div
+            className="bg-gray-800/95 backdrop-blur-sm border border-gray-700/50 rounded shadow-xl z-50 overflow-hidden"
             ref={refs.setFloating}
             style={floatingStyles}
-            className="bg-gray-800/95 backdrop-blur-sm border border-gray-700/50 rounded shadow-xl z-50 overflow-hidden"
           >
-            <div className="max-h-64 overflow-y-auto">
+            <div className="max-h-64 overflow-y-auto custom-scrollbar">
               {filteredRepos.map((repo, index) => (
                 <button
-                  key={repo.id}
+                  className={`w-full px-4 py-3 text-left transition-colors ${
+                    index === selectedIndex
+                      ? 'bg-teal-400/20 border-l-2 border-teal-400'
+                      : 'hover:bg-gray-700/50'
+                  }`}
                   id={`repo-item-${index}`}
+                  key={repo.id}
                   onClick={() => {
                     const repoIndex = repos.findIndex(r => r.id === repo.id)
                     if (repoIndex !== -1) {
@@ -171,11 +177,6 @@ export function RepositorySearch({
                       inputRef.current?.blur()
                     }
                   }}
-                  className={`w-full px-4 py-3 text-left transition-colors ${
-                    index === selectedIndex
-                      ? 'bg-teal-400/20 border-l-2 border-teal-400'
-                      : 'hover:bg-gray-700/50'
-                  }`}
                 >
                   <div className="font-medium text-gray-200">{repo.name}</div>
                   {repo.description && (
