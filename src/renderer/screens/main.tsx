@@ -17,6 +17,7 @@ import {
   type RepositoryCarouselRef
 } from 'renderer/components/ui/RepositoryCarousel3'
 import { RepositorySearch } from 'renderer/components/ui/RepositorySearch'
+import { ClickSpark } from 'renderer/components/ui/ClickSpark'
 import { useGitHubAuth, useUserRepos } from '../hooks/useGitHubAtoms'
 
 export function MainScreen() {
@@ -74,6 +75,8 @@ export function MainScreen() {
       className="relative h-screen w-screen bg-transparent drag-region transition-opacity duration-500"
       style={{ opacity: isFocused ? 1 : 0 }}
     >
+      {/* Click spark effect - only when focused */}
+      <ClickSpark color="#00ffff" enabled={isFocused} />
       {/* Hi message - top left */}
       <div className="absolute top-8 left-8">
         <Alert className="bg-transparent border-transparent text-accent w-fit">
