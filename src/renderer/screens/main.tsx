@@ -94,14 +94,22 @@ export function MainScreen() {
           <div className="w-full" style={{ minHeight: '180px' }}>
             <RepositoryCarousel3 repos={repos} />
           </div>
-          <div className="text-gray-500 text-sm flex items-center gap-2">
-            <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
-              ←
-            </kbd>
-            <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
-              →
-            </kbd>
-            <span>Navigate repositories</span>
+          <div className="text-gray-500 text-sm flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
+                ←
+              </kbd>
+              <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
+                →
+              </kbd>
+              <span>Navigate</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
+                Space
+              </kbd>
+              <span>Menu</span>
+            </div>
           </div>
         </div>
       )}

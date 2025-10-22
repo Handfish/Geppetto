@@ -8,6 +8,7 @@ import type {
   NotFoundError,
 } from '../../../shared/schemas/errors'
 import { RepositoryCard } from './RepositoryCard'
+import { RepositoryDropdown } from './RepositoryDropdown'
 
 type IpcError = AuthenticationError | NetworkError | NotFoundError
 
@@ -20,16 +21,25 @@ let ipcListenerAttached = false
 
 export function RepositoryCarousel3({ repos }: RepositoryCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const prevIndexRef = useRef(0)
   const currentIndexRef = useRef(currentIndex)
+  const centerCardRef = useRef<HTMLDivElement>(null)
   currentIndexRef.current = currentIndex
 
   useEffect(() => {
     if (ipcListenerAttached) return
     ipcListenerAttached = true
 
-    const handleNext = () => setCurrentIndex(prev => prev + 1)
-    const handlePrev = () => setCurrentIndex(prev => prev - 1)
+    const handleNext = () => {
+      setCurrentIndex(prev => prev + 1)
+      setIsDropdownOpen(false) // Close dropdown when navigating
+    }
+
+    const handlePrev = () => {
+      setCurrentIndex(prev => prev - 1)
+      setIsDropdownOpen(false) // Close dropdown when navigating
+    }
 
     window.electron.ipcRenderer.on('carousel:next', handleNext)
     window.electron.ipcRenderer.on('carousel:prev', handlePrev)
@@ -38,6 +48,19 @@ export function RepositoryCarousel3({ repos }: RepositoryCarouselProps) {
       window.electron.ipcRenderer.removeListener('carousel:next', handleNext)
       window.electron.ipcRenderer.removeListener('carousel:prev', handlePrev)
     }
+  }, [])
+
+  // Handle Space key to toggle dropdown
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        e.preventDefault()
+        setIsDropdownOpen(prev => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
   const spacing = 250
@@ -63,46 +86,59 @@ export function RepositoryCarousel3({ repos }: RepositoryCarouselProps) {
           prevIndexRef.current = current
 
           return (
-            <AnimatePresence custom={delta} initial={false}>
-              {visibleOffsets.map(offset => {
-                const idx = (current + offset + total) % total
-                const repo = repositories[idx]
-                const isActive = offset === 0
-                const x = offset * spacing
-                const scale = isActive ? 1 : 0.85
-                const opacity = isActive
-                  ? 1
-                  : 0.3 + (0.35 * (2 - Math.abs(offset))) / 2
+            <>
+              <AnimatePresence custom={delta} initial={false}>
+                {visibleOffsets.map(offset => {
+                  const idx = (current + offset + total) % total
+                  const repo = repositories[idx]
+                  const isActive = offset === 0
+                  const x = offset * spacing
+                  const scale = isActive ? 1 : 0.85
+                  const opacity = isActive
+                    ? 1
+                    : 0.3 + (0.35 * (2 - Math.abs(offset))) / 2
 
-                return (
-                  <motion.div
-                    animate={{ x, opacity, scale }}
-                    custom={delta}
-                    exit={{
-                      x: x - delta * spacing,
-                      opacity: 0,
-                      scale: 0.85,
-                    }}
-                    initial={{
-                      x: x + delta * spacing,
-                      opacity: 0,
-                      scale: 0.85,
-                    }}
-                    key={repo.id}
-                    style={{
-                      position: 'absolute',
-                      width: 200,
-                      height: 140,
-                      transformStyle: 'preserve-3d',
-                      zIndex: isActive ? 10 : 10 - Math.abs(offset),
-                    }}
-                    transition={{ type: 'spring', stiffness: 180, damping: 20 }}
-                  >
-                    <RepositoryCard isActive={isActive} repo={repo} />
-                  </motion.div>
-                )
-              })}
-            </AnimatePresence>
+                  return (
+                    <motion.div
+                      ref={isActive ? centerCardRef : null}
+                      animate={{ x, opacity, scale }}
+                      custom={delta}
+                      exit={{
+                        x: x - delta * spacing,
+                        opacity: 0,
+                        scale: 0.85,
+                      }}
+                      initial={{
+                        x: x + delta * spacing,
+                        opacity: 0,
+                        scale: 0.85,
+                      }}
+                      key={repo.id}
+                      style={{
+                        position: 'absolute',
+                        width: 200,
+                        height: 140,
+                        transformStyle: 'preserve-3d',
+                        zIndex: isActive ? 10 : 10 - Math.abs(offset),
+                      }}
+                      transition={{ type: 'spring', stiffness: 180, damping: 20 }}
+                    >
+                      <RepositoryCard isActive={isActive} repo={repo} />
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
+
+              {/* Dropdown Menu for center item */}
+              {total > 0 && (
+                <RepositoryDropdown
+                  repo={repositories[current]}
+                  isOpen={isDropdownOpen}
+                  onOpenChange={setIsDropdownOpen}
+                  anchorRef={centerCardRef}
+                />
+              )}
+            </>
           )
         })
         .render()}
