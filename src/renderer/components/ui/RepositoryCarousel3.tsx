@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Result } from '@effect-atom/atom-react'
 import type { GitHubRepository } from '../../../shared/schemas'
@@ -17,16 +17,44 @@ interface RepositoryCarouselProps {
   isFocused: boolean
 }
 
+export interface RepositoryCarouselRef {
+  jumpToIndex: (index: number, shuffleRight?: boolean) => void
+}
+
 // global persistent singleton for Electron listener
 let ipcListenerAttached = false
 
-export function RepositoryCarousel3({ repos, isFocused }: RepositoryCarouselProps) {
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const prevIndexRef = useRef(0)
-  const currentIndexRef = useRef(currentIndex)
-  const staticAnchorRef = useRef<HTMLDivElement>(null)
-  currentIndexRef.current = currentIndex
+export const RepositoryCarousel3 = forwardRef<RepositoryCarouselRef, RepositoryCarouselProps>(
+  function RepositoryCarousel3({ repos, isFocused }, ref) {
+    const [currentIndex, setCurrentIndex] = useState(0)
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+    const prevIndexRef = useRef(0)
+    const currentIndexRef = useRef(currentIndex)
+    const staticAnchorRef = useRef<HTMLDivElement>(null)
+    currentIndexRef.current = currentIndex
+
+    // Expose methods to parent component
+    useImperativeHandle(ref, () => ({
+      jumpToIndex: (index: number, shuffleRight = false) => {
+        if (shuffleRight) {
+          // Shuffle right 5 times quickly
+          let count = 0
+          const interval = setInterval(() => {
+            count++
+            setCurrentIndex(prev => prev + 1)
+            if (count >= 5) {
+              clearInterval(interval)
+              // Then jump to the target index
+              setTimeout(() => {
+                setCurrentIndex(index)
+              }, 100)
+            }
+          }, 100)
+        } else {
+          setCurrentIndex(index)
+        }
+      },
+    }))
 
   useEffect(() => {
     if (ipcListenerAttached) return
@@ -158,4 +186,4 @@ export function RepositoryCarousel3({ repos, isFocused }: RepositoryCarouselProp
         .render()}
     </div>
   )
-}
+})
