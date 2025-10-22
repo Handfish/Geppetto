@@ -130,23 +130,50 @@ app.whenReady().then(async () => {
   // Track focus state
   let isMainWindowFocused = true
 
+  // Helper functions to manage arrow key shortcuts
+  const registerArrowKeys = () => {
+    globalShortcut.register('Left', () => {
+      console.log('[Hotkey] Left arrow pressed')
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('carousel:prev')
+      }
+    })
+
+    globalShortcut.register('Right', () => {
+      console.log('[Hotkey] Right arrow pressed')
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('carousel:next')
+      }
+    })
+
+    console.log('[Hotkeys] Registered: Left, Right for carousel navigation')
+  }
+
+  const unregisterArrowKeys = () => {
+    globalShortcut.unregister('Left')
+    globalShortcut.unregister('Right')
+    console.log('[Hotkeys] Unregistered: Left, Right for carousel navigation')
+  }
+
   // Helper function to toggle window focus
   const toggleWindowFocus = () => {
     console.log('[Hotkey] Toggle focus pressed')
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (isMainWindowFocused) {
-        // Unfocus: fade out and make click-through
+        // Unfocus: fade out, make click-through, and unregister arrow keys
         isMainWindowFocused = false
         mainWindow.setIgnoreMouseEvents(true, { forward: true })
         mainWindow.webContents.send('window:unfocus')
-        console.log('[Window] Unfocused - click-through enabled')
+        unregisterArrowKeys()
+        console.log('[Window] Unfocused - click-through enabled, arrow keys released')
       } else {
-        // Focus: fade in and restore click handling
+        // Focus: fade in, restore click handling, and re-register arrow keys
         isMainWindowFocused = true
         mainWindow.setIgnoreMouseEvents(false)
         mainWindow.focus()
         mainWindow.webContents.send('window:focus')
-        console.log('[Window] Focused - click-through disabled')
+        registerArrowKeys()
+        console.log('[Window] Focused - click-through disabled, arrow keys captured')
       }
     }
   }
@@ -161,22 +188,8 @@ app.whenReady().then(async () => {
     console.error(`[Hotkeys] Failed to register: ${toggleShortcut}`)
   }
 
-  // Register global shortcuts for carousel navigation (only work when focused)
-  globalShortcut.register('Left', () => {
-    console.log('[Hotkey] Left arrow pressed, focused:', isMainWindowFocused)
-    if (mainWindow && !mainWindow.isDestroyed() && isMainWindowFocused) {
-      mainWindow.webContents.send('carousel:prev')
-    }
-  })
-
-  globalShortcut.register('Right', () => {
-    console.log('[Hotkey] Right arrow pressed, focused:', isMainWindowFocused)
-    if (mainWindow && !mainWindow.isDestroyed() && isMainWindowFocused) {
-      mainWindow.webContents.send('carousel:next')
-    }
-  })
-
-  console.log('[Hotkeys] Registered: Left, Right for carousel navigation')
+  // Register arrow key shortcuts initially (since we start in focused state)
+  registerArrowKeys()
 })
 
 // Handle OAuth callback URLs on macOS
