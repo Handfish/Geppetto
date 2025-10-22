@@ -44,11 +44,17 @@ export function RepositorySearch({
     whileElementsMounted: autoUpdate,
   })
 
-  // Filter repos based on search query
+  // Filter and sort repos based on search query
   const filteredRepos = searchQuery.trim()
-    ? repos.filter(repo =>
-        repo.name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    ? repos
+        .filter(repo =>
+          repo.name.toLowerCase().includes(searchQuery.toLowerCase()),
+        )
+        .sort((a, b) => {
+          const aIndex = a.name.toLowerCase().indexOf(searchQuery.toLowerCase())
+          const bIndex = b.name.toLowerCase().indexOf(searchQuery.toLowerCase())
+          return aIndex - bIndex
+        })
     : []
 
   // Reset selected index when filtered results change
