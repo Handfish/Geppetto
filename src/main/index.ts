@@ -160,20 +160,41 @@ app.whenReady().then(async () => {
     console.log('[Hotkey] Toggle focus pressed')
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (isMainWindowFocused) {
-        // Unfocus: fade out, make click-through, and unregister arrow keys
+        // Unfocus: trigger fade out, then hide window to restore focus to previous app
         isMainWindowFocused = false
         mainWindow.setIgnoreMouseEvents(true, { forward: true })
         mainWindow.webContents.send('window:unfocus')
         unregisterArrowKeys()
-        console.log('[Window] Unfocused - click-through enabled, arrow keys released')
+
+        // Wait for CSS fade animation (500ms) before hiding
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            // Cross-platform window hide that restores focus properly:
+            // - Linux: hide() restores focus
+            // - Windows: minimize() + hide() restores focus
+            // - macOS: app.hide() restores focus (but hides all windows)
+            mainWindow.minimize()
+            mainWindow.hide()
+            if (process.platform === 'darwin') {
+              app.hide()
+            }
+            console.log('[Window] Hidden - focus restored to previous application')
+          }
+        }, 500)
+
+        console.log('[Window] Unfocused - fading out (will hide in 500ms)')
       } else {
-        // Focus: fade in, restore click handling, and re-register arrow keys
+        // Focus: show window, restore from minimized state, fade in
         isMainWindowFocused = true
+
+        // Show and restore window (cross-platform)
+        mainWindow.show()
+        mainWindow.restore()
         mainWindow.setIgnoreMouseEvents(false)
         mainWindow.focus()
         mainWindow.webContents.send('window:focus')
         registerArrowKeys()
-        console.log('[Window] Focused - click-through disabled, arrow keys captured')
+        console.log('[Window] Focused - window shown, click-through disabled, arrow keys captured')
       }
     }
   }

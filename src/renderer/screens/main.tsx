@@ -66,7 +66,7 @@ export function MainScreen() {
   return (
     <main
       className="relative h-screen w-screen bg-transparent drag-region transition-opacity duration-500"
-      style={{ opacity: isFocused ? 1 : 0.2 }}
+      style={{ opacity: isFocused ? 1 : 0 }}
     >
       {/* Hi message - top left */}
       <div className="absolute top-8 left-8">
