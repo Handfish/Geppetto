@@ -14,17 +14,18 @@ type IpcError = AuthenticationError | NetworkError | NotFoundError
 
 interface RepositoryCarouselProps {
   repos: Result.Result<readonly GitHubRepository[], IpcError>
+  isFocused: boolean
 }
 
 // global persistent singleton for Electron listener
 let ipcListenerAttached = false
 
-export function RepositoryCarousel3({ repos }: RepositoryCarouselProps) {
+export function RepositoryCarousel3({ repos, isFocused }: RepositoryCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const prevIndexRef = useRef(0)
   const currentIndexRef = useRef(currentIndex)
-  const centerCardRef = useRef<HTMLDivElement>(null)
+  const staticAnchorRef = useRef<HTMLDivElement>(null)
   currentIndexRef.current = currentIndex
 
   useEffect(() => {
@@ -32,11 +33,13 @@ export function RepositoryCarousel3({ repos }: RepositoryCarouselProps) {
     ipcListenerAttached = true
 
     const handleNext = () => {
+      if (!isFocused) return // Ignore when unfocused
       setCurrentIndex(prev => prev + 1)
       setIsDropdownOpen(false) // Close dropdown when navigating
     }
 
     const handlePrev = () => {
+      if (!isFocused) return // Ignore when unfocused
       setCurrentIndex(prev => prev - 1)
       setIsDropdownOpen(false) // Close dropdown when navigating
     }
@@ -48,11 +51,12 @@ export function RepositoryCarousel3({ repos }: RepositoryCarouselProps) {
       window.electron.ipcRenderer.removeListener('carousel:next', handleNext)
       window.electron.ipcRenderer.removeListener('carousel:prev', handlePrev)
     }
-  }, [])
+  }, [isFocused])
 
   // Handle Space key to toggle dropdown
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isFocused) return // Ignore when unfocused
       if (e.code === 'Space') {
         e.preventDefault()
         setIsDropdownOpen(prev => !prev)
@@ -61,13 +65,24 @@ export function RepositoryCarousel3({ repos }: RepositoryCarouselProps) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [isFocused])
 
   const spacing = 250
   const visibleOffsets = [-2, -1, 0, 1, 2]
 
   return (
     <div className="relative w-full flex items-center justify-center" style={{ height: '160px', overflow: 'visible' }}>
+      {/* Static anchor point for dropdown - positioned at center, no animation */}
+      <div
+        ref={staticAnchorRef}
+        style={{
+          position: 'absolute',
+          width: 200,
+          height: 140,
+          pointerEvents: 'none',
+          visibility: 'hidden',
+        }}
+      />
       {Result.builder(repos)
         .onSuccess(repositories => {
           const total = repositories.length
@@ -100,7 +115,6 @@ export function RepositoryCarousel3({ repos }: RepositoryCarouselProps) {
 
                   return (
                     <motion.div
-                      ref={isActive ? centerCardRef : null}
                       animate={{ x, opacity, scale }}
                       custom={delta}
                       exit={{
@@ -135,7 +149,7 @@ export function RepositoryCarousel3({ repos }: RepositoryCarouselProps) {
                   repo={repositories[current]}
                   isOpen={isDropdownOpen}
                   onOpenChange={setIsDropdownOpen}
-                  anchorRef={centerCardRef}
+                  anchorRef={staticAnchorRef}
                 />
               )}
             </>

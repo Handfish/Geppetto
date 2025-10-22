@@ -92,7 +92,7 @@ export function MainScreen() {
         <div className="absolute bottom-0 left-0 w-1/2 flex flex-col items-start justify-end pb-8 pl-8 pr-8 gap-4" style={{ height: '25vh', paddingTop: '3rem' }}>
           <SleepLight color="#00ffff" speed={8} />
           <div className="w-full" style={{ minHeight: '180px' }}>
-            <RepositoryCarousel3 repos={repos} />
+            <RepositoryCarousel3 repos={repos} isFocused={isFocused} />
           </div>
           <div className="text-gray-500 text-sm flex items-center gap-3">
             <div className="flex items-center gap-2">

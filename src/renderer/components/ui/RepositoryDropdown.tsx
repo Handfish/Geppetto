@@ -11,6 +11,7 @@ import {
   useInteractions,
   FloatingPortal,
   FloatingFocusManager,
+  hide,
 } from '@floating-ui/react'
 import {
   GitBranch,
@@ -29,7 +30,7 @@ interface RepositoryDropdownProps {
   repo: GitHubRepository
   isOpen: boolean
   onOpenChange: (open: boolean) => void
-  anchorRef: React.RefObject<HTMLDivElement>
+  anchorRef: React.RefObject<HTMLDivElement | null>
 }
 
 export function RepositoryDropdown({
@@ -38,7 +39,7 @@ export function RepositoryDropdown({
   onOpenChange,
   anchorRef,
 }: RepositoryDropdownProps) {
-  const { refs, floatingStyles, context } = useFloating({
+  const { refs, floatingStyles, context, middlewareData } = useFloating({
     open: isOpen,
     onOpenChange,
     placement: 'top',
@@ -46,8 +47,10 @@ export function RepositoryDropdown({
       offset(12),
       flip(),
       shift({ padding: 8 }),
+      hide(), // Hide if reference element is not visible or detached
     ],
     whileElementsMounted: autoUpdate,
+    strategy: 'fixed', // Use fixed positioning for better stability during animations
   })
 
   const role = useRole(context)
@@ -57,14 +60,16 @@ export function RepositoryDropdown({
     dismiss,
   ])
 
-  // Sync anchor element
+  // Sync anchor element - update whenever anchorRef or isOpen changes
   useEffect(() => {
-    if (anchorRef.current) {
+    if (anchorRef.current && isOpen) {
       refs.setReference(anchorRef.current)
     }
-  }, [anchorRef, refs])
+  }, [anchorRef, refs, isOpen, repo.id]) // Re-sync when repo changes
 
-  if (!isOpen) return null
+  // Don't render if not open, if anchor is not available, or if hidden by middleware
+  const isHidden = middlewareData.hide?.referenceHidden
+  if (!isOpen || !anchorRef.current || isHidden) return null
 
   return (
     <FloatingPortal>
@@ -92,18 +97,14 @@ export function RepositoryDropdown({
 
           {/* Stats Section */}
           <div className="px-3 py-2 border-b border-gray-700/30 bg-gray-800/30">
-            <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="flex items-center gap-4 text-xs">
               <div className="flex items-center gap-1.5 text-gray-300">
                 <Star className="size-3.5 text-yellow-400/80" />
                 <span>{repo.stargazers_count}</span>
               </div>
               <div className="flex items-center gap-1.5 text-gray-300">
-                <GitFork className="size-3.5 text-blue-400/80" />
-                <span>{repo.forks_count}</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-gray-300">
-                <Eye className="size-3.5 text-purple-400/80" />
-                <span>{repo.watchers_count}</span>
+                <Code className="size-3.5 text-blue-400/80" />
+                <span className="text-gray-400">{repo.private ? 'Private' : 'Public'}</span>
               </div>
             </div>
           </div>
