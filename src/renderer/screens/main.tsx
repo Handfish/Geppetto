@@ -60,21 +60,33 @@ export function MainScreen() {
       <ClickSpark color="#00ffff" enabled={isFocused} />
       {/* Hi message - top left */}
       <div className="absolute top-8 left-8">
-        <Alert className="bg-transparent border-transparent text-accent w-fit">
-          <AlertTitle className="text-5xl text-teal-400">
-            Hi{userName ? `, ${userName}` : ','}
-          </AlertTitle>
+        <div className="relative">
+          {/* Soft-edged dark background with blur - Ubuntu/Linear inspired */}
+          <div className="absolute inset-0 -m-6 rounded-2xl bg-gradient-to-br from-gray-950/95 via-gray-900/90 to-gray-950/95 backdrop-blur-md shadow-2xl" />
 
-          <AlertDescription className="flex items-center gap-2 text-lg">
-            <Terminal className="size-6 text-fuchsia-300" />
+          {/* Inner glow for depth */}
+          <div className="absolute inset-0 -m-6 rounded-2xl bg-gradient-to-br from-gray-800/20 via-transparent to-gray-800/20" />
 
-            <span className="text-gray-400">
-              {userName
-                ? "It's time to build something awesome!"
-                : 'Sign in to get started!'}
-            </span>
-          </AlertDescription>
-        </Alert>
+          {/* Subtle border */}
+          <div className="absolute inset-0 -m-6 rounded-2xl ring-1 ring-gray-700/50 ring-inset" />
+
+          {/* Content */}
+          <Alert className="relative bg-transparent border-transparent text-accent w-fit">
+            <AlertTitle className="text-5xl text-teal-400 drop-shadow-[0_2px_8px_rgba(45,212,191,0.3)]">
+              Hi{userName ? `, ${userName}` : ','}
+            </AlertTitle>
+
+            <AlertDescription className="flex items-center gap-2 text-lg">
+              <Terminal className="size-6 text-fuchsia-300 drop-shadow-[0_2px_8px_rgba(232,121,249,0.3)]" />
+
+              <span className="text-gray-200 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                {userName
+                  ? "It's time to build something awesome!"
+                  : 'Sign in to get started!'}
+              </span>
+            </AlertDescription>
+          </Alert>
+        </div>
       </div>
 
       {/* Carousel and SleepLight - bottom left quadrant, bottom 6th of screen */}
