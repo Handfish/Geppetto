@@ -1,20 +1,31 @@
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Result } from '@effect-atom/atom-react'
-import type { GitHubRepository } from '../../../shared/schemas'
+import type { ProviderRepository } from '../../../shared/schemas/provider'
+import type { Account } from '../../../shared/schemas/account-context'
 import type {
   AuthenticationError,
   NetworkError,
   NotFoundError,
+  ProviderFeatureUnavailableError,
+  ProviderOperationError,
+  ProviderUnavailableError,
 } from '../../../shared/schemas/errors'
 import { RepositoryCard } from './RepositoryCard'
 import { RepositoryDropdown } from './RepositoryDropdown'
 
-type IpcError = AuthenticationError | NetworkError | NotFoundError
+type IpcError =
+  | AuthenticationError
+  | NetworkError
+  | NotFoundError
+  | ProviderFeatureUnavailableError
+  | ProviderOperationError
+  | ProviderUnavailableError
 
 interface RepositoryCarouselProps {
-  repos: Result.Result<readonly GitHubRepository[], IpcError>
+  repos: Result.Result<readonly ProviderRepository[], IpcError>
   isFocused: boolean
+  account?: Account | null
 }
 
 export interface RepositoryCarouselRef {
@@ -25,7 +36,7 @@ export interface RepositoryCarouselRef {
 let ipcListenerAttached = false
 
 export const RepositoryCarousel3 = forwardRef<RepositoryCarouselRef, RepositoryCarouselProps>(
-  function RepositoryCarousel3({ repos, isFocused }, ref) {
+  function RepositoryCarousel3({ repos, isFocused, account = null }, ref) {
     const [currentIndex, setCurrentIndex] = useState(0)
     const [isDropdownOpen, setIsDropdownOpen] = useState(false)
     const prevIndexRef = useRef(0)
@@ -155,7 +166,7 @@ export const RepositoryCarousel3 = forwardRef<RepositoryCarouselRef, RepositoryC
                         opacity: 0,
                         scale: 0.85,
                       }}
-                      key={repo.id}
+                      key={repo.repositoryId}
                       style={{
                         position: 'absolute',
                         width: 200,
@@ -165,7 +176,7 @@ export const RepositoryCarousel3 = forwardRef<RepositoryCarouselRef, RepositoryC
                       }}
                       transition={{ type: 'spring', stiffness: 180, damping: 20 }}
                     >
-                      <RepositoryCard isActive={isActive} repo={repo} />
+                      <RepositoryCard isActive={isActive} repo={repo} account={account} />
                     </motion.div>
                   )
                 })}

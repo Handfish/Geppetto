@@ -8,10 +8,10 @@ import {
   shift,
   size,
 } from '@floating-ui/react'
-import type { GitHubRepository } from '../../../shared/schemas'
+import type { ProviderRepository } from '../../../shared/schemas/provider'
 
 interface RepositorySearchProps {
-  repos: readonly GitHubRepository[]
+  repos: readonly ProviderRepository[]
   isFocused: boolean
   onSelectRepo: (index: number) => void
 }
@@ -107,9 +107,9 @@ export function RepositorySearch({
         case 'Enter':
           e.preventDefault()
           if (filteredRepos[selectedIndex]) {
-            const repoIndex = repos.findIndex(
-              r => r.id === filteredRepos[selectedIndex].id
-            )
+              const repoIndex = repos.findIndex(
+                r => r.repositoryId === filteredRepos[selectedIndex].repositoryId
+              )
             if (repoIndex !== -1) {
               onSelectRepo(repoIndex)
               setIsOpen(false)
@@ -173,9 +173,11 @@ export function RepositorySearch({
                       : 'hover:bg-gray-700/50'
                   }`}
                   id={`repo-item-${index}`}
-                  key={repo.id}
+                  key={repo.repositoryId}
                   onClick={() => {
-                    const repoIndex = repos.findIndex(r => r.id === repo.id)
+                    const repoIndex = repos.findIndex(
+                      r => r.repositoryId === repo.repositoryId
+                    )
                     if (repoIndex !== -1) {
                       onSelectRepo(repoIndex)
                       setIsOpen(false)

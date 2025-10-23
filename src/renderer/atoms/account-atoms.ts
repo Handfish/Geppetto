@@ -1,12 +1,36 @@
-/**
- * Account Management Atoms
- *
- * Reactive state management for multi-account support.
- *
- * TODO: Implement once renderer IPC client is set up with account contracts
- */
+import { Atom, Result } from '@effect-atom/atom-react'
+import { Effect, Duration } from 'effect'
+import { AccountClient } from '../lib/ipc-client'
+import { ProviderType } from '../../shared/schemas/account-context'
 
-// Placeholder file - atoms will be implemented when:
-// 1. Preload script exposes account IPC channels
-// 2. Renderer IPC client is extended with account methods
-// 3. UI components are ready to consume account state
+const accountRuntime = Atom.runtime(AccountClient.Default)
+
+export const accountContextAtom = accountRuntime
+  .atom(
+    Effect.gen(function* () {
+      const accountClient = yield* AccountClient
+      return yield* accountClient.getContext()
+    })
+  )
+  .pipe(Atom.withReactivity(['accounts:context']), Atom.keepAlive)
+
+export const activeAccountAtom = Atom.make((get) => {
+  const contextResult = get(accountContextAtom)
+  return Result.map(contextResult, (context) => context.getActiveAccount())
+})
+
+export const providerAccountsAtom = Atom.family((provider: ProviderType) =>
+  Atom.make((get) => {
+    const contextResult = get(accountContextAtom)
+    return Result.map(contextResult, (context) => context.getAccountsByProvider(provider))
+  })
+)
+
+export const tierLimitsAtom = accountRuntime
+  .atom(
+    Effect.gen(function* () {
+      const accountClient = yield* AccountClient
+      return yield* accountClient.getTierLimits()
+    })
+  )
+  .pipe(Atom.withReactivity(['accounts:tier']), Atom.setIdleTTL(Duration.minutes(10)))

@@ -24,10 +24,10 @@ import {
   Settings,
   Check,
 } from 'lucide-react'
-import type { GitHubRepository } from '../../../shared/schemas'
+import type { ProviderRepository } from '../../../shared/schemas/provider'
 
 interface RepositoryDropdownProps {
-  repo: GitHubRepository
+  repo: ProviderRepository
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   anchorRef: React.RefObject<HTMLDivElement | null>
@@ -65,7 +65,7 @@ export function RepositoryDropdown({
     if (anchorRef.current && isOpen) {
       refs.setReference(anchorRef.current)
     }
-  }, [anchorRef, refs, isOpen, repo.id]) // Re-sync when repo changes
+  }, [anchorRef, refs, isOpen, repo.repositoryId]) // Re-sync when repo changes
 
   // Don't render if not open, if anchor is not available, or if hidden by middleware
   const isHidden = middlewareData.hide?.referenceHidden
@@ -100,18 +100,24 @@ export function RepositoryDropdown({
             <div className="flex items-center gap-4 text-xs">
               <div className="flex items-center gap-1.5 text-gray-300">
                 <Star className="size-3.5 text-yellow-400/80" />
-                <span>{repo.stargazers_count}</span>
+                <span>{repo.stars}</span>
               </div>
               <div className="flex items-center gap-1.5 text-gray-300">
                 <Code className="size-3.5 text-blue-400/80" />
-                <span className="text-gray-400">{repo.private ? 'Private' : 'Public'}</span>
+                <span className="text-gray-400">
+                  {repo.visibility === 'private'
+                    ? 'Private'
+                    : repo.visibility === 'internal'
+                      ? 'Internal'
+                      : 'Public'}
+                </span>
               </div>
             </div>
           </div>
 
           {/* Actions Menu */}
           <div className="py-1.5">
-            <MenuItem icon={ExternalLink} label="Open in GitHub" />
+            <MenuItem icon={ExternalLink} label={`Open in ${repo.provider}`} />
             <MenuItem icon={GitBranch} label="View Branches" badge="main" />
             <MenuItem icon={FileText} label="View README" />
             <MenuItem icon={Code} label="Clone Repository" />

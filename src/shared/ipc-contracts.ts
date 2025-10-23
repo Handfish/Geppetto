@@ -1,5 +1,18 @@
 import { Schema as S } from 'effect'
-import { GitHubUser, GitHubRepository, GitHubIssue, GitHubPullRequest, AuthenticationError, NetworkError, NotFoundError } from './schemas'
+import {
+  ProviderSignInResult,
+  ProviderRepository,
+  ProviderAuthStatus,
+  ProviderAccountRepositories,
+} from './schemas/provider'
+import {
+  AuthenticationError,
+  NetworkError,
+  NotFoundError,
+  ProviderFeatureUnavailableError,
+  ProviderUnavailableError,
+  ProviderOperationError,
+} from './schemas/errors'
 import { Account, AccountContext, AccountId, ProviderType } from './schemas/account-context'
 
 /**
@@ -42,6 +55,7 @@ export const AccountIpcContracts = {
       maxGitHubAccounts: S.Number,
       maxGitLabAccounts: S.Number,
       maxBitbucketAccounts: S.Number,
+      maxGiteaAccounts: S.Number,
       enableAccountSwitcher: S.Boolean,
     }),
     errors: S.Union(NetworkError),
@@ -49,70 +63,53 @@ export const AccountIpcContracts = {
 } as const
 
 /**
- * GitHub IPC Contracts
+ * Provider IPC Contracts
  */
-export const GitHubIpcContracts = {
+export const ProviderIpcContracts = {
   signIn: {
-    channel: 'github:signIn' as const,
-    input: S.Void,
-    output: S.Struct({
-      user: GitHubUser,
-      token: S.Redacted(S.String),
-    }),
-    errors: S.Union(AuthenticationError, NetworkError),
+    channel: 'provider:signIn' as const,
+    input: S.Struct({ provider: ProviderType }),
+    output: ProviderSignInResult,
+    errors: S.Union(AuthenticationError, ProviderFeatureUnavailableError, ProviderUnavailableError, NetworkError),
   },
 
   checkAuth: {
-    channel: 'github:checkAuth' as const,
-    input: S.Void,
-    output: S.Struct({
-      authenticated: S.Boolean,
-      user: S.optional(GitHubUser),
-    }),
-    errors: S.Union(NetworkError),
+    channel: 'provider:checkAuth' as const,
+    input: S.Struct({ accountId: AccountId }),
+    output: ProviderAuthStatus,
+    errors: S.Union(AuthenticationError, NetworkError, ProviderUnavailableError, ProviderOperationError),
   },
 
   signOut: {
-    channel: 'github:signOut' as const,
-    input: S.Void,
+    channel: 'provider:signOut' as const,
+    input: S.Struct({ accountId: AccountId }),
     output: S.Void,
-    errors: S.Union(NetworkError),
+    errors: S.Union(NetworkError, ProviderUnavailableError, ProviderOperationError),
   },
-  
-  getRepos: {
-    channel: 'github:getRepos' as const,
-    input: S.Struct({ username: S.optional(S.String) }),
-    output: S.Array(GitHubRepository),
-    errors: S.Union(AuthenticationError, NetworkError),
+
+  getAccountRepositories: {
+    channel: 'provider:getAccountRepositories' as const,
+    input: S.Struct({ accountId: AccountId }),
+    output: S.Array(ProviderRepository),
+    errors: S.Union(
+      AuthenticationError,
+      NetworkError,
+      ProviderOperationError,
+      ProviderUnavailableError
+    ),
   },
-  
-  getRepo: {
-    channel: 'github:getRepo' as const,
-    input: S.Struct({ owner: S.String, repo: S.String }),
-    output: GitHubRepository,
-    errors: S.Union(AuthenticationError, NetworkError, NotFoundError),
-  },
-  
-  getIssues: {
-    channel: 'github:getIssues' as const,
-    input: S.Struct({
-      owner: S.String,
-      repo: S.String,
-      state: S.optional(S.Literal('open', 'closed', 'all')),
-    }),
-    output: S.Array(GitHubIssue),
-    errors: S.Union(AuthenticationError, NetworkError, NotFoundError),
-  },
-  
-  getPullRequests: {
-    channel: 'github:getPullRequests' as const,
-    input: S.Struct({
-      owner: S.String,
-      repo: S.String,
-      state: S.optional(S.Literal('open', 'closed', 'all')),
-    }),
-    output: S.Array(GitHubPullRequest),
-    errors: S.Union(AuthenticationError, NetworkError, NotFoundError),
+
+  getProviderRepositories: {
+    channel: 'provider:getProviderRepositories' as const,
+    input: S.Struct({ provider: ProviderType }),
+    output: S.Array(ProviderAccountRepositories),
+    errors: S.Union(
+      AuthenticationError,
+      NetworkError,
+      ProviderOperationError,
+      ProviderUnavailableError,
+      ProviderFeatureUnavailableError
+    ),
   },
 } as const
 
@@ -121,9 +118,8 @@ export const GitHubIpcContracts = {
  */
 export const IpcContracts = {
   ...AccountIpcContracts,
-  ...GitHubIpcContracts,
+  ...ProviderIpcContracts,
 } as const
 
 export type IpcContracts = typeof IpcContracts
 export type IpcChannels = keyof IpcContracts
-

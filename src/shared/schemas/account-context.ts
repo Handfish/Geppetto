@@ -10,7 +10,7 @@ import { Schema as S } from 'effect'
 /**
  * Provider types supported by the application
  */
-export const ProviderType = S.Literal('github', 'gitlab', 'bitbucket')
+export const ProviderType = S.Literal('github', 'gitlab', 'bitbucket', 'gitea')
 export type ProviderType = S.Schema.Type<typeof ProviderType>
 
 /**
@@ -20,7 +20,7 @@ export type ProviderType = S.Schema.Type<typeof ProviderType>
  */
 export const AccountId = S.String.pipe(
   S.brand('AccountId'),
-  S.pattern(/^(github|gitlab|bitbucket):\d+$/)
+  S.pattern(/^(github|gitlab|bitbucket|gitea):[A-Za-z0-9._-]+$/)
 )
 export type AccountId = S.Schema.Type<typeof AccountId>
 

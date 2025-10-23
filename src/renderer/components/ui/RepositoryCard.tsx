@@ -1,14 +1,18 @@
-import type { GitHubRepository } from '../../../shared/schemas'
+import type { ProviderRepository } from '../../../shared/schemas/provider'
+import type { Account } from '../../../shared/schemas/account-context'
 
 interface RepositoryCardProps {
-  repo: GitHubRepository
+  repo: ProviderRepository
   isActive?: boolean
+  account?: Account | null
 }
 
 export function RepositoryCard({
   repo,
   isActive = false,
+  account = null,
 }: RepositoryCardProps) {
+  const providerLabel = repo.provider.toUpperCase()
   return (
     <div
       className={`relative w-full h-full flex flex-col justify-between rounded-xl border p-4 ${
@@ -23,6 +27,16 @@ export function RepositoryCard({
       >
         {repo.name}
       </h3>
+      <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+        <span className={isActive ? 'text-emerald-300' : 'text-emerald-300/40'}>
+          {providerLabel}
+        </span>
+        {account && (
+          <span className={isActive ? 'text-gray-300' : 'text-gray-500/40'}>
+            {account.displayName ?? account.username}
+          </span>
+        )}
+      </div>
       {repo.description && (
         <p
           className={`text-xs line-clamp-2 ${isActive ? 'text-gray-300' : 'text-gray-400/40'}`}
@@ -39,7 +53,7 @@ export function RepositoryCard({
           </span>
         )}
         <span className={isActive ? 'text-gray-400' : 'text-gray-500/40'}>
-          {repo.stargazers_count} ★
+          {repo.stars} ★
         </span>
       </div>
     </div>

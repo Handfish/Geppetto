@@ -74,6 +74,7 @@ export const setupAccountIpcHandlers = Effect.gen(function* () {
       maxGitHubAccounts: tierService.getMaxAccountsForProvider('github'),
       maxGitLabAccounts: tierService.getMaxAccountsForProvider('gitlab'),
       maxBitbucketAccounts: tierService.getMaxAccountsForProvider('bitbucket'),
+      maxGiteaAccounts: tierService.getMaxAccountsForProvider('gitea'),
       enableAccountSwitcher: tierService.isMultiAccountEnabled(),
     })
   )

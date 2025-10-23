@@ -41,20 +41,14 @@ export class TierService extends Effect.Service<TierService>()('TierService', {
         const limits = getCurrentTierLimits()
         const currentCount = accountContext.countAccountsByProvider(provider)
 
-        let maxAllowed: number
-        switch (provider) {
-          case 'github':
-            maxAllowed = limits.maxGitHubAccounts
-            break
-          case 'gitlab':
-            maxAllowed = limits.maxGitLabAccounts
-            break
-          case 'bitbucket':
-            maxAllowed = limits.maxBitbucketAccounts
-            break
-          default:
-            maxAllowed = 0
-        }
+        const maxAllowed =
+          provider === 'github'
+            ? limits.maxGitHubAccounts
+            : provider === 'gitlab'
+              ? limits.maxGitLabAccounts
+              : provider === 'bitbucket'
+                ? limits.maxBitbucketAccounts
+                : limits.maxGiteaAccounts
 
         if (currentCount >= maxAllowed) {
           yield* Effect.fail(
@@ -102,6 +96,16 @@ export class TierService extends Effect.Service<TierService>()('TierService', {
             })
           )
         }
+
+        if (feature === 'gitea' && limits.maxGiteaAccounts === 0) {
+          yield* Effect.fail(
+            new FeatureNotAvailableError({
+              feature,
+              tier: limits.tier,
+              requiredTier: 'pro',
+            })
+          )
+        }
       }),
 
     getMaxAccountsForProvider: (provider: ProviderType) => {
@@ -113,6 +117,8 @@ export class TierService extends Effect.Service<TierService>()('TierService', {
           return limits.maxGitLabAccounts
         case 'bitbucket':
           return limits.maxBitbucketAccounts
+        case 'gitea':
+          return limits.maxGiteaAccounts
       }
     },
 

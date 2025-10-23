@@ -5,6 +5,7 @@ import { GitHubAuthError, GitHubAuthTimeout } from './errors'
 import { GitHubHttpService } from './http-service'
 import { SecureStoreService } from './store-service'
 import { AccountContextService } from '../account/account-context-service'
+import type { AccountId } from '../../shared/schemas/account-context'
 
 const PROTOCOL_SCHEME = 'geppetto'
 
@@ -159,11 +160,11 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
           // Legacy: Also store in old format for backward compatibility
           yield* storeService.setAuth(Redacted.make(token), user)
 
-          return { token: Redacted.make(token), user }
+          return { token: Redacted.make(token), user, account }
         }),
 
         /**
-         * Sign out - removes the active account
+         * Sign out - removes the active account (legacy behaviour)
          */
         signOut: Effect.gen(function* () {
           const activeAccount = yield* accountService.getActiveAccountForProvider('github')
@@ -176,7 +177,16 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
         }),
 
         /**
-         * Check authentication status
+         * Sign out a specific GitHub account
+         */
+        signOutAccount: (accountId: AccountId) =>
+          Effect.gen(function* () {
+            yield* storeService.clearAuthForAccount(accountId)
+            yield* accountService.removeAccount(accountId)
+          }),
+
+        /**
+         * Check authentication status for the active account (legacy)
          */
         checkAuth: Effect.gen(function* () {
           const activeAccount = yield* accountService.getActiveAccountForProvider('github')
@@ -194,6 +204,22 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
 
           return { authenticated: true, user: Option.some(user) }
         }),
+
+        /**
+         * Check authentication status for a specific account
+         */
+        checkAuthForAccount: (accountId: AccountId) =>
+          Effect.gen(function* () {
+            const tokenOption = yield* storeService.getAuthForAccount(accountId)
+            if (Option.isNone(tokenOption)) {
+              return { authenticated: false as const, user: Option.none() }
+            }
+
+            const token = Option.getOrThrow(tokenOption)
+            const user = yield* httpService.fetchUser(Redacted.value(token))
+
+            return { authenticated: true as const, user: Option.some(user) }
+          }),
       }
     }),
   }

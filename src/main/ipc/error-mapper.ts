@@ -1,5 +1,12 @@
 import { Effect } from 'effect'
-import { AuthenticationError, NetworkError, NotFoundError } from '../../shared/schemas/errors'
+import {
+  AuthenticationError,
+  NetworkError,
+  NotFoundError,
+  ProviderFeatureUnavailableError as SharedFeatureUnavailableError,
+  ProviderUnavailableError as SharedProviderUnavailableError,
+  ProviderOperationError as SharedProviderOperationError,
+} from '../../shared/schemas/errors'
 import {
   GitHubAuthError,
   GitHubAuthTimeout,
@@ -11,13 +18,25 @@ import {
   AccountLimitExceededError,
   FeatureNotAvailableError,
 } from '../tier/tier-service'
+import {
+  ProviderAuthenticationError,
+  ProviderFeatureUnsupportedError,
+  ProviderNotRegisteredError,
+  ProviderRepositoryError,
+} from '../providers/errors'
 
 /**
  * Result type for IPC error responses
  */
 export type IpcErrorResult = {
   _tag: 'Error'
-  error: AuthenticationError | NetworkError | NotFoundError
+  error:
+    | AuthenticationError
+    | NetworkError
+    | NotFoundError
+    | SharedFeatureUnavailableError
+    | SharedProviderUnavailableError
+    | SharedProviderOperationError
 }
 
 /**
@@ -34,6 +53,12 @@ type GitHubDomainError =
  * Union of all tier-related domain errors
  */
 type TierDomainError = AccountLimitExceededError | FeatureNotAvailableError
+
+type ProviderDomainError =
+  | ProviderAuthenticationError
+  | ProviderFeatureUnsupportedError
+  | ProviderNotRegisteredError
+  | ProviderRepositoryError
 
 /**
  * Type guard to check if an error is a tagged GitHub domain error
@@ -58,6 +83,15 @@ const isTierDomainError = (error: unknown): error is TierDomainError => {
   )
 }
 
+const isProviderDomainError = (error: unknown): error is ProviderDomainError => {
+  return (
+    error instanceof ProviderAuthenticationError ||
+    error instanceof ProviderFeatureUnsupportedError ||
+    error instanceof ProviderNotRegisteredError ||
+    error instanceof ProviderRepositoryError
+  )
+}
+
 /**
  * Maps domain errors to shared IPC error types that can be sent across process boundaries
  */
@@ -78,6 +112,46 @@ export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcError
         _tag: 'Error' as const,
         error: new AuthenticationError({
           message: `Feature '${error.feature}' requires ${error.requiredTier} tier.`,
+        }),
+      })
+    }
+  }
+
+  if (isProviderDomainError(error)) {
+    if (error instanceof ProviderAuthenticationError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new AuthenticationError({ message: error.message }),
+      })
+    }
+
+    if (error instanceof ProviderFeatureUnsupportedError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedFeatureUnavailableError({
+          provider: error.provider,
+          feature: error.feature,
+          message: `Provider '${error.provider}' does not support feature '${error.feature}' yet.`,
+        }),
+      })
+    }
+
+    if (error instanceof ProviderNotRegisteredError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedProviderUnavailableError({
+          provider: error.provider,
+          message: `Provider '${error.provider}' is not configured.`,
+        }),
+      })
+    }
+
+    if (error instanceof ProviderRepositoryError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedProviderOperationError({
+          provider: error.provider,
+          message: error.message,
         }),
       })
     }

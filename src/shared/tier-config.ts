@@ -23,6 +23,8 @@ export class TierLimits extends S.Class<TierLimits>('TierLimits')({
   maxGitLabAccounts: S.Number,
   /** Maximum number of Bitbucket accounts (future) */
   maxBitbucketAccounts: S.Number,
+  /** Maximum number of Gitea accounts (future) */
+  maxGiteaAccounts: S.Number,
   /** Whether multi-account switching UI is enabled */
   enableAccountSwitcher: S.Boolean,
   /** Application tier */
@@ -37,6 +39,7 @@ const FREE_TIER_LIMITS = new TierLimits({
   maxGitHubAccounts: 1,
   maxGitLabAccounts: 0,
   maxBitbucketAccounts: 0,
+  maxGiteaAccounts: 0,
   enableAccountSwitcher: false,
   tier: 'free',
 })
@@ -49,6 +52,7 @@ const PRO_TIER_LIMITS = new TierLimits({
   maxGitHubAccounts: Number.POSITIVE_INFINITY,
   maxGitLabAccounts: Number.POSITIVE_INFINITY,
   maxBitbucketAccounts: Number.POSITIVE_INFINITY,
+  maxGiteaAccounts: Number.POSITIVE_INFINITY,
   enableAccountSwitcher: true,
   tier: 'pro',
 })

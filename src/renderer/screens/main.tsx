@@ -1,5 +1,4 @@
 import { Terminal } from 'lucide-react'
-import { Option } from 'effect'
 import { useEffect, useState, useRef } from 'react'
 import { Result } from '@effect-atom/atom-react'
 
@@ -18,31 +17,16 @@ import {
 } from 'renderer/components/ui/RepositoryCarousel3'
 import { RepositorySearch } from 'renderer/components/ui/RepositorySearch'
 import { ClickSpark } from 'renderer/components/ui/ClickSpark'
-import { useGitHubAuth, useUserRepos } from '../hooks/useGitHubAtoms'
+import { useProviderAuth, useAccountRepositories } from '../hooks/useProviderAtoms'
 
 export function MainScreen() {
-  const { currentUser, refresh } = useGitHubAuth()
-  const { repos } = useUserRepos()
+  const { accounts, activeAccount, refreshProviderRepos } = useProviderAuth('github')
+  const activeAccountId = activeAccount?.id ?? accounts[0]?.id ?? null
+  const { repositoriesResult: repos } = useAccountRepositories(activeAccountId)
   const [isFocused, setIsFocused] = useState(true)
   const carouselRef = useRef<RepositoryCarouselRef>(null)
 
   // Listen for auth changes from other windows
-  useEffect(() => {
-    const handleAuthChange = () => {
-      console.log('[MainScreen] Auth changed, refreshing...')
-      refresh()
-    }
-
-    window.electron.ipcRenderer.on('github:auth-changed', handleAuthChange)
-
-    return () => {
-      window.electron.ipcRenderer.removeListener(
-        'github:auth-changed',
-        handleAuthChange
-      )
-    }
-  }, [refresh])
-
   // Listen for focus/unfocus events
   useEffect(() => {
     const handleFocus = () => {
@@ -65,10 +49,7 @@ export function MainScreen() {
   }, [])
 
   // Extract username from currentUser Option
-  const userName = Option.match(currentUser, {
-    onNone: () => null as string | null,
-    onSome: user => user.login,
-  })
+  const userName = activeAccount?.displayName ?? activeAccount?.username ?? null
 
   return (
     <main
@@ -97,11 +78,16 @@ export function MainScreen() {
       </div>
 
       {/* Carousel and SleepLight - bottom left quadrant, bottom 6th of screen */}
-      {userName && (
+      {userName && activeAccountId && (
         <div className="absolute bottom-0 left-0 w-1/2 flex flex-col items-start justify-end pb-8 pl-8 pr-8 gap-4" style={{ height: '25vh', paddingTop: '3rem' }}>
           <SleepLight color="#00ffff" speed={8} />
           <div className="w-full" style={{ minHeight: '180px' }}>
-            <RepositoryCarousel3 ref={carouselRef} repos={repos} isFocused={isFocused} />
+            <RepositoryCarousel3
+              ref={carouselRef}
+              repos={repos}
+              isFocused={isFocused}
+              account={activeAccount ?? accounts.find(acc => acc.id === activeAccountId) ?? null}
+            />
           </div>
           <div className="text-gray-500 text-sm flex items-center gap-3">
             <div className="flex items-center gap-2">

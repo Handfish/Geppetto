@@ -1,195 +1,311 @@
-import { Effect, Schema as S } from 'effect'
+import { Duration, Effect, RateLimiter, Schedule, Schema as S, Console } from 'effect'
+import { pipe } from 'effect/Function'
 import { GitHubApiError, GitHubTokenExchangeError } from './errors'
 import { GitHubUser } from '../../shared/schemas'
 import { GitHubTokenResponse } from './schemas'
+import { GitHubRateLimitConfig } from '../../config'
 
-export class GitHubHttpService extends Effect.Service<GitHubHttpService>()('GitHubHttpService', {
-  sync: () => ({
-    makeAuthenticatedRequest: <A, I = unknown, R = never>(
-      endpoint: string,
-      token: string,
-      schema: S.Schema<A, I, R>
-    ): Effect.Effect<A, GitHubApiError, R> =>
+const NonNegativeIntFromString = pipe(
+  S.NumberFromString,
+  S.int(),
+  S.nonNegative()
+)
+
+const decodeOptionalHeaderInt = (value: string | null) => {
+  const sanitized = value?.trim()
+  if (!sanitized) {
+    return Effect.succeed<number | undefined>(undefined)
+  }
+
+  return pipe(
+    sanitized,
+    S.decodeUnknown(NonNegativeIntFromString),
+    Effect.orElse(() => Effect.succeed<number | undefined>(undefined))
+  )
+}
+
+const isRetriableApiError = (error: GitHubApiError) => {
+  if (error.retryAfter && error.retryAfter > 0) {
+    return true
+  }
+
+  if (
+    typeof error.rateLimitRemaining === 'number' &&
+    error.rateLimitRemaining <= 0
+  ) {
+    return true
+  }
+
+  if (error.status === 429 || error.status === 503) {
+    return true
+  }
+
+  if (
+    error.status === 403 &&
+    typeof error.rateLimitRemaining === 'number' &&
+    error.rateLimitRemaining <= 0
+  ) {
+    return true
+  }
+
+  return false
+}
+
+export class GitHubHttpService extends Effect.Service<GitHubHttpService>()(
+  'GitHubHttpService',
+  {
+    effect: Effect.scoped(
       Effect.gen(function* () {
-        const response = yield* Effect.tryPromise({
-          try: () =>
-            fetch(`https://api.github.com${endpoint}`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'User-Agent': 'GitHub-Desktop-Clone',
-                Accept: 'application/vnd.github.v3+json',
-              },
-            }),
-          catch: (error) =>
-            new GitHubApiError({
-              message: error instanceof Error ? error.message : 'Request failed',
-              endpoint,
-            }),
+        yield* Console.log('[GitHubHttpService] Initializing service...')
+        yield* Console.log('[GitHubHttpService] Loading config...')
+        const config = yield* GitHubRateLimitConfig
+        yield* Console.log('[GitHubHttpService] Config loaded:', config)
+        const {
+          requestsPerSecond,
+          requestsPerMinute,
+          maxRetries,
+          backoffBaseMs,
+          maxBackoffSeconds,
+        } = config
+
+        const perSecondLimiter = yield* RateLimiter.make({
+          limit: requestsPerSecond,
+          interval: Duration.seconds(1),
+        })
+        const perMinuteLimiter = yield* RateLimiter.make({
+          limit: requestsPerMinute,
+          interval: Duration.minutes(1),
         })
 
-        if (!response.ok) {
-          const errorText = yield* Effect.tryPromise({
-            try: () => response.text(),
-            catch: () => new GitHubApiError({
-              message: 'Unknown error',
-              endpoint,
-            }),
+        const applyRateLimit = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+          perMinuteLimiter(perSecondLimiter(effect))
+
+        const maxBackoffMillis = Duration.toMillis(
+          Duration.seconds(maxBackoffSeconds)
+        )
+
+        const baseBackoffSchedule = pipe(
+          Schedule.exponential(Duration.millis(backoffBaseMs)),
+          Schedule.modifyDelay((_, duration) => {
+            const capped = Math.min(
+              Duration.toMillis(duration),
+              maxBackoffMillis
+            )
+            return Duration.millis(capped)
+          }),
+          Schedule.jittered,
+          Schedule.intersect(Schedule.recurs(maxRetries))
+        )
+
+        const apiRetrySchedule = pipe(
+          baseBackoffSchedule,
+          Schedule.whileInput(isRetriableApiError)
+        )
+
+        const makeAuthenticatedRequest = <A, I = unknown, R = never>(
+          endpoint: string,
+          token: string,
+          schema: S.Schema<A, I, R>
+        ): Effect.Effect<A, GitHubApiError, R> => {
+          const requestEffect = Effect.gen(function* () {
+            const response = yield* applyRateLimit(
+              Effect.tryPromise({
+                try: () =>
+                  fetch(`https://api.github.com${endpoint}`, {
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                      'User-Agent': 'GitHub-Desktop-Clone',
+                      Accept: 'application/vnd.github.v3+json',
+                    },
+                  }),
+                catch: error =>
+                  new GitHubApiError({
+                    message:
+                      error instanceof Error ? error.message : 'Request failed',
+                    endpoint,
+                  }),
+              })
+            )
+
+            if (!response.ok) {
+              const errorText = yield* Effect.tryPromise({
+                try: () => response.text(),
+                catch: () =>
+                  new GitHubApiError({
+                    message: 'Unknown error',
+                    endpoint,
+                    status: response.status,
+                  }),
+              })
+
+              const remaining = yield* decodeOptionalHeaderInt(
+                response.headers.get('x-ratelimit-remaining')
+              )
+              const reset = yield* decodeOptionalHeaderInt(
+                response.headers.get('x-ratelimit-reset')
+              )
+              const retryAfter = yield* decodeOptionalHeaderInt(
+                response.headers.get('retry-after')
+              )
+
+              const rateLimited =
+                response.status === 429 ||
+                (response.status === 403 &&
+                  (remaining === 0 || /rate limit/i.test(errorText))) ||
+                (typeof remaining === 'number' && remaining <= 0)
+
+              if (rateLimited) {
+                const nowSeconds = Math.floor(Date.now() / 1000)
+                const secondsUntilReset =
+                  typeof reset === 'number'
+                    ? Math.max(reset - nowSeconds, 0)
+                    : undefined
+
+                yield* Effect.sync(() => {
+                  console.warn(
+                    `[GitHubHttpService] Rate limit encountered on ${endpoint}. retryAfter=${retryAfter ?? 'n/a'}s, resetIn=${secondsUntilReset ?? 'n/a'}s`
+                  )
+                })
+
+                if (retryAfter && retryAfter > 0) {
+                  yield* Effect.sleep(Duration.seconds(retryAfter))
+                }
+              }
+
+              return yield* Effect.fail(
+                new GitHubApiError({
+                  message: rateLimited
+                    ? `GitHub rate limit reached for ${endpoint}. ${
+                        retryAfter
+                          ? `Retry after ${retryAfter} seconds.`
+                          : 'Please wait before retrying.'
+                      }`
+                    : `GitHub API error: ${response.status} ${response.statusText} - ${errorText}`,
+                  status: response.status,
+                  endpoint,
+                  rateLimitRemaining: remaining,
+                  rateLimitReset: reset,
+                  retryAfter,
+                })
+              )
+            }
+
+            const data = yield* Effect.tryPromise({
+              try: () => response.json(),
+              catch: error =>
+                new GitHubApiError({
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : 'Failed to parse response',
+                  endpoint,
+                }),
+            })
+
+            return yield* S.decodeUnknown(schema)(data).pipe(
+              Effect.mapError(
+                error =>
+                  new GitHubApiError({
+                    message: `Schema validation failed: ${error.message}`,
+                    endpoint,
+                  })
+              )
+            )
           })
 
-          return yield* Effect.fail(
-            new GitHubApiError({
-              message: `GitHub API error: ${response.status} ${response.statusText} - ${errorText}`,
-              status: response.status,
-              endpoint,
-            })
-          )
+          return Effect.retry(requestEffect, apiRetrySchedule)
         }
 
-        const data = yield* Effect.tryPromise({
-          try: () => response.json(),
-          catch: (error) =>
-            new GitHubApiError({
-              message: error instanceof Error ? error.message : 'Failed to parse response',
-              endpoint,
-            }),
-        })
+        return {
+          makeAuthenticatedRequest,
 
-        return yield* S.decodeUnknown(schema)(data).pipe(
-          Effect.mapError(
-            (error) =>
-              new GitHubApiError({
-                message: `Schema validation failed: ${error.message}`,
-                endpoint,
+          exchangeCodeForToken: (
+            code: string
+          ): Effect.Effect<string, GitHubTokenExchangeError> =>
+            Effect.gen(function* () {
+              const clientId = process.env.GITHUB_CLIENT_ID || 'your-client-id'
+              const clientSecret =
+                process.env.GITHUB_CLIENT_SECRET || 'your-client-secret'
+
+              const response = yield* applyRateLimit(
+                Effect.tryPromise({
+                  try: () =>
+                    fetch('https://github.com/login/oauth/access_token', {
+                      method: 'POST',
+                      headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        client_id: clientId,
+                        client_secret: clientSecret,
+                        code,
+                      }),
+                    }),
+                  catch: error =>
+                    new GitHubTokenExchangeError({
+                      message:
+                        error instanceof Error
+                          ? error.message
+                          : 'Token exchange failed',
+                      code,
+                    }),
+                })
+              )
+
+              if (!response.ok) {
+                return yield* Effect.fail(
+                  new GitHubTokenExchangeError({
+                    message: `Token exchange failed: ${response.status} ${response.statusText}`,
+                    code,
+                  })
+                )
+              }
+
+              const data = yield* Effect.tryPromise({
+                try: () => response.json(),
+                catch: () =>
+                  new GitHubTokenExchangeError({
+                    message: 'Failed to parse token response',
+                    code,
+                  }),
               })
-          )
-        )
-      }),
 
-    exchangeCodeForToken: (code: string): Effect.Effect<string, GitHubTokenExchangeError> =>
-      Effect.gen(function* () {
-        const clientId = process.env.GITHUB_CLIENT_ID || 'your-client-id'
-        const clientSecret = process.env.GITHUB_CLIENT_SECRET || 'your-client-secret'
+              console.log(
+                '[Token Exchange] Response data:',
+                JSON.stringify(data, null, 2)
+              )
 
-        const response = yield* Effect.tryPromise({
-          try: () =>
-            fetch('https://github.com/login/oauth/access_token', {
-              method: 'POST',
-              headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                client_id: clientId,
-                client_secret: clientSecret,
-                code,
-              }),
+              if (data.error) {
+                return yield* Effect.fail(
+                  new GitHubTokenExchangeError({
+                    message: `GitHub OAuth error: ${data.error}${data.error_description ? ` - ${data.error_description}` : ''}`,
+                    code,
+                  })
+                )
+              }
+
+              const tokenResponse = yield* S.decodeUnknown(GitHubTokenResponse)(
+                data
+              ).pipe(
+                Effect.mapError(
+                  error =>
+                    new GitHubTokenExchangeError({
+                      message: `Invalid token response format: ${JSON.stringify(data)}. Schema error: ${error.message}`,
+                      code,
+                    })
+                )
+              )
+
+              return tokenResponse.access_token
             }),
-          catch: (error) =>
-            new GitHubTokenExchangeError({
-              message: error instanceof Error ? error.message : 'Token exchange failed',
-              code,
-            }),
-        })
 
-        if (!response.ok) {
-          return yield* Effect.fail(
-            new GitHubTokenExchangeError({
-              message: `Token exchange failed: ${response.status} ${response.statusText}`,
-              code,
-            })
-          )
+          fetchUser: (
+            token: string
+          ): Effect.Effect<GitHubUser, GitHubApiError> =>
+            makeAuthenticatedRequest('/user', token, GitHubUser),
         }
-
-        const data = yield* Effect.tryPromise({
-          try: () => response.json(),
-          catch: () =>
-            new GitHubTokenExchangeError({
-              message: 'Failed to parse token response',
-              code,
-            }),
-        })
-
-        console.log('[Token Exchange] Response data:', JSON.stringify(data, null, 2))
-
-        // Check if GitHub returned an error response
-        if (data.error) {
-          return yield* Effect.fail(
-            new GitHubTokenExchangeError({
-              message: `GitHub OAuth error: ${data.error}${data.error_description ? ` - ${data.error_description}` : ''}`,
-              code,
-            })
-          )
-        }
-
-        const tokenResponse = yield* S.decodeUnknown(GitHubTokenResponse)(data).pipe(
-          Effect.mapError(
-            (error) =>
-              new GitHubTokenExchangeError({
-                message: `Invalid token response format: ${JSON.stringify(data)}. Schema error: ${error.message}`,
-                code,
-              })
-          )
-        )
-
-        return tokenResponse.access_token
-      }),
-
-    fetchUser: (token: string): Effect.Effect<GitHubUser, GitHubApiError> =>
-      Effect.gen(function* () {
-        const endpoint = '/user'
-        const response = yield* Effect.tryPromise({
-          try: () =>
-            fetch(`https://api.github.com${endpoint}`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'User-Agent': 'GitHub-Desktop-Clone',
-                Accept: 'application/vnd.github.v3+json',
-              },
-            }),
-          catch: (error) =>
-            new GitHubApiError({
-              message: error instanceof Error ? error.message : 'Request failed',
-              endpoint,
-            }),
-        })
-
-        if (!response.ok) {
-          const errorText = yield* Effect.tryPromise({
-            try: () => response.text(),
-            catch: () => new GitHubApiError({
-              message: 'Unknown error',
-              endpoint,
-            }),
-          })
-
-          return yield* Effect.fail(
-            new GitHubApiError({
-              message: `GitHub API error: ${response.status} ${response.statusText} - ${errorText}`,
-              status: response.status,
-              endpoint,
-            })
-          )
-        }
-
-        const data = yield* Effect.tryPromise({
-          try: () => response.json(),
-          catch: (error) =>
-            new GitHubApiError({
-              message: error instanceof Error ? error.message : 'Failed to parse response',
-              endpoint,
-            }),
-        })
-
-        return yield* S.decodeUnknown(GitHubUser)(data).pipe(
-          Effect.mapError(
-            (error) =>
-              new GitHubApiError({
-                message: `Schema validation failed: ${error.message}`,
-                endpoint,
-              })
-          )
-        )
-      }),
-  }),
-}) {}
-
+      })
+    ),
+  }
+) {}

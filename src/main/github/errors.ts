@@ -18,9 +18,11 @@ export class GitHubApiError extends Data.TaggedError('GitHubApiError')<{
   readonly message: string
   readonly status?: number
   readonly endpoint?: string
+  readonly rateLimitRemaining?: number
+  readonly rateLimitReset?: number
+  readonly retryAfter?: number
 }> {}
 
 export class NotAuthenticatedError extends Data.TaggedError('NotAuthenticatedError')<{
   readonly message: string
 }> {}
-

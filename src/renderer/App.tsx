@@ -2,10 +2,10 @@ import React from 'react'
 import { AuthCard } from './components/AuthCard'
 import { RepositoryList } from './components/RepositoryList'
 import SleepLight from './components/ui/SleepLight'
-import { useGitHubAuth } from './hooks/useGitHubAtoms'
+import { useProviderAuth } from './hooks/useProviderAtoms'
 
 export function App() {
-  const { isAuthenticated } = useGitHubAuth()
+  const { isAuthenticated } = useProviderAuth('github')
 
   return (
     <div className="min-h-screen bg-gray-900 p-6">
@@ -16,7 +16,7 @@ export function App() {
           </div>
           <h1 className="text-3xl font-bold text-white text-center">Geppetto</h1>
           <p className="text-gray-400 text-center">
-            Manage your GitHub repositories with Effect and Electron
+            Manage your repositories with Effect and Electron
           </p>
         </header>
 

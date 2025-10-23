@@ -56,22 +56,46 @@ export class ElectronIpcClient extends Effect.Service<ElectronIpcClient>()('Elec
   })
 }) {}
 
-export class GitHubClient extends Effect.Service<GitHubClient>()('GitHubClient', {
+export class ProviderClient extends Effect.Service<ProviderClient>()('ProviderClient', {
   dependencies: [ElectronIpcClient.Default],
   effect: Effect.gen(function* () {
     const ipc = yield* ElectronIpcClient
+    type SignInInput = S.Schema.Type<(typeof IpcContracts)['signIn']['input']>
+    type CheckAuthInput = S.Schema.Type<(typeof IpcContracts)['checkAuth']['input']>
+    type SignOutInput = S.Schema.Type<(typeof IpcContracts)['signOut']['input']>
+    type AccountReposInput = S.Schema.Type<(typeof IpcContracts)['getAccountRepositories']['input']>
+    type ProviderReposInput = S.Schema.Type<
+      (typeof IpcContracts)['getProviderRepositories']['input']
+    >
 
     return {
-      signIn: () => ipc.invoke('signIn', undefined),
-      checkAuth: () => ipc.invoke('checkAuth', undefined),
-      signOut: () => ipc.invoke('signOut', undefined),
-      getRepos: (username?: string) => ipc.invoke('getRepos', { username }),
-      getRepo: (owner: string, repo: string) => ipc.invoke('getRepo', { owner, repo }),
-      getIssues: (owner: string, repo: string, state?: 'open' | 'closed' | 'all') =>
-        ipc.invoke('getIssues', { owner, repo, state: state ?? 'open' }),
-      getPullRequests: (owner: string, repo: string, state?: 'open' | 'closed' | 'all') =>
-        ipc.invoke('getPullRequests', { owner, repo, state: state ?? 'open' }),
+      signIn: (provider: SignInInput['provider']) => ipc.invoke('signIn', { provider }),
+      checkAuth: (accountId: CheckAuthInput['accountId']) =>
+        ipc.invoke('checkAuth', { accountId }),
+      signOut: (accountId: SignOutInput['accountId']) => ipc.invoke('signOut', { accountId }),
+      getAccountRepositories: (accountId: AccountReposInput['accountId']) =>
+        ipc.invoke('getAccountRepositories', { accountId }),
+      getProviderRepositories: (provider: ProviderReposInput['provider']) =>
+        ipc.invoke('getProviderRepositories', { provider }),
     } as const
   }),
 }) {}
 
+export class AccountClient extends Effect.Service<AccountClient>()('AccountClient', {
+  dependencies: [ElectronIpcClient.Default],
+  effect: Effect.gen(function* () {
+    const ipc = yield* ElectronIpcClient
+    type SwitchAccountInput = S.Schema.Type<(typeof IpcContracts)['switchAccount']['input']>
+    type RemoveAccountInput = S.Schema.Type<(typeof IpcContracts)['removeAccount']['input']>
+
+    return {
+      getContext: () => ipc.invoke('getAccountContext', undefined),
+      getActiveAccount: () => ipc.invoke('getActiveAccount', undefined),
+      switchAccount: (accountId: SwitchAccountInput['accountId']) =>
+        ipc.invoke('switchAccount', { accountId }),
+      removeAccount: (accountId: RemoveAccountInput['accountId']) =>
+        ipc.invoke('removeAccount', { accountId }),
+      getTierLimits: () => ipc.invoke('getTierLimits', undefined),
+    } as const
+  }),
+}) {}

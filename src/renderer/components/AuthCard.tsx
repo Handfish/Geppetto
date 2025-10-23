@@ -1,37 +1,65 @@
 import React from 'react'
-import { Result } from '@effect-atom/atom-react'
-import { Option } from 'effect'
-import { useGitHubAuth } from '../hooks/useGitHubAtoms'
+import { useProviderAuth } from '../hooks/useProviderAtoms'
 
 export function AuthCard() {
-  const { isAuthenticated, currentUser, signIn, signOut, isSigningIn } =
-    useGitHubAuth()
+  const { accounts, isAuthenticated, signIn, signOut, isSigningIn } =
+    useProviderAuth('github')
+
+  const primaryAccount = accounts[0] ?? null
 
   if (isAuthenticated) {
     return (
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <div className="flex items-center space-x-4">
-          {Option.isSome(currentUser) && (
-            <>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            {primaryAccount?.avatarUrl ? (
               <img
-                alt={currentUser.value.login}
+                alt={primaryAccount.username}
                 className="w-12 h-12 rounded-full"
-                src={currentUser.value.avatar_url}
+                src={primaryAccount.avatarUrl}
               />
-              <div>
-                <h3 className="text-white font-medium">
-                  {currentUser.value.name || currentUser.value.login}
-                </h3>
-                <p className="text-gray-400">@{currentUser.value.login}</p>
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-gray-300">
+                {primaryAccount?.username.slice(0, 2).toUpperCase()}
               </div>
-            </>
+            )}
+            <div>
+              <h3 className="text-white font-medium">
+                {primaryAccount?.displayName ?? primaryAccount?.username ?? 'Connected Account'}
+              </h3>
+              <p className="text-gray-400 text-sm">GitHub</p>
+            </div>
+            {primaryAccount && (
+              <button
+                className="ml-auto px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                onClick={() => signOut(primaryAccount.id)}
+              >
+                Sign Out
+              </button>
+            )}
+          </div>
+
+          {accounts.length > 1 && (
+            <div className="border-t border-gray-700 pt-4">
+              <p className="text-gray-400 text-sm mb-2">Connected accounts</p>
+              <div className="space-y-2">
+                {accounts.map(account => (
+                  <div
+                    key={account.id}
+                    className="flex items-center justify-between text-sm text-gray-300 bg-gray-900/40 border border-gray-700/40 rounded-md px-3 py-2"
+                  >
+                    <span>{account.displayName ?? account.username}</span>
+                    <button
+                      className="text-red-400 hover:text-red-300"
+                      onClick={() => signOut(account.id)}
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-          <button
-            className="ml-auto px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-            onClick={signOut}
-          >
-            Sign Out
-          </button>
         </div>
       </div>
     )
@@ -40,10 +68,10 @@ export function AuthCard() {
   return (
     <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 text-center">
       <h2 className="text-xl font-semibold text-white mb-4">
-        GitHub Integration
+        Git Provider Integration
       </h2>
       <p className="text-gray-300 mb-6">
-        Connect your GitHub account to access repositories and issues.
+        Connect your repository providers to access projects across accounts.
       </p>
       <button
         className="px-6 py-2 bg-gray-900 text-white rounded-md border border-gray-600 hover:bg-gray-700 transition-colors disabled:opacity-50"

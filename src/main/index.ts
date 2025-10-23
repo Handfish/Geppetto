@@ -6,12 +6,18 @@ import { GitHubAuthService } from './github/auth-service'
 import { GitHubApiService } from './github/api-service'
 import { GitHubHttpService } from './github/http-service'
 import { SecureStoreService } from './github/store-service'
+import { GitHubProviderAdapter } from './github/provider-adapter'
+import { GitLabProviderAdapter } from './gitlab/provider-adapter'
+import { BitbucketProviderAdapter } from './bitbucket/provider-adapter'
+import { GiteaProviderAdapter } from './gitea/provider-adapter'
 import { TierService } from './tier/tier-service'
 import { AccountContextService } from './account/account-context-service'
-import { setupGitHubIpcHandlers } from './ipc/github-handlers'
 import { setupAccountIpcHandlers } from './ipc/account-handlers'
 import { registerRoute } from '../lib/electron-router-dom'
 import { makeAppSetup } from '../lib/electron-app/factories/app/setup'
+import { ProviderRegistryService } from './providers/registry'
+import { VcsProviderService } from './providers/vcs-provider-service'
+import { setupProviderIpcHandlers } from './ipc/provider-handlers'
 
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
@@ -22,7 +28,13 @@ const MainLayer = Layer.mergeAll(
   TierService.Default,
   AccountContextService.Default,
   GitHubAuthService.Default,
-  GitHubApiService.Default
+  GitHubApiService.Default,
+  GitHubProviderAdapter.Default,
+  GitLabProviderAdapter.Default,
+  BitbucketProviderAdapter.Default,
+  GiteaProviderAdapter.Default,
+  ProviderRegistryService.Default,
+  VcsProviderService.Default
 )
 
 function createMainWindow() {
@@ -116,7 +128,7 @@ app.whenReady().then(async () => {
   await Effect.runPromise(
     Effect.gen(function* () {
       yield* setupAccountIpcHandlers
-      yield* setupGitHubIpcHandlers
+      yield* setupProviderIpcHandlers
     }).pipe(Effect.provide(MainLayer))
   )
 
