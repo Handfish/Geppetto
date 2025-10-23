@@ -116,43 +116,86 @@ export function MainScreen() {
       {userName && activeAccountId && (
         <div className="absolute bottom-0 left-0 w-1/2 flex flex-col items-start justify-end pb-8 pl-8 pr-8 gap-4" style={{ height: '25vh', paddingTop: '3rem' }}>
           <SleepLight color="#00ffff" speed={8} />
-          <div className="w-full" style={{ minHeight: '180px' }}>
-            <RepositoryCarousel3
-              ref={carouselRef}
-              repos={repos}
-              isFocused={isFocused}
-              account={activeAccount ?? accounts.find(acc => acc.id === activeAccountId) ?? null}
+
+          <div className="relative w-full flex flex-col gap-4">
+            {/* Glassy rounded rectangle background - extends off screen at bottom and left, tight on right */}
+            <div
+              className="absolute backdrop-blur-md shadow-2xl pointer-events-none"
+              style={{
+                top: '-2rem',
+                left: '-100vw',
+                right: '-2rem',
+                bottom: '-100vh',
+                borderRadius: '1.5rem',
+                background: 'linear-gradient(135deg, rgba(3, 7, 18, 0.92) 0%, rgba(17, 24, 39, 0.88) 100%)'
+              }}
             />
-          </div>
-          <div className="text-gray-500 text-sm flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
-                ←
-              </kbd>
-              <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
-                →
-              </kbd>
-              <span>Navigate</span>
+
+            {/* Inner glow for depth */}
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                top: '-2rem',
+                left: '-100vw',
+                right: '-2rem',
+                bottom: '-100vh',
+                borderRadius: '1.5rem',
+                background: 'linear-gradient(135deg, rgba(31, 41, 55, 0.15) 0%, transparent 60%)'
+              }}
+            />
+
+            {/* Subtle border only on visible edges */}
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                top: '-2rem',
+                left: '-100vw',
+                right: '-2rem',
+                bottom: '-100vh',
+                borderRadius: '1.5rem',
+                boxShadow: 'inset 0 1px 0 0 rgba(107, 114, 128, 0.5)'
+              }}
+            />
+
+            <div className="w-full relative z-10" style={{ minHeight: '180px' }}>
+              <RepositoryCarousel3
+                ref={carouselRef}
+                repos={repos}
+                isFocused={isFocused}
+                account={activeAccount ?? accounts.find(acc => acc.id === activeAccountId) ?? null}
+              />
             </div>
-            <div className="flex items-center gap-2">
-              <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
-                Space
-              </kbd>
-              <span>Menu</span>
+
+            <div className="text-gray-500 text-sm flex items-center gap-3 relative z-10">
+              <div className="flex items-center gap-2">
+                <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
+                  ←
+                </kbd>
+                <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
+                  →
+                </kbd>
+                <span>Navigate</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
+                  Space
+                </kbd>
+                <span>Menu</span>
+              </div>
+              {Result.match(repos, {
+                onSuccess: (successResult) => (
+                  <RepositorySearch
+                    repos={successResult.value}
+                    isFocused={isFocused}
+                    onSelectRepo={(index) => {
+                      carouselRef.current?.jumpToIndex(index, true)
+                    }}
+                  />
+                ),
+                onInitial: () => null,
+                onFailure: () => null,
+              })}
             </div>
-            {Result.match(repos, {
-              onSuccess: (successResult) => (
-                <RepositorySearch
-                  repos={successResult.value}
-                  isFocused={isFocused}
-                  onSelectRepo={(index) => {
-                    carouselRef.current?.jumpToIndex(index, true)
-                  }}
-                />
-              ),
-              onInitial: () => null,
-              onFailure: () => null,
-            })}
           </div>
         </div>
       )}
