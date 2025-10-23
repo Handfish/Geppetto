@@ -7,6 +7,7 @@ import {
   providerSignOutAtom,
   providerRepositoriesAtom,
   accountRepositoriesAtom,
+  emptyAccountRepositoriesAtom,
 } from '../atoms/provider-atoms'
 import { accountContextAtom, providerAccountsAtom } from '../atoms/account-atoms'
 
@@ -51,18 +52,16 @@ export function useProviderRepositories(provider: ProviderType) {
 }
 
 export function useAccountRepositories(accountId: AccountId | null) {
-  if (!accountId) {
-    const empty = Result.initial<readonly never[]>()
-    return {
-      repositoriesResult: empty,
-      repositories: [] as const,
-      isLoading: false,
-    }
-  }
-  const repositoriesResult = useAtomValue(accountRepositoriesAtom(accountId))
+  const atom = accountId ? accountRepositoriesAtom(accountId) : emptyAccountRepositoriesAtom
+  const repositoriesResult = useAtomValue(atom)
+  const repositories = Result.getOrElse(repositoriesResult, () => [])
+  const isLoading = accountId
+    ? repositoriesResult._tag === 'Initial' && repositoriesResult.waiting
+    : false
+
   return {
     repositoriesResult,
-    repositories: Result.getOrElse(repositoriesResult, () => []),
-    isLoading: repositoriesResult._tag === 'Initial' && repositoriesResult.waiting,
+    repositories,
+    isLoading,
   }
 }

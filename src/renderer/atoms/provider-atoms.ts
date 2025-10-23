@@ -1,7 +1,8 @@
-import { Atom } from '@effect-atom/atom-react'
+import { Atom, Result } from '@effect-atom/atom-react'
 import { Effect, Duration } from 'effect'
 import type { AccountId, ProviderType } from '../../shared/schemas/account-context'
 import { ProviderClient } from '../lib/ipc-client'
+import type { ProviderRepository } from '../../shared/schemas/provider'
 
 const providerRuntime = Atom.runtime(ProviderClient.Default)
 
@@ -74,4 +75,8 @@ export const accountRepositoriesAtom = Atom.family((accountId: AccountId) =>
       Atom.withReactivity([`provider:${accountId}:repos`, 'providers:repos']),
       Atom.setIdleTTL(Duration.minutes(5))
     )
+)
+
+export const emptyAccountRepositoriesAtom = Atom.make(() =>
+  Result.success([] as ProviderRepository[])
 )
