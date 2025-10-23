@@ -70,7 +70,11 @@ const aiProviderUsageQueryAtom = Atom.family((provider: AiProviderType) =>
       Effect.gen(function* () {
         const client = yield* AiProviderClient
         return yield* client.getProviderUsage(provider)
-      })
+      }).pipe(
+        // Gracefully handle no accounts case - return empty array instead of error
+        Effect.catchTag('AiUsageUnavailableError', () => Effect.succeed([] as readonly AiUsageSnapshot[])),
+        Effect.catchTag('AiAuthenticationError', () => Effect.succeed([] as readonly AiUsageSnapshot[]))
+      )
     )
     .pipe(
       Atom.withReactivity([`ai-provider:${provider}:usage`, 'ai-provider:usage']),

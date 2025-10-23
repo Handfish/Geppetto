@@ -271,6 +271,9 @@ export class WebUsagePageAdapter extends Effect.Service<WebUsagePageAdapter>()(
               }),
           })
 
+          console.log(`[UsagePage] Fetched usage page HTML for ${provider}`)
+          console.log(html)
+
           const bars = config.parse(html)
           if (bars.length === 0) {
             return yield* Effect.fail(

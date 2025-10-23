@@ -159,6 +159,11 @@ export class AiAccountContextService extends Effect.Service<AiAccountContextServ
 
             saveContext(updatedContext)
           }),
+
+        clearAllAccounts: () =>
+          Effect.sync(() => {
+            saveContext(AiAccountContext.empty())
+          }),
       }
     }),
   }

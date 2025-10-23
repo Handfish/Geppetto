@@ -11,7 +11,7 @@ export function useAiProviderAuth(
   provider: AiProviderType,
   options?: { loadUsage?: boolean }
 ) {
-  const loadUsage = options?.loadUsage ?? true
+  const loadUsage = options?.loadUsage ?? false
   const [signInResult, signIn] = useAtom(aiProviderSignInAtom(provider))
   const usageAtom = selectAiProviderUsageAtom(provider, loadUsage)
   const usageResult = useAtomValue(usageAtom)

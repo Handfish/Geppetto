@@ -46,10 +46,10 @@ const FREE_TIER_LIMITS = new TierLimits({
   maxGitLabAccounts: 0,
   maxBitbucketAccounts: 0,
   maxGiteaAccounts: 0,
-  maxOpenAiAccounts: 0,
-  maxClaudeAccounts: 0,
+  maxOpenAiAccounts: 1,
+  maxClaudeAccounts: 1,
   enableAccountSwitcher: false,
-  enableAiProviders: false,
+  enableAiProviders: true,
   tier: 'free',
 })
 

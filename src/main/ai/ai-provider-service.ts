@@ -90,18 +90,26 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
             const context = yield* accountService.getContext()
             const accounts = context.getAccountsByProvider(provider)
 
+            // If no accounts exist, return empty array immediately
+            if (accounts.length === 0) {
+              return []
+            }
+
             const usage = yield* Effect.forEach(
               accounts,
               (account) =>
                 adapter
                   .getUsage(account.id)
                   .pipe(
-                    Effect.tap(() => accountService.touchAccount(account.id))
+                    Effect.tap(() => accountService.touchAccount(account.id)),
+                    // Gracefully handle authentication errors per account
+                    Effect.catchAll(() => Effect.succeed(null))
                   ),
               { concurrency: 'unbounded' }
             )
 
-            return usage
+            // Filter out null results from failed fetches
+            return usage.filter((u): u is AiUsageSnapshot => u !== null)
           }),
       }
     }),

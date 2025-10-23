@@ -2,19 +2,18 @@ import React from 'react'
 import { Result, useAtomValue } from '@effect-atom/atom-react'
 import { useAiProviderAuth } from '../hooks/useAiProviderAtoms'
 import type { AiUsageSnapshot } from '../../shared/schemas/ai/provider'
-import {
+import type {
   AiAuthenticationError,
   AiProviderUnavailableError,
   AiFeatureUnavailableError,
   AiUsageUnavailableError,
 } from '../../shared/schemas/ai/errors'
-import { AuthenticationError, NetworkError } from '../../shared/schemas/errors'
+import type {
+  AuthenticationError,
+  NetworkError,
+} from '../../shared/schemas/errors'
 import { tierLimitsAtom } from '../atoms/account-atoms'
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from './ui/alert'
+import { Alert, AlertDescription, AlertTitle } from './ui/alert'
 import {
   showProFeatureLockedToast,
   DEFAULT_PRO_FEATURE_MESSAGE,
@@ -34,6 +33,19 @@ type SignInError =
   | AiFeatureUnavailableError
   | AiProviderUnavailableError
 
+const BAR_SEGMENTS = 20
+
+const clampPercent = (value: number) => Math.max(0, Math.min(100, value))
+
+const renderUsageBar = (percent: number) => {
+  const clamped = clampPercent(percent)
+  const filledSegments = Math.round((clamped / 100) * BAR_SEGMENTS)
+  return `[${'#'.repeat(filledSegments).padEnd(BAR_SEGMENTS, '-')}]`
+}
+
+const formatPercent = (value: number) =>
+  clampPercent(value).toFixed(1).replace(/\.0$/, '')
+
 export function AiUsageCard() {
   const tierLimitsResult = useAtomValue(tierLimitsAtom)
   const aiProvidersEnabled = Result.match(tierLimitsResult, {
@@ -41,13 +53,22 @@ export function AiUsageCard() {
     onInitial: () => false,
     onFailure: () => false,
   })
-  const [featureLockMessage, setFeatureLockMessage] = React.useState<string | null>(null)
+  const [featureLockMessage, setFeatureLockMessage] = React.useState<
+    string | null
+  >(null)
   const signInFeatureToastShownRef = React.useRef(false)
   const usageFeatureToastShownRef = React.useRef(false)
 
-  const { signIn, signOut, signInResult, usageResult, isAuthenticated, refreshUsage } =
-    useAiProviderAuth('openai', { loadUsage: aiProvidersEnabled })
+  const {
+    signIn,
+    signOut,
+    signInResult,
+    usageResult,
+    isAuthenticated,
+    refreshUsage,
+  } = useAiProviderAuth('openai', { loadUsage: false })
 
+  // Only load usage after successful sign-in
   React.useEffect(() => {
     if (aiProvidersEnabled && signInResult._tag === 'Success') {
       refreshUsage()
@@ -91,49 +112,106 @@ export function AiUsageCard() {
       const message = usageResult.error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
       setFeatureLockMessage(message)
 
-      if (!signInFeatureToastShownRef.current && !usageFeatureToastShownRef.current) {
+      if (
+        !signInFeatureToastShownRef.current &&
+        !usageFeatureToastShownRef.current
+      ) {
         showProFeatureLockedToast(message)
         usageFeatureToastShownRef.current = true
       }
     }
   }, [usageResult])
 
+  const lastLoggedUsageRef = React.useRef<string | null>(null)
+
+  React.useEffect(() => {
+    if (usageResult._tag !== 'Success') {
+      return
+    }
+
+    const snapshots = usageResult.value ?? []
+    const key = JSON.stringify(
+      snapshots.map(snapshot => ({
+        accountId: snapshot.accountId,
+        capturedAt: snapshot.capturedAt,
+        metrics: snapshot.metrics.map(metric => ({
+          id: metric.toolId,
+          used: metric.used,
+          limit: metric.limit,
+          percentage: metric.usagePercentage,
+        })),
+      }))
+    )
+
+    if (key === lastLoggedUsageRef.current) {
+      return
+    }
+    lastLoggedUsageRef.current = key
+
+    snapshots.forEach(snapshot => {
+      console.group(`[OpenAI Usage] ${snapshot.accountId}`)
+      snapshot.metrics.forEach(metric => {
+        const percentUsed = clampPercent(metric.usagePercentage)
+        const bar = renderUsageBar(percentUsed)
+        const limitLabel =
+          metric.limit != null
+            ? ` (${metric.used}${metric.unit ? ` ${metric.unit}` : ''} / ${metric.limit}${metric.unit ? ` ${metric.unit}` : ''})`
+            : metric.unit
+              ? ` (${metric.used} ${metric.unit})`
+              : ''
+
+        console.log(
+          `${metric.toolName}: ${bar} ${formatPercent(percentUsed)}% used${limitLabel}`
+        )
+      })
+      console.groupEnd()
+    })
+  }, [usageResult])
+
   const usageContent = Result.builder(
     usageResult as Result.Result<readonly AiUsageSnapshot[], UsageError>
   )
     .onInitial(() =>
-      usageResult.waiting ? <div className="text-gray-400 text-sm">Loading usage…</div> : null
+      usageResult.waiting ? (
+        <div className="text-gray-400 text-sm">Loading usage…</div>
+      ) : null
     )
-    .onErrorTag('AiAuthenticationError', (error) => (
+    .onErrorTag('AiAuthenticationError', error => (
       <div className="text-red-400 text-sm">
         {error.message ?? 'Authentication required to fetch OpenAI usage.'}
       </div>
     ))
-    .onErrorTag('AiProviderUnavailableError', (error) => (
+    .onErrorTag('AiProviderUnavailableError', error => (
       <div className="text-red-400 text-sm">
         {error.message ?? 'OpenAI provider is currently unavailable.'}
       </div>
     ))
-    .onErrorTag('AiUsageUnavailableError', (error) => (
+    .onErrorTag('AiUsageUnavailableError', error => (
       <div className="text-red-400 text-sm">
         {error.message ?? 'Unable to fetch OpenAI usage right now.'}
       </div>
     ))
-    .onErrorTag('NetworkError', (error) => (
+    .onErrorTag('NetworkError', error => (
       <div className="text-red-400 text-sm">Network error: {error.message}</div>
     ))
-    .onDefect((defect) => (
-      <div className="text-red-400 text-sm">Unexpected error: {String(defect)}</div>
+    .onDefect(defect => (
+      <div className="text-red-400 text-sm">
+        Unexpected error: {String(defect)}
+      </div>
     ))
     .onSuccess((snapshots: readonly AiUsageSnapshot[]) => {
       if (snapshots.length === 0) {
-        return <div className="text-gray-400 text-sm">No OpenAI accounts connected yet.</div>
+        return (
+          <div className="text-gray-400 text-sm">
+            No OpenAI accounts connected yet.
+          </div>
+        )
       }
 
       return (
         <div className="space-y-6">
-          {snapshots.map((snapshot) => (
-            <div key={snapshot.accountId} className="space-y-4">
+          {snapshots.map(snapshot => (
+            <div className="space-y-4" key={snapshot.accountId}>
               <div className="flex items-center justify-between text-sm text-gray-400">
                 <span>Account: {snapshot.accountId}</span>
                 <div className="flex items-center gap-3">
@@ -147,8 +225,8 @@ export function AiUsageCard() {
                 </div>
               </div>
               <div className="space-y-3">
-                {snapshot.metrics.map((metric) => (
-                  <div key={metric.toolId} className="space-y-2">
+                {snapshot.metrics.map(metric => (
+                  <div className="space-y-2" key={metric.toolId}>
                     <div className="flex items-center justify-between text-sm text-gray-300">
                       <span>{metric.toolName}</span>
                       <span>
@@ -162,7 +240,9 @@ export function AiUsageCard() {
                     <div className="h-2 bg-gray-700 rounded">
                       <div
                         className="h-2 bg-indigo-500 rounded"
-                        style={{ width: `${Math.min(metric.usagePercentage, 100)}%` }}
+                        style={{
+                          width: `${Math.min(metric.usagePercentage, 100)}%`,
+                        }}
                       />
                     </div>
                   </div>
@@ -175,21 +255,23 @@ export function AiUsageCard() {
     })
     .render()
 
-  const signInErrorContent = Result.builder(signInResult as Result.Result<unknown, SignInError>)
+  const signInErrorContent = Result.builder(
+    signInResult as Result.Result<unknown, SignInError>
+  )
     .onInitial(() => null)
     .onSuccess(() => null)
-    .onErrorTag('AuthenticationError', (error) => (
+    .onErrorTag('AuthenticationError', error => (
       <p className="text-red-400 text-sm">
         {error.message ?? 'Unable to connect to OpenAI.'}
       </p>
     ))
-    .onErrorTag('NetworkError', (error) => (
+    .onErrorTag('NetworkError', error => (
       <p className="text-red-400 text-sm">Network error: {error.message}</p>
     ))
-    .onErrorTag('AiAuthenticationError', (error) => (
+    .onErrorTag('AiAuthenticationError', error => (
       <p className="text-red-400 text-sm">{error.message}</p>
     ))
-    .onErrorTag('AiProviderUnavailableError', (error) => (
+    .onErrorTag('AiProviderUnavailableError', error => (
       <p className="text-red-400 text-sm">{error.message}</p>
     ))
     .render()

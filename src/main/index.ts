@@ -19,11 +19,14 @@ import { ProviderRegistryService } from './providers/registry'
 import { VcsProviderService } from './providers/vcs-provider-service'
 import { setupProviderIpcHandlers } from './ipc/provider-handlers'
 import { AiAccountContextService } from './ai/account-context-service'
-import { OpenAiProviderAdapter } from './ai/openai/provider-adapter'
-import { ClaudeProviderAdapter } from './ai/claude/provider-adapter'
+import { OpenAiBrowserProviderAdapter } from './ai/openai/browser-provider-adapter'
+import { ClaudeBrowserProviderAdapter } from './ai/claude/browser-provider-adapter'
 import { AiProviderRegistryService } from './ai/registry'
 import { AiProviderService } from './ai/ai-provider-service'
 import { setupAiProviderIpcHandlers } from './ipc/ai-provider-handlers'
+import { ElectronSessionService } from './ai/browser/electron-session-service'
+import { BrowserAuthService } from './ai/browser/browser-auth-service'
+import { CookieUsagePageAdapter } from './ai/browser/cookie-usage-page-adapter'
 
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
@@ -42,8 +45,11 @@ const MainLayer = Layer.mergeAll(
   GiteaProviderAdapter.Default,
   ProviderRegistryService.Default,
   VcsProviderService.Default,
-  OpenAiProviderAdapter.Default,
-  ClaudeProviderAdapter.Default,
+  ElectronSessionService.Default,
+  BrowserAuthService.Default,
+  CookieUsagePageAdapter.Default,
+  OpenAiBrowserProviderAdapter.Default,
+  ClaudeBrowserProviderAdapter.Default,
   AiProviderRegistryService.Default,
   AiProviderService.Default
 )
