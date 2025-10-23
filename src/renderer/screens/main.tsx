@@ -13,14 +13,18 @@ import SleepLight from 'renderer/components/ui/SleepLight'
 // import { RepositoryCarousel2 } from 'renderer/components/ui/RepositoryCarousel2'
 import {
   RepositoryCarousel3,
-  type RepositoryCarouselRef
+  type RepositoryCarouselRef,
 } from 'renderer/components/ui/RepositoryCarousel3'
 import { RepositorySearch } from 'renderer/components/ui/RepositorySearch'
 import { ClickSpark } from 'renderer/components/ui/ClickSpark'
-import { useProviderAuth, useAccountRepositories } from '../hooks/useProviderAtoms'
+import {
+  useProviderAuth,
+  useAccountRepositories,
+} from '../hooks/useProviderAtoms'
 
 export function MainScreen() {
-  const { accounts, activeAccount, refreshProviderRepos } = useProviderAuth('github')
+  const { accounts, activeAccount, refreshProviderRepos } =
+    useProviderAuth('github')
   const activeAccountId = activeAccount?.id ?? accounts[0]?.id ?? null
   const { repositoriesResult: repos } = useAccountRepositories(activeAccountId)
   const [isFocused, setIsFocused] = useState(true)
@@ -44,7 +48,10 @@ export function MainScreen() {
 
     return () => {
       window.electron.ipcRenderer.removeListener('window:focus', handleFocus)
-      window.electron.ipcRenderer.removeListener('window:unfocus', handleUnfocus)
+      window.electron.ipcRenderer.removeListener(
+        'window:unfocus',
+        handleUnfocus
+      )
     }
   }, [])
 
@@ -61,19 +68,18 @@ export function MainScreen() {
       {/* Hi message - top left */}
       <div className="absolute top-8 left-8">
         <div className="relative">
-          {/* Soft-edged dark background with blur - Ubuntu/Linear inspired, diagonal '/' shape */}
+          {/* Soft-edged dark background with blur - rounded corner card extending off-screen */}
           <div
             className="absolute backdrop-blur-md shadow-2xl"
             style={{
-              top: '-6rem',
-              left: '-7rem',
-              right: '-6rem',
-              bottom: '-4rem',
-              borderRadius: '45%',
-              background: 'radial-gradient(ellipse 130% 110% at 30% 35%, rgba(3, 7, 18, 0.95) 0%, rgba(17, 24, 39, 0.92) 60%, rgba(17, 24, 39, 0.85) 80%, rgba(17, 24, 39, 0.4) 92%, transparent 100%)',
-              filter: 'blur(8px)',
-              transform: 'rotate(-12deg)',
-              transformOrigin: 'center center'
+              top: '-100vh',
+              left: '-100vw',
+              right: '-8rem',
+              bottom: '-3rem',
+              borderRadius: '8rem',
+              background:
+                'radial-gradient(ellipse 110% 100% at 60% 60%, rgba(3, 7, 18, 0.95) 0%, rgba(17, 24, 39, 0.92) 50%, rgba(17, 24, 39, 0.88) 70%, rgba(17, 24, 39, 0.5) 85%, rgba(17, 24, 39, 0.15) 93%, transparent 100%)',
+              filter: 'blur(7px)',
             }}
           />
 
@@ -81,15 +87,14 @@ export function MainScreen() {
           <div
             className="absolute"
             style={{
-              top: '-6rem',
-              left: '-7rem',
-              right: '-6rem',
-              bottom: '-4rem',
-              borderRadius: '45%',
-              background: 'radial-gradient(ellipse 130% 110% at 30% 35%, rgba(31, 41, 55, 0.2) 0%, rgba(31, 41, 55, 0.1) 70%, transparent 90%)',
-              filter: 'blur(4px)',
-              transform: 'rotate(-12deg)',
-              transformOrigin: 'center center'
+              top: '-100vh',
+              left: '-100vw',
+              right: '-8rem',
+              bottom: '-3rem',
+              borderRadius: '8rem',
+              background:
+                'radial-gradient(ellipse 100% 95% at 60% 60%, rgba(31, 41, 55, 0.2) 0%, rgba(31, 41, 55, 0.1) 60%, transparent 85%)',
+              filter: 'blur(3px)',
             }}
           />
 
@@ -114,9 +119,13 @@ export function MainScreen() {
 
       {/* Carousel and SleepLight - bottom left quadrant, bottom 6th of screen */}
       {userName && activeAccountId && (
-        <div className="absolute bottom-0 left-0 w-1/2 flex flex-col items-start justify-end pb-8 pl-8 pr-8 gap-4" style={{ height: '25vh', paddingTop: '3rem' }}>
-          <SleepLight color="#00ffff" speed={8} />
-
+        <div
+          className="absolute bottom-0 left-0 w-1/2 flex flex-col items-start justify-end pb-8 pl-8 pr-8"
+          style={{ height: '30vh', paddingTop: '3rem' }}
+        >
+          <div className="mb-6">
+            <SleepLight color="#00ffff" speed={8} />
+          </div>
           <div className="relative w-full flex flex-col gap-4">
             {/* Glassy rounded rectangle background - extends off screen at bottom and left, tight on right */}
             <div
@@ -127,7 +136,8 @@ export function MainScreen() {
                 right: '-2rem',
                 bottom: '-100vh',
                 borderRadius: '1.5rem',
-                background: 'linear-gradient(135deg, rgba(3, 7, 18, 0.92) 0%, rgba(17, 24, 39, 0.88) 100%)'
+                background:
+                  'linear-gradient(135deg, rgba(3, 7, 18, 0.92) 0%, rgba(17, 24, 39, 0.88) 100%)',
               }}
             />
 
@@ -140,7 +150,8 @@ export function MainScreen() {
                 right: '-2rem',
                 bottom: '-100vh',
                 borderRadius: '1.5rem',
-                background: 'linear-gradient(135deg, rgba(31, 41, 55, 0.15) 0%, transparent 60%)'
+                background:
+                  'linear-gradient(135deg, rgba(31, 41, 55, 0.15) 0%, transparent 60%)',
               }}
             />
 
@@ -153,16 +164,23 @@ export function MainScreen() {
                 right: '-2rem',
                 bottom: '-100vh',
                 borderRadius: '1.5rem',
-                boxShadow: 'inset 0 1px 0 0 rgba(107, 114, 128, 0.5)'
+                boxShadow: 'inset 0 1px 0 0 rgba(107, 114, 128, 0.5)',
               }}
             />
 
-            <div className="w-full relative z-10" style={{ minHeight: '180px' }}>
+            <div
+              className="w-full relative z-10"
+              style={{ minHeight: '180px' }}
+            >
               <RepositoryCarousel3
+                account={
+                  activeAccount ??
+                  accounts.find(acc => acc.id === activeAccountId) ??
+                  null
+                }
+                isFocused={isFocused}
                 ref={carouselRef}
                 repos={repos}
-                isFocused={isFocused}
-                account={activeAccount ?? accounts.find(acc => acc.id === activeAccountId) ?? null}
               />
             </div>
 
@@ -183,13 +201,13 @@ export function MainScreen() {
                 <span>Menu</span>
               </div>
               {Result.match(repos, {
-                onSuccess: (successResult) => (
+                onSuccess: successResult => (
                   <RepositorySearch
-                    repos={successResult.value}
                     isFocused={isFocused}
-                    onSelectRepo={(index) => {
+                    onSelectRepo={index => {
                       carouselRef.current?.jumpToIndex(index, true)
                     }}
+                    repos={successResult.value}
                   />
                 ),
                 onInitial: () => null,
