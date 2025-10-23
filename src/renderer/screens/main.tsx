@@ -61,14 +61,37 @@ export function MainScreen() {
       {/* Hi message - top left */}
       <div className="absolute top-8 left-8">
         <div className="relative">
-          {/* Soft-edged dark background with blur - Ubuntu/Linear inspired */}
-          <div className="absolute inset-0 -m-6 rounded-2xl bg-gradient-to-br from-gray-950/95 via-gray-900/90 to-gray-950/95 backdrop-blur-md shadow-2xl" />
+          {/* Soft-edged dark background with blur - Ubuntu/Linear inspired, diagonal '/' shape */}
+          <div
+            className="absolute backdrop-blur-md shadow-2xl"
+            style={{
+              top: '-6rem',
+              left: '-7rem',
+              right: '-6rem',
+              bottom: '-4rem',
+              borderRadius: '45%',
+              background: 'radial-gradient(ellipse 130% 110% at 30% 35%, rgba(3, 7, 18, 0.95) 0%, rgba(17, 24, 39, 0.92) 60%, rgba(17, 24, 39, 0.85) 80%, rgba(17, 24, 39, 0.4) 92%, transparent 100%)',
+              filter: 'blur(8px)',
+              transform: 'rotate(-12deg)',
+              transformOrigin: 'center center'
+            }}
+          />
 
           {/* Inner glow for depth */}
-          <div className="absolute inset-0 -m-6 rounded-2xl bg-gradient-to-br from-gray-800/20 via-transparent to-gray-800/20" />
-
-          {/* Subtle border */}
-          <div className="absolute inset-0 -m-6 rounded-2xl ring-1 ring-gray-700/50 ring-inset" />
+          <div
+            className="absolute"
+            style={{
+              top: '-6rem',
+              left: '-7rem',
+              right: '-6rem',
+              bottom: '-4rem',
+              borderRadius: '45%',
+              background: 'radial-gradient(ellipse 130% 110% at 30% 35%, rgba(31, 41, 55, 0.2) 0%, rgba(31, 41, 55, 0.1) 70%, transparent 90%)',
+              filter: 'blur(4px)',
+              transform: 'rotate(-12deg)',
+              transformOrigin: 'center center'
+            }}
+          />
 
           {/* Content */}
           <Alert className="relative bg-transparent border-transparent text-accent w-fit">
