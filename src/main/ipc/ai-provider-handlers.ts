@@ -42,11 +42,11 @@ export const setupAiProviderIpcHandlers = Effect.gen(function* () {
     })
   }
 
-  setupHandler('signIn', (input) => aiProviderService.signIn(input.provider))
-  setupHandler('signOut', (input) => aiProviderService.signOut(input.accountId))
-  setupHandler('checkAuth', (input) => aiProviderService.checkAuth(input.accountId))
-  setupHandler('getUsage', (input) => aiProviderService.getUsage(input.accountId))
-  setupHandler('getProviderUsage', (input) =>
+  setupHandler('aiProvider:signIn', (input) => aiProviderService.signIn(input.provider))
+  setupHandler('aiProvider:signOut', (input) => aiProviderService.signOut(input.accountId))
+  setupHandler('aiProvider:checkAuth', (input) => aiProviderService.checkAuth(input.accountId))
+  setupHandler('aiProvider:getUsage', (input) => aiProviderService.getUsage(input.accountId))
+  setupHandler('aiProvider:getProviderUsage', (input) =>
     aiProviderService.getUsageByProvider(input.provider)
   )
 })

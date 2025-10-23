@@ -51,6 +51,7 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 
             const adapter = yield* registry.getAdapter(account.provider)
             yield* adapter.signOut(accountId)
+            yield* accountService.removeAccount(accountId)
           }),
 
         checkAuth: (accountId: AiAccountId) =>

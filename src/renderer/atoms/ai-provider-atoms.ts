@@ -1,7 +1,7 @@
 import { Atom } from '@effect-atom/atom-react'
 import { Effect, Duration } from 'effect'
 import { AiProviderClient } from '../lib/ipc-client'
-import type { AiProviderType } from '../../shared/schemas/ai/provider'
+import type { AiAccountId, AiProviderType } from '../../shared/schemas/ai/provider'
 
 const aiProviderRuntime = Atom.runtime(AiProviderClient.Default)
 
@@ -29,4 +29,15 @@ export const aiProviderUsageAtom = Atom.family((provider: AiProviderType) =>
       Atom.withReactivity([`ai-provider:${provider}:usage`, 'ai-provider:usage']),
       Atom.setIdleTTL(Duration.minutes(5))
     )
+)
+
+export const aiProviderSignOutAtom = aiProviderRuntime.fn(
+  (params: { accountId: AiAccountId }) =>
+    Effect.gen(function* () {
+      const client = yield* AiProviderClient
+      yield* client.signOut(params.accountId)
+    }),
+  {
+    reactivityKeys: ['ai-provider:usage'],
+  }
 )

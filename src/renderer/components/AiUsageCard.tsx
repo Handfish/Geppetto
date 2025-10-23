@@ -1,20 +1,29 @@
 import React from 'react'
 import { Result } from '@effect-atom/atom-react'
 import { useAiProviderAuth } from '../hooks/useAiProviderAtoms'
+import type { AiUsageSnapshot } from '../../shared/schemas/ai/provider'
+import {
+  AiAuthenticationError,
+  AiProviderUnavailableError,
+  AiUsageUnavailableError,
+} from '../../shared/schemas/ai/errors'
+import { AuthenticationError, NetworkError } from '../../shared/schemas/errors'
+
+type UsageError =
+  | AiAuthenticationError
+  | AiProviderUnavailableError
+  | AiUsageUnavailableError
+  | NetworkError
+
+type SignInError =
+  | AuthenticationError
+  | NetworkError
+  | AiAuthenticationError
+  | AiProviderUnavailableError
 
 export function AiUsageCard() {
-  const { signIn, signInResult, usageResult, isAuthenticated, refreshUsage } =
+  const { signIn, signOut, signInResult, usageResult, isAuthenticated, refreshUsage } =
     useAiProviderAuth('openai')
-
-  const resolveErrorMessage = React.useCallback((error: unknown, fallback: string) => {
-    if (typeof error === 'object' && error !== null && 'message' in error) {
-      const candidate = (error as { message?: unknown }).message
-      if (typeof candidate === 'string' && candidate.trim().length > 0) {
-        return candidate
-      }
-    }
-    return fallback
-  }, [])
 
   React.useEffect(() => {
     if (signInResult._tag === 'Success') {
@@ -22,8 +31,12 @@ export function AiUsageCard() {
     }
   }, [refreshUsage, signInResult])
 
-  const usageContent = Result.builder(usageResult)
-    .onInitial(() => (usageResult.waiting ? <div className="text-gray-400 text-sm">Loading usage…</div> : null))
+  const usageContent = Result.builder(
+    usageResult as Result.Result<readonly AiUsageSnapshot[], UsageError>
+  )
+    .onInitial(() =>
+      usageResult.waiting ? <div className="text-gray-400 text-sm">Loading usage…</div> : null
+    )
     .onErrorTag('AiAuthenticationError', (error) => (
       <div className="text-red-400 text-sm">
         {error.message ?? 'Authentication required to fetch OpenAI usage.'}
@@ -39,12 +52,15 @@ export function AiUsageCard() {
         {error.message ?? 'Unable to fetch OpenAI usage right now.'}
       </div>
     ))
+    .onErrorTag('NetworkError', (error) => (
+      <div className="text-red-400 text-sm">Network error: {error.message}</div>
+    ))
     .onDefect((defect) => (
       <div className="text-red-400 text-sm">Unexpected error: {String(defect)}</div>
     ))
-    .onSuccess((snapshots) => {
+    .onSuccess((snapshots: readonly AiUsageSnapshot[]) => {
       if (snapshots.length === 0) {
-        return <div className="text-gray-400 text-sm">Connected, but no CLI usage recorded yet.</div>
+        return <div className="text-gray-400 text-sm">No OpenAI accounts connected yet.</div>
       }
 
       return (
@@ -53,7 +69,15 @@ export function AiUsageCard() {
             <div key={snapshot.accountId} className="space-y-4">
               <div className="flex items-center justify-between text-sm text-gray-400">
                 <span>Account: {snapshot.accountId}</span>
-                <span>{new Date(snapshot.capturedAt).toLocaleString()}</span>
+                <div className="flex items-center gap-3">
+                  <span>{new Date(snapshot.capturedAt).toLocaleString()}</span>
+                  <button
+                    className="px-3 py-1 text-xs bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors"
+                    onClick={() => signOut(snapshot.accountId)}
+                  >
+                    Disconnect
+                  </button>
+                </div>
               </div>
               <div className="space-y-3">
                 {snapshot.metrics.map((metric) => (
@@ -84,6 +108,25 @@ export function AiUsageCard() {
     })
     .render()
 
+  const signInErrorContent = Result.builder(signInResult as Result.Result<unknown, SignInError>)
+    .onInitial(() => null)
+    .onSuccess(() => null)
+    .onErrorTag('AuthenticationError', (error) => (
+      <p className="text-red-400 text-sm">
+        {error.message ?? 'Unable to connect to OpenAI.'}
+      </p>
+    ))
+    .onErrorTag('NetworkError', (error) => (
+      <p className="text-red-400 text-sm">Network error: {error.message}</p>
+    ))
+    .onErrorTag('AiAuthenticationError', (error) => (
+      <p className="text-red-400 text-sm">{error.message}</p>
+    ))
+    .onErrorTag('AiProviderUnavailableError', (error) => (
+      <p className="text-red-400 text-sm">{error.message}</p>
+    ))
+    .render()
+
   return (
     <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
       <div className="flex flex-col gap-4">
@@ -102,15 +145,11 @@ export function AiUsageCard() {
             <button
               className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition-colors disabled:opacity-50"
               disabled={signInResult.waiting}
-              onClick={signIn}
+              onClick={() => signIn()}
             >
               {signInResult.waiting ? 'Connecting…' : 'Connect OpenAI'}
             </button>
-            {signInResult._tag === 'Failure' && (
-              <p className="text-red-400 text-sm">
-                {resolveErrorMessage(signInResult.error, 'Unable to connect to OpenAI.')}
-              </p>
-            )}
+            {signInErrorContent}
           </div>
         )}
 

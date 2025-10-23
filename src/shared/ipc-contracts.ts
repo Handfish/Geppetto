@@ -129,7 +129,7 @@ export const ProviderIpcContracts = {
 } as const
 
 export const AiProviderIpcContracts = {
-  signIn: {
+  'aiProvider:signIn': {
     channel: 'aiProvider:signIn' as const,
     input: S.Struct({ provider: AiProviderType }),
     output: AiProviderSignInResult,
@@ -141,14 +141,14 @@ export const AiProviderIpcContracts = {
     ),
   },
 
-  signOut: {
+  'aiProvider:signOut': {
     channel: 'aiProvider:signOut' as const,
     input: S.Struct({ accountId: AiAccountId }),
     output: S.Void,
     errors: S.Union(AiProviderUnavailableError, NetworkError),
   },
 
-  checkAuth: {
+  'aiProvider:checkAuth': {
     channel: 'aiProvider:checkAuth' as const,
     input: S.Struct({ accountId: AiAccountId }),
     output: AiProviderAuthStatus,
@@ -159,7 +159,7 @@ export const AiProviderIpcContracts = {
     ),
   },
 
-  getUsage: {
+  'aiProvider:getUsage': {
     channel: 'aiProvider:getUsage' as const,
     input: S.Struct({ accountId: AiAccountId }),
     output: AiUsageSnapshot,
@@ -171,7 +171,7 @@ export const AiProviderIpcContracts = {
     ),
   },
 
-  getProviderUsage: {
+  'aiProvider:getProviderUsage': {
     channel: 'aiProvider:getProviderUsage' as const,
     input: S.Struct({ provider: AiProviderType }),
     output: S.Array(AiUsageSnapshot),
