@@ -1,31 +1,51 @@
-import { Effect } from 'effect'
-import type {
-  AiProviderAdapter,
-  AiUsageEffect,
-} from '../ports'
+import { Effect, pipe } from 'effect'
+import type { AiProviderAdapter } from '../ports'
 import {
   AiProviderSignInResult,
   AiProviderAuthStatus,
   AiUsageSnapshot,
-  AiUsageMetric,
   AiAccount,
 } from '../../../shared/schemas/ai/provider'
+import { AiProviderUsageError } from '../errors'
+import type { AiProviderAuthenticationError } from '../errors'
+import { UsagePageError } from '../usage-page/ports'
+import { WebUsagePageAdapter } from '../usage-page/web-usage-page-adapter'
+import { usageBarsToMetrics } from '../usage-page/usage-metric-utils'
+
+const PROVIDER: 'openai' = 'openai'
+
+const mapUsageError =
+  (accountId: AiAccount['id']) =>
+  (error: unknown): AiProviderUsageError | AiProviderAuthenticationError => {
+    if (error instanceof UsagePageError) {
+      return new AiProviderUsageError({
+        provider: PROVIDER,
+        accountId,
+        message: error.message,
+      })
+    }
+
+    return error as AiProviderAuthenticationError
+  }
 
 export class OpenAiProviderAdapter extends Effect.Service<OpenAiProviderAdapter>()(
   'OpenAiProviderAdapter',
   {
-    effect: Effect.sync(() => {
+    dependencies: [WebUsagePageAdapter.Default],
+    effect: Effect.gen(function* () {
+      const usagePage = yield* WebUsagePageAdapter
+
       const adapter: AiProviderAdapter = {
-        provider: 'openai',
+        provider: PROVIDER,
         supportsUsage: true,
 
         signIn: () =>
           Effect.sync(() => {
-            const accountId = AiAccount.makeAccountId('openai', 'default')
+            const accountId = AiAccount.makeAccountId(PROVIDER, 'default')
             return new AiProviderSignInResult({
-              provider: 'openai',
+              provider: PROVIDER,
               accountId,
-              label: 'OpenAI CLI',
+              label: 'OpenAI Usage',
               metadata: {
                 accountIdentifier: 'default',
               },
@@ -34,52 +54,30 @@ export class OpenAiProviderAdapter extends Effect.Service<OpenAiProviderAdapter>
 
         signOut: () => Effect.void,
 
-        checkAuth: (accountId) =>
+        checkAuth: accountId =>
           Effect.sync(
             () =>
               new AiProviderAuthStatus({
-                provider: 'openai',
+                provider: PROVIDER,
                 accountId,
                 authenticated: true,
               })
           ),
 
-        getUsage: ((accountId) =>
-          Effect.sync(() => {
-            const metrics = [
-              new AiUsageMetric({
-                toolId: 'cli.generate',
-                toolName: 'CLI Generate',
-                used: 4200,
-                limit: 10000,
-                usagePercentage: 42,
-                unit: 'tokens',
-              }),
-              new AiUsageMetric({
-                toolId: 'cli.plan',
-                toolName: 'CLI Planner',
-                used: 12,
-                limit: 50,
-                usagePercentage: 24,
-                unit: 'invocations',
-              }),
-              new AiUsageMetric({
-                toolId: 'cli.summarize',
-                toolName: 'CLI Summaries',
-                used: 80,
-                limit: 100,
-                usagePercentage: 80,
-                unit: 'requests',
-              }),
-            ]
-
-            return new AiUsageSnapshot({
-              provider: 'openai',
-              accountId,
-              capturedAt: new Date(),
-              metrics,
-            })
-          })) satisfies AiUsageEffect,
+        getUsage: accountId =>
+          pipe(
+            usagePage.fetchUsagePage(PROVIDER),
+            Effect.map(
+              snapshot =>
+                new AiUsageSnapshot({
+                  provider: PROVIDER,
+                  accountId,
+                  capturedAt: snapshot.fetchedAt,
+                  metrics: usageBarsToMetrics(snapshot.bars),
+                })
+            ),
+            Effect.mapError(mapUsageError(accountId))
+          ),
       }
 
       return adapter

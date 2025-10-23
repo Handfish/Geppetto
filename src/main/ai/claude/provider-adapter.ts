@@ -1,31 +1,51 @@
-import { Effect } from 'effect'
-import type {
-  AiProviderAdapter,
-  AiUsageEffect,
-} from '../ports'
+import { Effect, pipe } from 'effect'
+import type { AiProviderAdapter } from '../ports'
 import {
   AiProviderSignInResult,
   AiProviderAuthStatus,
-  AiUsageMetric,
   AiUsageSnapshot,
   AiAccount,
 } from '../../../shared/schemas/ai/provider'
+import { AiProviderUsageError } from '../errors'
+import type { AiProviderAuthenticationError } from '../errors'
+import { UsagePageError } from '../usage-page/ports'
+import { WebUsagePageAdapter } from '../usage-page/web-usage-page-adapter'
+import { usageBarsToMetrics } from '../usage-page/usage-metric-utils'
+
+const PROVIDER: 'claude' = 'claude'
+
+const mapUsageError =
+  (accountId: AiAccount['id']) =>
+  (error: unknown): AiProviderUsageError | AiProviderAuthenticationError => {
+    if (error instanceof UsagePageError) {
+      return new AiProviderUsageError({
+        provider: PROVIDER,
+        accountId,
+        message: error.message,
+      })
+    }
+
+    return error as AiProviderAuthenticationError
+  }
 
 export class ClaudeProviderAdapter extends Effect.Service<ClaudeProviderAdapter>()(
   'ClaudeProviderAdapter',
   {
-    effect: Effect.sync(() => {
+    dependencies: [WebUsagePageAdapter.Default],
+    effect: Effect.gen(function* () {
+      const usagePage = yield* WebUsagePageAdapter
+
       const adapter: AiProviderAdapter = {
-        provider: 'claude',
+        provider: PROVIDER,
         supportsUsage: true,
 
         signIn: () =>
           Effect.sync(() => {
-            const accountId = AiAccount.makeAccountId('claude', 'default')
+            const accountId = AiAccount.makeAccountId(PROVIDER, 'default')
             return new AiProviderSignInResult({
-              provider: 'claude',
+              provider: PROVIDER,
               accountId,
-              label: 'Claude CLI',
+              label: 'Claude Usage',
               metadata: {
                 accountIdentifier: 'default',
               },
@@ -34,44 +54,30 @@ export class ClaudeProviderAdapter extends Effect.Service<ClaudeProviderAdapter>
 
         signOut: () => Effect.void,
 
-        checkAuth: (accountId) =>
+        checkAuth: accountId =>
           Effect.sync(
             () =>
               new AiProviderAuthStatus({
-                provider: 'claude',
+                provider: PROVIDER,
                 accountId,
                 authenticated: true,
               })
           ),
 
-        getUsage: ((accountId) =>
-          Effect.sync(() => {
-            const metrics = [
-              new AiUsageMetric({
-                toolId: 'cli.workspace',
-                toolName: 'Workspace Agent',
-                used: 18,
-                limit: 40,
-                usagePercentage: 45,
-                unit: 'sessions',
-              }),
-              new AiUsageMetric({
-                toolId: 'cli.review',
-                toolName: 'Code Review',
-                used: 6,
-                limit: 20,
-                usagePercentage: 30,
-                unit: 'reviews',
-              }),
-            ]
-
-            return new AiUsageSnapshot({
-              provider: 'claude',
-              accountId,
-              capturedAt: new Date(),
-              metrics,
-            })
-          })) satisfies AiUsageEffect,
+        getUsage: accountId =>
+          pipe(
+            usagePage.fetchUsagePage(PROVIDER),
+            Effect.map(
+              snapshot =>
+                new AiUsageSnapshot({
+                  provider: PROVIDER,
+                  accountId,
+                  capturedAt: snapshot.fetchedAt,
+                  metrics: usageBarsToMetrics(snapshot.bars),
+                })
+            ),
+            Effect.mapError(mapUsageError(accountId))
+          ),
       }
 
       return adapter
