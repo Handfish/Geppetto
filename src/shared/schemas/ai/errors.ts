@@ -15,6 +15,15 @@ export class AiProviderUnavailableError extends S.TaggedError<AiProviderUnavaila
   message: S.String,
 }) {}
 
+export class AiFeatureUnavailableError extends S.TaggedError<AiFeatureUnavailableError>(
+  'AiFeatureUnavailableError'
+)('AiFeatureUnavailableError', {
+  feature: S.String,
+  tier: S.String,
+  requiredTier: S.String,
+  message: S.String,
+}) {}
+
 export class AiUsageUnavailableError extends S.TaggedError<AiUsageUnavailableError>(
   'AiUsageUnavailableError'
 )('AiUsageUnavailableError', {

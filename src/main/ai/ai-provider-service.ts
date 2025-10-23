@@ -85,6 +85,7 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 
         getUsageByProvider: (provider: AiProviderType) =>
           Effect.gen(function* () {
+            yield* tierService.ensureAiProvidersEnabled()
             const adapter = yield* registry.getAdapter(provider)
             const context = yield* accountService.getContext()
             const accounts = context.getAccountsByProvider(provider)

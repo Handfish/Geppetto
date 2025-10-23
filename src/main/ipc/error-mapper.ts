@@ -10,6 +10,7 @@ import {
 import {
   AiAuthenticationError as SharedAiAuthenticationError,
   AiProviderUnavailableError as SharedAiProviderUnavailableError,
+  AiFeatureUnavailableError as SharedAiFeatureUnavailableError,
   AiUsageUnavailableError as SharedAiUsageUnavailableError,
 } from '../../shared/schemas/ai/errors'
 import {
@@ -51,6 +52,7 @@ export type IpcErrorResult = {
     | SharedProviderOperationError
     | SharedAiAuthenticationError
     | SharedAiProviderUnavailableError
+    | SharedAiFeatureUnavailableError
     | SharedAiUsageUnavailableError
 }
 
@@ -140,6 +142,17 @@ export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcError
     }
 
     if (error instanceof FeatureNotAvailableError) {
+      if (error.feature === 'ai-providers') {
+        return Effect.succeed({
+          _tag: 'Error' as const,
+          error: new SharedAiFeatureUnavailableError({
+            feature: error.feature,
+            tier: error.tier,
+            requiredTier: error.requiredTier,
+            message: `Feature '${error.feature}' requires ${error.requiredTier} tier.`,
+          }),
+        })
+      }
       return Effect.succeed({
         _tag: 'Error' as const,
         error: new AuthenticationError({

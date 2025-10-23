@@ -23,6 +23,7 @@ import {
 import {
   AiAuthenticationError,
   AiProviderUnavailableError,
+  AiFeatureUnavailableError,
   AiUsageUnavailableError,
 } from './schemas/ai/errors'
 import { Account, AccountContext, AccountId, ProviderType } from './schemas/account-context'
@@ -137,6 +138,7 @@ export const AiProviderIpcContracts = {
       AuthenticationError,
       AiAuthenticationError,
       AiProviderUnavailableError,
+      AiFeatureUnavailableError,
       NetworkError
     ),
   },
@@ -178,6 +180,7 @@ export const AiProviderIpcContracts = {
     errors: S.Union(
       AiUsageUnavailableError,
       AiProviderUnavailableError,
+      AiFeatureUnavailableError,
       NetworkError
     ),
   },

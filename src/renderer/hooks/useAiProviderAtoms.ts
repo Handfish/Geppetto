@@ -3,14 +3,19 @@ import { Result } from '@effect-atom/atom-react'
 import type { AiAccountId, AiProviderType, AiUsageSnapshot } from '../../shared/schemas/ai/provider'
 import {
   aiProviderSignInAtom,
-  aiProviderUsageAtom,
+  selectAiProviderUsageAtom,
   aiProviderSignOutAtom,
 } from '../atoms/ai-provider-atoms'
 
-export function useAiProviderAuth(provider: AiProviderType) {
+export function useAiProviderAuth(
+  provider: AiProviderType,
+  options?: { loadUsage?: boolean }
+) {
+  const loadUsage = options?.loadUsage ?? true
   const [signInResult, signIn] = useAtom(aiProviderSignInAtom(provider))
-  const usageResult = useAtomValue(aiProviderUsageAtom(provider))
-  const refreshUsage = useAtomRefresh(aiProviderUsageAtom(provider))
+  const usageAtom = selectAiProviderUsageAtom(provider, loadUsage)
+  const usageResult = useAtomValue(usageAtom)
+  const refreshUsage = useAtomRefresh(usageAtom)
   const runSignOut = useAtomSet(aiProviderSignOutAtom)
 
   const usage = Result.getOrElse(usageResult, () => [] as readonly AiUsageSnapshot[])
@@ -31,8 +36,13 @@ export function useAiProviderAuth(provider: AiProviderType) {
   }
 }
 
-export function useAiProviderUsage(provider: AiProviderType) {
-  const usageResult = useAtomValue(aiProviderUsageAtom(provider))
+export function useAiProviderUsage(
+  provider: AiProviderType,
+  options?: { enabled?: boolean }
+) {
+  const enabled = options?.enabled ?? true
+  const usageAtom = selectAiProviderUsageAtom(provider, enabled)
+  const usageResult = useAtomValue(usageAtom)
   return {
     usageResult,
     usage: Result.getOrElse(usageResult, () => []),

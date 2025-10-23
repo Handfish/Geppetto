@@ -1,17 +1,29 @@
 import React from 'react'
-import { Result } from '@effect-atom/atom-react'
+import { Result, useAtomValue } from '@effect-atom/atom-react'
 import { useAiProviderAuth } from '../hooks/useAiProviderAtoms'
 import type { AiUsageSnapshot } from '../../shared/schemas/ai/provider'
 import {
   AiAuthenticationError,
   AiProviderUnavailableError,
+  AiFeatureUnavailableError,
   AiUsageUnavailableError,
 } from '../../shared/schemas/ai/errors'
 import { AuthenticationError, NetworkError } from '../../shared/schemas/errors'
+import { tierLimitsAtom } from '../atoms/account-atoms'
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from './ui/alert'
+import {
+  showProFeatureLockedToast,
+  DEFAULT_PRO_FEATURE_MESSAGE,
+} from '../lib/toast'
 
 type UsageError =
   | AiAuthenticationError
   | AiProviderUnavailableError
+  | AiFeatureUnavailableError
   | AiUsageUnavailableError
   | NetworkError
 
@@ -19,17 +31,72 @@ type SignInError =
   | AuthenticationError
   | NetworkError
   | AiAuthenticationError
+  | AiFeatureUnavailableError
   | AiProviderUnavailableError
 
 export function AiUsageCard() {
+  const tierLimitsResult = useAtomValue(tierLimitsAtom)
+  const aiProvidersEnabled = Result.match(tierLimitsResult, {
+    onSuccess: ({ value }) => value.enableAiProviders,
+    onInitial: () => false,
+    onFailure: () => false,
+  })
+  const [featureLockMessage, setFeatureLockMessage] = React.useState<string | null>(null)
+  const signInFeatureToastShownRef = React.useRef(false)
+  const usageFeatureToastShownRef = React.useRef(false)
+
   const { signIn, signOut, signInResult, usageResult, isAuthenticated, refreshUsage } =
-    useAiProviderAuth('openai')
+    useAiProviderAuth('openai', { loadUsage: aiProvidersEnabled })
 
   React.useEffect(() => {
-    if (signInResult._tag === 'Success') {
+    if (aiProvidersEnabled && signInResult._tag === 'Success') {
       refreshUsage()
     }
-  }, [refreshUsage, signInResult])
+  }, [aiProvidersEnabled, refreshUsage, signInResult])
+
+  React.useEffect(() => {
+    if (aiProvidersEnabled) {
+      setFeatureLockMessage(null)
+      signInFeatureToastShownRef.current = false
+      usageFeatureToastShownRef.current = false
+    }
+  }, [aiProvidersEnabled])
+
+  React.useEffect(() => {
+    if (signInResult.waiting) {
+      signInFeatureToastShownRef.current = false
+      return
+    }
+
+    if (
+      Result.isFailure(signInResult) &&
+      signInResult.error._tag === 'AiFeatureUnavailableError'
+    ) {
+      const message = signInResult.error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
+      setFeatureLockMessage(message)
+      signInFeatureToastShownRef.current = true
+    }
+  }, [signInResult])
+
+  React.useEffect(() => {
+    if (usageResult.waiting) {
+      usageFeatureToastShownRef.current = false
+      return
+    }
+
+    if (
+      usageResult._tag === 'Failure' &&
+      usageResult.error._tag === 'AiFeatureUnavailableError'
+    ) {
+      const message = usageResult.error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
+      setFeatureLockMessage(message)
+
+      if (!signInFeatureToastShownRef.current && !usageFeatureToastShownRef.current) {
+        showProFeatureLockedToast(message)
+        usageFeatureToastShownRef.current = true
+      }
+    }
+  }, [usageResult])
 
   const usageContent = Result.builder(
     usageResult as Result.Result<readonly AiUsageSnapshot[], UsageError>
@@ -151,6 +218,17 @@ export function AiUsageCard() {
             </button>
             {signInErrorContent}
           </div>
+        )}
+
+        {featureLockMessage && (
+          <Alert className="bg-gray-950/85 border border-yellow-500/70 text-yellow-200 shadow-lg">
+            <AlertTitle className="text-lg font-semibold uppercase tracking-wide text-yellow-300">
+              Pro feature locked
+            </AlertTitle>
+            <AlertDescription className="text-sm text-yellow-100/85">
+              {featureLockMessage}
+            </AlertDescription>
+          </Alert>
         )}
 
         {usageContent}

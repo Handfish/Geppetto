@@ -1,14 +1,14 @@
 import { Terminal } from 'lucide-react'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Result } from '@effect-atom/atom-react'
 
+import SleepLight from 'renderer/components/ui/SleepLight'
+import { ToastViewport } from 'renderer/components/ui/ToastViewport'
 import {
   Alert,
   AlertTitle,
   AlertDescription,
 } from 'renderer/components/ui/alert'
-
-import SleepLight from 'renderer/components/ui/SleepLight'
 // import { RepositoryCarousel } from 'renderer/components/ui/RepositoryCarousel'
 // import { RepositoryCarousel2 } from 'renderer/components/ui/RepositoryCarousel2'
 // import {
@@ -25,6 +25,11 @@ import {
   useProviderAuth,
   useAccountRepositories,
 } from '../hooks/useProviderAtoms'
+import {
+  CONSOLE_ERROR_KEY,
+  readConsoleError,
+  clearConsoleError,
+} from '../lib/console-error-channel'
 
 export function MainScreen() {
   const { accounts, activeAccount, refreshProviderRepos } =
@@ -33,6 +38,11 @@ export function MainScreen() {
   const { repositoriesResult: repos } = useAccountRepositories(activeAccountId)
   const [isFocused, setIsFocused] = useState(true)
   const carouselRef = useRef<RepositoryCarouselRef>(null)
+  const [consoleError, setConsoleError] = useState(() => readConsoleError())
+
+  const handleConsoleErrorChange = useCallback(() => {
+    setConsoleError(readConsoleError())
+  }, [])
 
   // Listen for auth changes from other windows
   // Listen for focus/unfocus events
@@ -62,11 +72,32 @@ export function MainScreen() {
   // Extract username from currentUser Option
   const userName = activeAccount?.displayName ?? activeAccount?.username ?? null
 
+  useEffect(() => {
+    handleConsoleErrorChange()
+    const listener = (event: StorageEvent) => {
+      if (event.key === CONSOLE_ERROR_KEY) {
+        handleConsoleErrorChange()
+      }
+    }
+
+    window.addEventListener('storage', listener)
+    return () => {
+      window.removeEventListener('storage', listener)
+    }
+  }, [handleConsoleErrorChange])
+
+  const dismissConsoleError = () => {
+    clearConsoleError()
+    handleConsoleErrorChange()
+  }
+
   return (
-    <main
-      className="relative h-screen w-screen bg-transparent drag-region transition-opacity duration-500 overflow-hidden"
-      style={{ opacity: isFocused ? 1 : 0 }}
-    >
+    <>
+      <ToastViewport />
+      <main
+        className="relative h-screen w-screen bg-transparent drag-region transition-opacity duration-500 overflow-hidden"
+        style={{ opacity: isFocused ? 1 : 0 }}
+      >
       {/* Click spark effect - only when focused */}
       <ClickSpark color="#00ffff" enabled={isFocused} />
       {/* Hi message - top left */}
@@ -121,7 +152,28 @@ export function MainScreen() {
         </div>
       </div>
 
-      {/* Carousel and SleepLight - bottom left quadrant, bottom 6th of screen */}
+      {consoleError && (
+        <div className="absolute top-36 left-8 max-w-md">
+          <Alert className="bg-gray-950/85 border border-yellow-500/70 text-yellow-200 shadow-lg">
+            <AlertTitle className="text-lg font-semibold uppercase tracking-wide text-yellow-300">
+              Developer console message
+            </AlertTitle>
+            <AlertDescription className="text-sm text-yellow-100/85">
+              {consoleError.message}
+            </AlertDescription>
+            <div className="mt-3 flex justify-end">
+              <button
+                className="rounded-md border border-yellow-400/60 px-3 py-1 text-xs font-medium text-yellow-100/80 transition hover:bg-yellow-500/10 hover:text-yellow-50"
+                onClick={dismissConsoleError}
+                type="button"
+              >
+                Dismiss
+              </button>
+            </div>
+          </Alert>
+        </div>
+      )}
+
       {userName && activeAccountId && (
         <div
           className="absolute bottom-0 left-0 flex flex-col items-start justify-end pb-3 pl-8"
@@ -268,6 +320,7 @@ export function MainScreen() {
           </div>
         </div>
       )}
-    </main>
+      </main>
+    </>
   )
 }
