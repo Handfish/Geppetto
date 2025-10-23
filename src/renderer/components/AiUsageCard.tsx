@@ -1,21 +1,88 @@
-import React from "react";
-import { useAiProviderAuth } from "../hooks/useAiProviderAtoms";
+import React from 'react'
+import { Result } from '@effect-atom/atom-react'
+import { useAiProviderAuth } from '../hooks/useAiProviderAtoms'
 
 export function AiUsageCard() {
-  const {
-    signIn,
-    signInResult,
-    usageResult,
-    usage,
-    isAuthenticated,
-    refreshUsage,
-  } = useAiProviderAuth("openai");
+  const { signIn, signInResult, usageResult, isAuthenticated, refreshUsage } =
+    useAiProviderAuth('openai')
+
+  const resolveErrorMessage = React.useCallback((error: unknown, fallback: string) => {
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      const candidate = (error as { message?: unknown }).message
+      if (typeof candidate === 'string' && candidate.trim().length > 0) {
+        return candidate
+      }
+    }
+    return fallback
+  }, [])
 
   React.useEffect(() => {
-    if (signInResult._tag === "Success") {
-      refreshUsage();
+    if (signInResult._tag === 'Success') {
+      refreshUsage()
     }
-  }, [refreshUsage, signInResult]);
+  }, [refreshUsage, signInResult])
+
+  const usageContent = Result.builder(usageResult)
+    .onInitial(() => (usageResult.waiting ? <div className="text-gray-400 text-sm">Loading usage…</div> : null))
+    .onErrorTag('AiAuthenticationError', (error) => (
+      <div className="text-red-400 text-sm">
+        {error.message ?? 'Authentication required to fetch OpenAI usage.'}
+      </div>
+    ))
+    .onErrorTag('AiProviderUnavailableError', (error) => (
+      <div className="text-red-400 text-sm">
+        {error.message ?? 'OpenAI provider is currently unavailable.'}
+      </div>
+    ))
+    .onErrorTag('AiUsageUnavailableError', (error) => (
+      <div className="text-red-400 text-sm">
+        {error.message ?? 'Unable to fetch OpenAI usage right now.'}
+      </div>
+    ))
+    .onDefect((defect) => (
+      <div className="text-red-400 text-sm">Unexpected error: {String(defect)}</div>
+    ))
+    .onSuccess((snapshots) => {
+      if (snapshots.length === 0) {
+        return <div className="text-gray-400 text-sm">Connected, but no CLI usage recorded yet.</div>
+      }
+
+      return (
+        <div className="space-y-6">
+          {snapshots.map((snapshot) => (
+            <div key={snapshot.accountId} className="space-y-4">
+              <div className="flex items-center justify-between text-sm text-gray-400">
+                <span>Account: {snapshot.accountId}</span>
+                <span>{new Date(snapshot.capturedAt).toLocaleString()}</span>
+              </div>
+              <div className="space-y-3">
+                {snapshot.metrics.map((metric) => (
+                  <div key={metric.toolId} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm text-gray-300">
+                      <span>{metric.toolName}</span>
+                      <span>
+                        {metric.used}
+                        {metric.unit ? ` ${metric.unit}` : ''}
+                        {metric.limit
+                          ? ` / ${metric.limit}${metric.unit ? ` ${metric.unit}` : ''}`
+                          : ''}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-gray-700 rounded">
+                      <div
+                        className="h-2 bg-indigo-500 rounded"
+                        style={{ width: `${Math.min(metric.usagePercentage, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )
+    })
+    .render()
 
   return (
     <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
@@ -37,73 +104,18 @@ export function AiUsageCard() {
               disabled={signInResult.waiting}
               onClick={signIn}
             >
-              {signInResult.waiting ? "Connecting…" : "Connect OpenAI"}
+              {signInResult.waiting ? 'Connecting…' : 'Connect OpenAI'}
             </button>
-            {signInResult._tag === "Failure" && (
+            {signInResult._tag === 'Failure' && (
               <p className="text-red-400 text-sm">
-                {typeof signInResult.error === "Unable to connect to OpenAI."}
-                {typeof signInResult.error === "object"
-                'message' in signInResult.error &&
-                "message" in signInResult.error &&
-                typeof signInResult.error.message === "string"
-                  : 'Unable to connect to OpenAI.'}
-              </p>"Unable to connect to OpenAI."
+                {resolveErrorMessage(signInResult.error, 'Unable to connect to OpenAI.')}
+              </p>
             )}
           </div>
         )}
 
-        {usageResult._tag === 'Success' && usage.length > 0 && (
-          <div className="spac"Success"
-            {usage.map((snapshot) => (
-              <div key={snapshot.accountId} className="space-y-4">
-                <div className="flex items-center justify-between text-sm text-gray-400">
-                  <span>Account: {snapshot.accountId}</span>
-                  <span>{new Date(snapshot.capturedAt).toLocaleString()}</span>
-                </div>
-                <div className="space-y-3">
-                  {snapshot.metrics.map((metric) => (
-                    <div key={metric.toolId} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm text-gray-300">
-                        <span>{metric.toolName}</span>
-                        <span>
-                          {metric.used}
-                          {metric.unit ? ` ${metric.unit}` : ''}
-                          {metric.limit""
-                            ? ` / ${metric.limit}${metric.unit ? ` ${metric.unit}` : ''}`
-                            : ''}""}`
-                            : ""
-                      </div>
-                      <div className="h-2 bg-gray-700 rounded">
-                        <div
-                          className="h-2 bg-indigo-500 rounded"
-                          style={{ width: `${Math.min(metric.usagePercentage, 100)}%` }}
-                        />
-                            width: `${Math.min(metric.usagePercentage, 100)}%`,
-
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {usageResult._tag === 'Initial' && usageResult.waiting && (
-          <div className="text"Initial" text-sm">Loading usage…</div>
-        )}
-
-        {usageResult._tag === 'Failure' && (
-          <div className="text"Failure"text-sm">
-            {typeof usageResult.error === 'object' &&
-            usageResult.error &&"object"
-            'message' in usageResult.error &&
-            "message" in usageResult.error &&
-            typeof usageResult.error.message === "string"
-              : 'Unable to fetch OpenAI usage right now.'}
-          </div>"Unable to fetch OpenAI usage right now."
-        )}
+        {usageContent}
       </div>
     </div>
   )
-};
+}

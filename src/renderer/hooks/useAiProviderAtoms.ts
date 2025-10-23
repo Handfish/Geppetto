@@ -9,13 +9,14 @@ export function useAiProviderAuth(provider: AiProviderType) {
   const refreshUsage = useAtomRefresh(aiProviderUsageAtom(provider))
 
   const usage = Result.getOrElse(usageResult, () => [])
+  const isAuthenticated = Result.isSuccess(usageResult)
 
   return {
     signIn,
     signInResult,
     usageResult,
     usage,
-    isAuthenticated: usage.length > 0,
+    isAuthenticated,
     refreshUsage,
   }
 }
