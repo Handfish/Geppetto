@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from 'framer-motion'
 import type { ProviderRepository } from '../../../shared/schemas/provider'
 import type { Account } from '../../../shared/schemas/account-context'
 
@@ -12,15 +13,35 @@ export function RepositoryCard4({
   isActive = false,
   account = null,
 }: RepositoryCardProps) {
+  const shouldReduceMotion = useReducedMotion()
   const providerLabel = repo.provider.toUpperCase()
+
+  // Subtle hover effect for active card only
+  const hoverVariants = {
+    initial: { scale: 1 },
+    hover: isActive && !shouldReduceMotion ? { scale: 1.02 } : { scale: 1 },
+  }
+
+  const hoverTransition = shouldReduceMotion
+    ? { duration: 0.15, ease: [0.16, 1, 0.3, 1] }
+    : { type: 'spring', stiffness: 400, damping: 25 }
+
   return (
-    <div
+    <motion.div
       className={`relative w-full h-full flex flex-col justify-between rounded-lg border p-3 ${
         isActive
           ? 'bg-black/20 border-teal-400/40 shadow-lg shadow-teal-400/30'
           : 'bg-black/10 border-teal-400/10'
       }`}
-      style={{ backfaceVisibility: 'hidden' }}
+      style={{
+        backfaceVisibility: 'hidden',
+        // Only animate transform and opacity for optimal performance
+        willChange: isActive ? 'transform' : 'auto',
+      }}
+      variants={hoverVariants}
+      initial="initial"
+      whileHover="hover"
+      transition={hoverTransition}
     >
       {/* Header with repo name */}
       <h3
@@ -63,6 +84,6 @@ export function RepositoryCard4({
           {repo.stars} ★
         </span>
       </div>
-    </div>
+    </motion.div>
   )
 }
