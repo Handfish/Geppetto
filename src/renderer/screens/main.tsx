@@ -11,10 +11,14 @@ import {
 import SleepLight from 'renderer/components/ui/SleepLight'
 // import { RepositoryCarousel } from 'renderer/components/ui/RepositoryCarousel'
 // import { RepositoryCarousel2 } from 'renderer/components/ui/RepositoryCarousel2'
+// import {
+//   RepositoryCarousel3,
+//   type RepositoryCarouselRef,
+// } from 'renderer/components/ui/RepositoryCarousel3'
 import {
-  RepositoryCarousel3,
+  RepositoryCarousel4,
   type RepositoryCarouselRef,
-} from 'renderer/components/ui/RepositoryCarousel3'
+} from 'renderer/components/ui/RepositoryCarousel4'
 import { RepositorySearch } from 'renderer/components/ui/RepositorySearch'
 import { ClickSpark } from 'renderer/components/ui/ClickSpark'
 import {
@@ -120,71 +124,117 @@ export function MainScreen() {
       {/* Carousel and SleepLight - bottom left quadrant, bottom 6th of screen */}
       {userName && activeAccountId && (
         <div
-          className="absolute bottom-0 left-0 w-1/2 flex flex-col items-start justify-end pb-8 pl-8 pr-8"
+          className="absolute bottom-0 left-0 flex flex-col items-start justify-end pb-3 pl-8"
           style={{ height: '30vh', paddingTop: '3rem' }}
         >
           <div className="mb-6">
             <SleepLight color="#00ffff" speed={8} />
           </div>
-          <div className="relative w-full flex flex-col gap-4">
-            {/* Glassy rounded rectangle background - extends off screen at bottom and left, tight on right */}
-            <div
-              className="absolute backdrop-blur-md shadow-2xl pointer-events-none"
-              style={{
-                top: '-2rem',
-                left: '-100vw',
-                right: '-2rem',
-                bottom: '-100vh',
-                borderRadius: '1.5rem',
-                background:
-                  'linear-gradient(135deg, rgba(3, 7, 18, 0.92) 0%, rgba(17, 24, 39, 0.88) 100%)',
-              }}
-            />
-
-            {/* Inner glow for depth */}
-            <div
-              className="absolute pointer-events-none"
-              style={{
-                top: '-2rem',
-                left: '-100vw',
-                right: '-2rem',
-                bottom: '-100vh',
-                borderRadius: '1.5rem',
-                background:
-                  'linear-gradient(135deg, rgba(31, 41, 55, 0.15) 0%, transparent 60%)',
-              }}
-            />
-
-            {/* Subtle border only on visible edges */}
-            <div
-              className="absolute pointer-events-none"
-              style={{
-                top: '-2rem',
-                left: '-100vw',
-                right: '-2rem',
-                bottom: '-100vh',
-                borderRadius: '1.5rem',
-                boxShadow: 'inset 0 1px 0 0 rgba(107, 114, 128, 0.5)',
-              }}
-            />
-
-            <div
-              className="w-full relative z-10"
-              style={{ minHeight: '180px' }}
-            >
-              <RepositoryCarousel3
-                account={
-                  activeAccount ??
-                  accounts.find(acc => acc.id === activeAccountId) ??
-                  null
-                }
-                isFocused={isFocused}
-                ref={carouselRef}
-                repos={repos}
+          <div className="relative flex flex-col gap-3">
+            {/* Carousel container with tight background */}
+            <div className="relative" style={{ width: '500px' }}>
+              {/* Glassy background hugged to carousel - extends off left edge */}
+              <div
+                className="absolute backdrop-blur-md shadow-2xl pointer-events-none"
+                style={{
+                  top: '-1rem',
+                  left: '-100vw',
+                  right: '-1rem',
+                  bottom: '-0.75rem',
+                  borderRadius: '1rem',
+                  background:
+                    'linear-gradient(135deg, rgba(3, 7, 18, 0.92) 0%, rgba(17, 24, 39, 0.88) 100%)',
+                }}
               />
+
+              {/* Inner glow for depth */}
+              <div
+                className="absolute pointer-events-none"
+                style={{
+                  top: '-1rem',
+                  left: '-100vw',
+                  right: '-1rem',
+                  bottom: '-0.75rem',
+                  borderRadius: '1rem',
+                  background:
+                    'linear-gradient(135deg, rgba(31, 41, 55, 0.15) 0%, transparent 60%)',
+                }}
+              />
+
+              {/* Subtle border */}
+              <div
+                className="absolute pointer-events-none"
+                style={{
+                  top: '-1rem',
+                  left: '-100vw',
+                  right: '-1rem',
+                  bottom: '-0.75rem',
+                  borderRadius: '1rem',
+                  boxShadow: 'inset 0 1px 0 0 rgba(107, 114, 128, 0.5)',
+                }}
+              />
+
+              <div
+                className="relative z-10 px-3"
+                style={{ minHeight: '160px' }}
+              >
+                <RepositoryCarousel4
+                  account={
+                    activeAccount ??
+                    accounts.find(acc => acc.id === activeAccountId) ??
+                    null
+                  }
+                  isFocused={isFocused}
+                  ref={carouselRef}
+                  repos={repos}
+                />
+              </div>
             </div>
 
-            <div className="text-gray-500 text-sm flex items-center gap-3 relative z-10">
+            {/* Controls container with separate tight background */}
+            <div className="relative inline-block">
+              {/* Glassy background hugged to controls - extends off left and bottom edges */}
+              <div
+                className="absolute backdrop-blur-md shadow-lg pointer-events-none"
+                style={{
+                  top: '-0.5rem',
+                  left: '-100vw',
+                  right: '-0.75rem',
+                  bottom: '-100vh',
+                  borderRadius: '0.75rem',
+                  background:
+                    'linear-gradient(135deg, rgba(3, 7, 18, 0.85) 0%, rgba(17, 24, 39, 0.80) 100%)',
+                }}
+              />
+
+              {/* Inner glow */}
+              <div
+                className="absolute pointer-events-none"
+                style={{
+                  top: '-0.5rem',
+                  left: '-100vw',
+                  right: '-0.75rem',
+                  bottom: '-100vh',
+                  borderRadius: '0.75rem',
+                  background:
+                    'linear-gradient(135deg, rgba(31, 41, 55, 0.12) 0%, transparent 60%)',
+                }}
+              />
+
+              {/* Subtle border */}
+              <div
+                className="absolute pointer-events-none"
+                style={{
+                  top: '-0.5rem',
+                  left: '-100vw',
+                  right: '-0.75rem',
+                  bottom: '-100vh',
+                  borderRadius: '0.75rem',
+                  boxShadow: 'inset 0 1px 0 0 rgba(107, 114, 128, 0.3)',
+                }}
+              />
+
+              <div className="text-gray-500 text-sm flex items-center gap-3 relative z-10 px-3 py-1.5">
               <div className="flex items-center gap-2">
                 <kbd className="px-2 py-1 bg-gray-800/50 rounded border border-gray-700/50 text-teal-400">
                   ←
@@ -213,6 +263,7 @@ export function MainScreen() {
                 onInitial: () => null,
                 onFailure: () => null,
               })}
+              </div>
             </div>
           </div>
         </div>
