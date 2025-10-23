@@ -1,0 +1,107 @@
+import { Effect } from 'effect'
+import {
+  AiProviderSignInResult,
+  AiProviderType,
+  AiAccountId,
+  AiUsageSnapshot,
+  AiAccount,
+} from '../../shared/schemas/ai/provider'
+import { AiProviderRegistryService } from './registry'
+import { AiProviderRegistryPort } from './ports'
+import { AiAccountContextService } from './account-context-service'
+import { TierService } from '../tier/tier-service'
+import { AiAccountNotFoundError } from './errors'
+
+export class AiProviderService extends Effect.Service<AiProviderService>()(
+  'AiProviderService',
+  {
+    dependencies: [
+      AiProviderRegistryService.Default,
+      AiAccountContextService.Default,
+      TierService.Default,
+    ],
+    effect: Effect.gen(function* () {
+      const registry: AiProviderRegistryPort = yield* AiProviderRegistryService
+      const accountService = yield* AiAccountContextService
+      const tierService = yield* TierService
+
+      return {
+        signIn: (provider: AiProviderType): Effect.Effect<AiProviderSignInResult> =>
+          Effect.gen(function* () {
+            yield* tierService.ensureAiProvidersEnabled()
+            const adapter = yield* registry.getAdapter(provider)
+            const signInResult = yield* adapter.signIn()
+
+            yield* accountService.addAccount({
+              provider,
+              identifier: signInResult.metadata.accountIdentifier,
+              label: signInResult.label,
+            })
+
+            return signInResult
+          }),
+
+        signOut: (accountId: AiAccountId): Effect.Effect<void> =>
+          Effect.gen(function* () {
+            const context = yield* accountService.getContext()
+            const account = context.getAccount(accountId)
+            if (!account) {
+              return
+            }
+
+            const adapter = yield* registry.getAdapter(account.provider)
+            yield* adapter.signOut(accountId)
+          }),
+
+        checkAuth: (accountId: AiAccountId) =>
+          Effect.gen(function* () {
+            const context = yield* accountService.getContext()
+            const account = context.getAccount(accountId)
+            if (!account) {
+              const { provider } = AiAccount.parseAccountId(accountId)
+              return yield* Effect.fail(new AiAccountNotFoundError({ accountId, provider }))
+            }
+
+            const adapter = yield* registry.getAdapter(account.provider)
+            return yield* adapter.checkAuth(accountId)
+          }),
+
+        getUsage: (accountId: AiAccountId): Effect.Effect<AiUsageSnapshot> =>
+          Effect.gen(function* () {
+            const context = yield* accountService.getContext()
+            const account = context.getAccount(accountId)
+
+            if (!account) {
+              const { provider } = AiAccount.parseAccountId(accountId)
+              return yield* Effect.fail(new AiAccountNotFoundError({ accountId, provider }))
+            }
+
+            const adapter = yield* registry.getAdapter(account.provider)
+            const usage = yield* adapter.getUsage(accountId)
+            yield* accountService.touchAccount(accountId)
+            return usage
+          }),
+
+        getUsageByProvider: (provider: AiProviderType) =>
+          Effect.gen(function* () {
+            const adapter = yield* registry.getAdapter(provider)
+            const context = yield* accountService.getContext()
+            const accounts = context.getAccountsByProvider(provider)
+
+            const usage = yield* Effect.forEach(
+              accounts,
+              (account) =>
+                adapter
+                  .getUsage(account.id)
+                  .pipe(
+                    Effect.tap(() => accountService.touchAccount(account.id))
+                  ),
+              { concurrency: 'unbounded' }
+            )
+
+            return usage
+          }),
+      }
+    }),
+  }
+) {}

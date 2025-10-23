@@ -6,6 +6,13 @@ import {
   ProviderAccountRepositories,
 } from './schemas/provider'
 import {
+  AiProviderSignInResult,
+  AiProviderAuthStatus,
+  AiProviderType,
+  AiAccountId,
+  AiUsageSnapshot,
+} from './schemas/ai/provider'
+import {
   AuthenticationError,
   NetworkError,
   NotFoundError,
@@ -13,6 +20,11 @@ import {
   ProviderUnavailableError,
   ProviderOperationError,
 } from './schemas/errors'
+import {
+  AiAuthenticationError,
+  AiProviderUnavailableError,
+  AiUsageUnavailableError,
+} from './schemas/ai/errors'
 import { Account, AccountContext, AccountId, ProviderType } from './schemas/account-context'
 
 /**
@@ -56,7 +68,10 @@ export const AccountIpcContracts = {
       maxGitLabAccounts: S.Number,
       maxBitbucketAccounts: S.Number,
       maxGiteaAccounts: S.Number,
+      maxOpenAiAccounts: S.Number,
+      maxClaudeAccounts: S.Number,
       enableAccountSwitcher: S.Boolean,
+      enableAiProviders: S.Boolean,
     }),
     errors: S.Union(NetworkError),
   },
@@ -113,12 +128,68 @@ export const ProviderIpcContracts = {
   },
 } as const
 
+export const AiProviderIpcContracts = {
+  signIn: {
+    channel: 'aiProvider:signIn' as const,
+    input: S.Struct({ provider: AiProviderType }),
+    output: AiProviderSignInResult,
+    errors: S.Union(
+      AuthenticationError,
+      AiAuthenticationError,
+      AiProviderUnavailableError,
+      NetworkError
+    ),
+  },
+
+  signOut: {
+    channel: 'aiProvider:signOut' as const,
+    input: S.Struct({ accountId: AiAccountId }),
+    output: S.Void,
+    errors: S.Union(AiProviderUnavailableError, NetworkError),
+  },
+
+  checkAuth: {
+    channel: 'aiProvider:checkAuth' as const,
+    input: S.Struct({ accountId: AiAccountId }),
+    output: AiProviderAuthStatus,
+    errors: S.Union(
+      AiAuthenticationError,
+      AiProviderUnavailableError,
+      NetworkError
+    ),
+  },
+
+  getUsage: {
+    channel: 'aiProvider:getUsage' as const,
+    input: S.Struct({ accountId: AiAccountId }),
+    output: AiUsageSnapshot,
+    errors: S.Union(
+      AiUsageUnavailableError,
+      AiProviderUnavailableError,
+      AiAuthenticationError,
+      NetworkError
+    ),
+  },
+
+  getProviderUsage: {
+    channel: 'aiProvider:getProviderUsage' as const,
+    input: S.Struct({ provider: AiProviderType }),
+    output: S.Array(AiUsageSnapshot),
+    errors: S.Union(
+      AiUsageUnavailableError,
+      AiProviderUnavailableError,
+      NetworkError
+    ),
+  },
+} as const
+
 /**
  * Combined IPC Contracts
  */
 export const IpcContracts = {
   ...AccountIpcContracts,
   ...ProviderIpcContracts,
+  ...AiProviderIpcContracts,
 } as const
 
 export type IpcContracts = typeof IpcContracts

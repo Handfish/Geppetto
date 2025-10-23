@@ -18,6 +18,12 @@ import { makeAppSetup } from '../lib/electron-app/factories/app/setup'
 import { ProviderRegistryService } from './providers/registry'
 import { VcsProviderService } from './providers/vcs-provider-service'
 import { setupProviderIpcHandlers } from './ipc/provider-handlers'
+import { AiAccountContextService } from './ai/account-context-service'
+import { OpenAiProviderAdapter } from './ai/openai/provider-adapter'
+import { ClaudeProviderAdapter } from './ai/claude/provider-adapter'
+import { AiProviderRegistryService } from './ai/registry'
+import { AiProviderService } from './ai/ai-provider-service'
+import { setupAiProviderIpcHandlers } from './ipc/ai-provider-handlers'
 
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
@@ -27,6 +33,7 @@ const MainLayer = Layer.mergeAll(
   SecureStoreService.Default,
   TierService.Default,
   AccountContextService.Default,
+  AiAccountContextService.Default,
   GitHubAuthService.Default,
   GitHubApiService.Default,
   GitHubProviderAdapter.Default,
@@ -34,7 +41,11 @@ const MainLayer = Layer.mergeAll(
   BitbucketProviderAdapter.Default,
   GiteaProviderAdapter.Default,
   ProviderRegistryService.Default,
-  VcsProviderService.Default
+  VcsProviderService.Default,
+  OpenAiProviderAdapter.Default,
+  ClaudeProviderAdapter.Default,
+  AiProviderRegistryService.Default,
+  AiProviderService.Default
 )
 
 function createMainWindow() {
@@ -129,6 +140,7 @@ app.whenReady().then(async () => {
     Effect.gen(function* () {
       yield* setupAccountIpcHandlers
       yield* setupProviderIpcHandlers
+      yield* setupAiProviderIpcHandlers
     }).pipe(Effect.provide(MainLayer))
   )
 

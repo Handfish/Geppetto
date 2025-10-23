@@ -69,13 +69,19 @@ export const setupAccountIpcHandlers = Effect.gen(function* () {
   setupHandler('getActiveAccount', () => accountService.getActiveAccount())
 
   setupHandler('getTierLimits', () =>
-    Effect.succeed({
-      tier: tierService.getTierLimits().tier,
-      maxGitHubAccounts: tierService.getMaxAccountsForProvider('github'),
-      maxGitLabAccounts: tierService.getMaxAccountsForProvider('gitlab'),
-      maxBitbucketAccounts: tierService.getMaxAccountsForProvider('bitbucket'),
-      maxGiteaAccounts: tierService.getMaxAccountsForProvider('gitea'),
-      enableAccountSwitcher: tierService.isMultiAccountEnabled(),
+    Effect.sync(() => {
+      const limits = tierService.getTierLimits()
+      return {
+        tier: limits.tier,
+        maxGitHubAccounts: tierService.getMaxAccountsForProvider('github'),
+        maxGitLabAccounts: tierService.getMaxAccountsForProvider('gitlab'),
+        maxBitbucketAccounts: tierService.getMaxAccountsForProvider('bitbucket'),
+        maxGiteaAccounts: tierService.getMaxAccountsForProvider('gitea'),
+        maxOpenAiAccounts: tierService.getMaxAiAccountsForProvider('openai'),
+        maxClaudeAccounts: tierService.getMaxAiAccountsForProvider('claude'),
+        enableAccountSwitcher: tierService.isMultiAccountEnabled(),
+        enableAiProviders: limits.enableAiProviders,
+      }
     })
   )
 })

@@ -9,12 +9,16 @@
 import { Effect, Layer, Context, Data } from 'effect'
 import { getCurrentTierLimits, type TierLimits } from '../../shared/tier-config'
 import { type AccountContext, type ProviderType } from '../../shared/schemas/account-context'
+import {
+  type AiAccountContext,
+  type AiProviderType,
+} from '../../shared/schemas/ai/provider'
 
 /**
  * TierService errors
  */
 export class AccountLimitExceededError extends Data.TaggedError('AccountLimitExceededError')<{
-  provider: ProviderType
+  provider: string
   currentCount: number
   maxAllowed: number
   tier: string
@@ -49,6 +53,25 @@ export class TierService extends Effect.Service<TierService>()('TierService', {
               : provider === 'bitbucket'
                 ? limits.maxBitbucketAccounts
                 : limits.maxGiteaAccounts
+
+        if (currentCount >= maxAllowed) {
+          yield* Effect.fail(
+            new AccountLimitExceededError({
+              provider,
+              currentCount,
+              maxAllowed,
+              tier: limits.tier,
+            })
+          )
+        }
+      }),
+
+    checkCanAddAiAccount: (provider: AiProviderType, accountContext: AiAccountContext) =>
+      Effect.gen(function* () {
+        const limits = getCurrentTierLimits()
+        const currentCount = accountContext.countAccountsByProvider(provider)
+        const maxAllowed =
+          provider === 'openai' ? limits.maxOpenAiAccounts : limits.maxClaudeAccounts
 
         if (currentCount >= maxAllowed) {
           yield* Effect.fail(
@@ -106,6 +129,16 @@ export class TierService extends Effect.Service<TierService>()('TierService', {
             })
           )
         }
+
+        if (feature === 'ai-providers' && !limits.enableAiProviders) {
+          yield* Effect.fail(
+            new FeatureNotAvailableError({
+              feature,
+              tier: limits.tier,
+              requiredTier: 'pro',
+            })
+          )
+        }
       }),
 
     getMaxAccountsForProvider: (provider: ProviderType) => {
@@ -122,9 +155,33 @@ export class TierService extends Effect.Service<TierService>()('TierService', {
       }
     },
 
+    getMaxAiAccountsForProvider: (provider: AiProviderType) => {
+      const limits = getCurrentTierLimits()
+      switch (provider) {
+        case 'openai':
+          return limits.maxOpenAiAccounts
+        case 'claude':
+          return limits.maxClaudeAccounts
+      }
+    },
+
     /**
      * Check if multi-account features are enabled
      */
     isMultiAccountEnabled: () => getCurrentTierLimits().enableAccountSwitcher,
+
+    ensureAiProvidersEnabled: () =>
+      Effect.gen(function* () {
+        const limits = getCurrentTierLimits()
+        if (!limits.enableAiProviders) {
+          yield* Effect.fail(
+            new FeatureNotAvailableError({
+              feature: 'ai-providers',
+              tier: limits.tier,
+              requiredTier: 'pro',
+            })
+          )
+        }
+      }),
   }),
 }) {}

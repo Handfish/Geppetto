@@ -82,7 +82,10 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
                 if (error) {
                   console.log('[Auth] OAuth error:', error)
                   hasResolved = true
-                  ;(app as unknown as OAuthApp).removeListener('oauth-callback', handleCallback)
+                  ;(app as unknown as OAuthApp).removeListener(
+                    'oauth-callback',
+                    handleCallback
+                  )
                   resume(
                     Effect.fail(
                       new GitHubAuthError({
@@ -96,7 +99,10 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
                 if (authCode) {
                   console.log('[Auth] Authorization code received:', authCode)
                   hasResolved = true
-                  ;(app as unknown as OAuthApp).removeListener('oauth-callback', handleCallback)
+                  ;(app as unknown as OAuthApp).removeListener(
+                    'oauth-callback',
+                    handleCallback
+                  )
                   console.log('[Auth] About to call resume with Effect.succeed')
                   resume(Effect.succeed(authCode))
                   console.log('[Auth] Resume called successfully')
@@ -118,7 +124,10 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
             // Cleanup function
             return Effect.sync(() => {
               console.log('[Auth] Cleaning up oauth-callback listener')
-              ;(app as unknown as OAuthApp).removeListener('oauth-callback', handleCallback)
+              ;(app as unknown as OAuthApp).removeListener(
+                'oauth-callback',
+                handleCallback
+              )
             })
           })
 
@@ -155,7 +164,10 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
           })
 
           // Store token for this account
-          yield* storeService.setAuthForAccount(account.id, Redacted.make(token))
+          yield* storeService.setAuthForAccount(
+            account.id,
+            Redacted.make(token)
+          )
 
           // Legacy: Also store in old format for backward compatibility
           yield* storeService.setAuth(Redacted.make(token), user)
@@ -167,7 +179,8 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
          * Sign out - removes the active account (legacy behaviour)
          */
         signOut: Effect.gen(function* () {
-          const activeAccount = yield* accountService.getActiveAccountForProvider('github')
+          const activeAccount =
+            yield* accountService.getActiveAccountForProvider('github')
           if (activeAccount) {
             yield* storeService.clearAuthForAccount(activeAccount.id)
             yield* accountService.removeAccount(activeAccount.id)
@@ -189,12 +202,15 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
          * Check authentication status for the active account (legacy)
          */
         checkAuth: Effect.gen(function* () {
-          const activeAccount = yield* accountService.getActiveAccountForProvider('github')
+          const activeAccount =
+            yield* accountService.getActiveAccountForProvider('github')
           if (!activeAccount) {
             return { authenticated: false, user: Option.none() }
           }
 
-          const tokenOption = yield* storeService.getAuthForAccount(activeAccount.id)
+          const tokenOption = yield* storeService.getAuthForAccount(
+            activeAccount.id
+          )
           if (Option.isNone(tokenOption)) {
             return { authenticated: false, user: Option.none() }
           }

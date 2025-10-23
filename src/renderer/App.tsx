@@ -3,6 +3,7 @@ import { AuthCard } from './components/AuthCard'
 import { RepositoryList } from './components/RepositoryList'
 import SleepLight from './components/ui/SleepLight'
 import { useProviderAuth } from './hooks/useProviderAtoms'
+import { AiUsageCard } from './components/AiUsageCard'
 
 export function App() {
   const { isAuthenticated } = useProviderAuth('github')
@@ -21,6 +22,8 @@ export function App() {
         </header>
 
         <AuthCard />
+
+        <AiUsageCard />
 
         {isAuthenticated && (
           <>

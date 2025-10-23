@@ -81,6 +81,33 @@ export class ProviderClient extends Effect.Service<ProviderClient>()('ProviderCl
   }),
 }) {}
 
+export class AiProviderClient extends Effect.Service<AiProviderClient>()('AiProviderClient', {
+  dependencies: [ElectronIpcClient.Default],
+  effect: Effect.gen(function* () {
+    const ipc = yield* ElectronIpcClient
+    type AiSignInInput = S.Schema.Type<(typeof IpcContracts)['aiProvider:signIn']['input']>
+    type AiSignOutInput = S.Schema.Type<(typeof IpcContracts)['aiProvider:signOut']['input']>
+    type AiCheckAuthInput = S.Schema.Type<(typeof IpcContracts)['aiProvider:checkAuth']['input']>
+    type AiUsageInput = S.Schema.Type<(typeof IpcContracts)['aiProvider:getUsage']['input']>
+    type AiProviderUsageInput = S.Schema.Type<
+      (typeof IpcContracts)['aiProvider:getProviderUsage']['input']
+    >
+
+    return {
+      signIn: (provider: AiSignInInput['provider']) =>
+        ipc.invoke('aiProvider:signIn', { provider }),
+      signOut: (accountId: AiSignOutInput['accountId']) =>
+        ipc.invoke('aiProvider:signOut', { accountId }),
+      checkAuth: (accountId: AiCheckAuthInput['accountId']) =>
+        ipc.invoke('aiProvider:checkAuth', { accountId }),
+      getUsage: (accountId: AiUsageInput['accountId']) =>
+        ipc.invoke('aiProvider:getUsage', { accountId }),
+      getProviderUsage: (provider: AiProviderUsageInput['provider']) =>
+        ipc.invoke('aiProvider:getProviderUsage', { provider }),
+    } as const
+  }),
+}) {}
+
 export class AccountClient extends Effect.Service<AccountClient>()('AccountClient', {
   dependencies: [ElectronIpcClient.Default],
   effect: Effect.gen(function* () {

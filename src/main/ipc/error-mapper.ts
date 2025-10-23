@@ -8,6 +8,11 @@ import {
   ProviderOperationError as SharedProviderOperationError,
 } from '../../shared/schemas/errors'
 import {
+  AiAuthenticationError as SharedAiAuthenticationError,
+  AiProviderUnavailableError as SharedAiProviderUnavailableError,
+  AiUsageUnavailableError as SharedAiUsageUnavailableError,
+} from '../../shared/schemas/ai/errors'
+import {
   GitHubAuthError,
   GitHubAuthTimeout,
   GitHubTokenExchangeError,
@@ -24,6 +29,13 @@ import {
   ProviderNotRegisteredError,
   ProviderRepositoryError,
 } from '../providers/errors'
+import {
+  AiProviderAuthenticationError,
+  AiProviderFeatureUnsupportedError,
+  AiProviderNotRegisteredError,
+  AiProviderUsageError,
+  AiAccountNotFoundError,
+} from '../ai/errors'
 
 /**
  * Result type for IPC error responses
@@ -37,6 +49,9 @@ export type IpcErrorResult = {
     | SharedFeatureUnavailableError
     | SharedProviderUnavailableError
     | SharedProviderOperationError
+    | SharedAiAuthenticationError
+    | SharedAiProviderUnavailableError
+    | SharedAiUsageUnavailableError
 }
 
 /**
@@ -59,6 +74,13 @@ type ProviderDomainError =
   | ProviderFeatureUnsupportedError
   | ProviderNotRegisteredError
   | ProviderRepositoryError
+
+type AiDomainError =
+  | AiProviderAuthenticationError
+  | AiProviderFeatureUnsupportedError
+  | AiProviderNotRegisteredError
+  | AiProviderUsageError
+  | AiAccountNotFoundError
 
 /**
  * Type guard to check if an error is a tagged GitHub domain error
@@ -89,6 +111,16 @@ const isProviderDomainError = (error: unknown): error is ProviderDomainError => 
     error instanceof ProviderFeatureUnsupportedError ||
     error instanceof ProviderNotRegisteredError ||
     error instanceof ProviderRepositoryError
+  )
+}
+
+const isAiDomainError = (error: unknown): error is AiDomainError => {
+  return (
+    error instanceof AiProviderAuthenticationError ||
+    error instanceof AiProviderFeatureUnsupportedError ||
+    error instanceof AiProviderNotRegisteredError ||
+    error instanceof AiProviderUsageError ||
+    error instanceof AiAccountNotFoundError
   )
 }
 
@@ -152,6 +184,60 @@ export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcError
         error: new SharedProviderOperationError({
           provider: error.provider,
           message: error.message,
+        }),
+      })
+    }
+  }
+
+  if (isAiDomainError(error)) {
+    if (error instanceof AiProviderAuthenticationError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedAiAuthenticationError({
+          provider: error.provider,
+          message: error.message,
+        }),
+      })
+    }
+
+    if (error instanceof AiProviderFeatureUnsupportedError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedAiProviderUnavailableError({
+          provider: error.provider,
+          message: `Provider '${error.provider}' does not support feature '${error.feature}' yet.`,
+        }),
+      })
+    }
+
+    if (error instanceof AiProviderNotRegisteredError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedAiProviderUnavailableError({
+          provider: error.provider,
+          message: `AI provider '${error.provider}' is not configured.`,
+        }),
+      })
+    }
+
+    if (error instanceof AiProviderUsageError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedAiUsageUnavailableError({
+          provider: error.provider,
+          accountId: error.accountId,
+          message: error.message,
+        }),
+      })
+    }
+
+    if (error instanceof AiAccountNotFoundError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedAiUsageUnavailableError({
+          provider: error.provider,
+          accountId: error.accountId,
+          message: `AI account '${error.accountId}' could not be located.`,
         }),
       })
     }
