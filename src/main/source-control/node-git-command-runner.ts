@@ -80,12 +80,9 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
                       GitCommandDomainError
                     >()
 
-                    const runtime = yield* Effect.runtime<never>()
-
-                    const emit = (event: unknown) =>
-                      runtime.runFork(
-                        S.decodeUnknown(GitCommandEvent)(event).pipe(
-                          Effect.flatMap(parsed => queue.offer(parsed)),
+                    const emit = (event: GitCommandEvent) =>
+                      Effect.runFork(
+                        queue.offer(event).pipe(
                           Effect.catchAllCause(cause =>
                             Effect.logError(
                               `Failed to emit git command event: ${Cause.pretty(
@@ -111,7 +108,7 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
                     const completeSuccess = (result: GitCommandResult) => {
                       if (!markCompleted()) return
 
-                      runtime.runFork(
+                      Effect.runFork(
                         Deferred.succeed(resultDeferred, result).pipe(
                           Effect.zipRight(queue.shutdown)
                         )
@@ -123,7 +120,7 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
                     ) => {
                       if (!markCompleted()) return
 
-                      runtime.runFork(
+                      Effect.runFork(
                         Deferred.fail(resultDeferred, error).pipe(
                           Effect.zipRight(queue.shutdown)
                         )
@@ -133,23 +130,24 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
                     const child = yield* Effect.acquireRelease(
                       Effect.try({
                         try: () =>
-                          spawn(binary, args, {
+                          spawn(binary ?? 'git', args, {
                             cwd: worktree.repositoryPath,
                             env: mergedEnv,
                             stdio: allowInteractive ? 'inherit' : stdio,
                           }),
                         catch: (error: unknown) => {
                           const nodeError = error as NodeJS.ErrnoException
+                          const executableName = binary ?? 'git'
                           if (nodeError?.code === 'ENOENT') {
                             return new GitExecutableUnavailableError({
-                              binary,
-                              message: `Executable "${binary}" was not found in PATH`,
+                              binary: executableName,
+                              message: `Executable "${executableName}" was not found in PATH`,
                             })
                           }
 
                           return new GitCommandSpawnError({
                             commandId: id,
-                            message: `Failed to spawn ${binary}`,
+                            message: `Failed to spawn ${executableName}`,
                             cause:
                               error instanceof Error
                                 ? error.message
@@ -209,7 +207,7 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
                       completeFailure(
                         new GitCommandSpawnError({
                           commandId: id,
-                          message: `Process error for ${binary}`,
+                          message: `Process error for ${binary ?? 'git'}`,
                           cause:
                             error instanceof Error
                               ? error.message
@@ -327,35 +325,33 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
 
                     yield* Effect.forkScoped(
                       Effect.repeat(
-                        Effect.when(
-                          Effect.sync(() => !completed),
-                          Effect.gen(function* () {
-                            const heartbeat = yield* S.decodeUnknown(
-                              GitCommandEvent
-                            )({
+                        Effect.suspend(() => {
+                          if (completed) {
+                            return Effect.void
+                          }
+                          return Effect.gen(function* () {
+                            const heartbeat: GitCommandEvent = {
                               _tag: 'Heartbeat',
                               commandId: id,
                               timestamp: new Date(),
-                            })
+                            }
                             yield* queue.offer(heartbeat).pipe(
-                              Effect.catchAll(() => Effect.unit)
+                              Effect.catchAll(() => Effect.void)
                             )
                           })
-                        ),
+                        }),
                         Schedule.spaced(Duration.seconds(5))
                       )
                     )
 
-                    const startedEvent = yield* S.decodeUnknown(
-                      GitCommandEvent
-                    )({
+                    const startedEvent: GitCommandEvent = {
                       _tag: 'Started',
                       commandId: id,
                       startedAt,
-                      binary,
+                      binary: binary ?? 'git',
                       args,
                       cwd: worktree.repositoryPath,
-                    })
+                    }
                     yield* queue.offer(startedEvent)
 
                     const events = Stream.fromQueue(queue)
@@ -376,15 +372,36 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
 
                     yield* Deferred.await(resultDeferred).pipe(
                       Effect.match({
-                        onFailure: () => Effect.unit,
-                        onSuccess: () => Effect.unit,
+                        onFailure: () => Effect.void,
+                        onSuccess: () => Effect.void,
                       })
                     )
                   }),
-                  error =>
-                    Deferred.fail(handleDeferred, error).pipe(
-                      Effect.zipRight(Effect.fail(error))
+                  error => {
+                    // Convert any error (including ParseError) to GitCommandDomainError
+                    const domainError: GitCommandDomainError =
+                      error instanceof GitExecutableUnavailableError ||
+                      error instanceof GitCommandTimeoutError ||
+                      error instanceof GitCommandFailedError ||
+                      error instanceof GitCommandSpawnError
+                        ? error
+                        : new GitCommandSpawnError({
+                            commandId: request.id,
+                            message: `Failed to execute command: ${
+                              error instanceof Error
+                                ? error.message
+                                : String(error)
+                            }`,
+                            cause:
+                              error instanceof Error
+                                ? error.message
+                                : String(error),
+                          })
+
+                    return Deferred.fail(handleDeferred, domainError).pipe(
+                      Effect.zipRight(Effect.fail(domainError))
                     )
+                  }
                 )
               )
 
