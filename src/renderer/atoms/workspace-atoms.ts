@@ -68,3 +68,22 @@ export const setWorkspacePathAtom = workspaceRuntime.fn(
     reactivityKeys: ['workspace:config'],
   }
 )
+
+/**
+ * Clone repository to workspace atom
+ */
+export const cloneToWorkspaceAtom = workspaceRuntime.fn(
+  (params: {
+    cloneUrl: string
+    repoName: string
+    owner: string
+    defaultBranch: string
+  }) =>
+    Effect.gen(function* () {
+      const client = yield* WorkspaceClient
+      return yield* client.cloneToWorkspace(params)
+    }),
+  {
+    reactivityKeys: ['workspace:repos'],
+  }
+)

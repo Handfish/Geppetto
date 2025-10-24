@@ -110,6 +110,8 @@ const makeRepositoryMapper =
       forks: repo.forks_count,
       openIssues: repo.open_issues_count,
       webUrl: repo.html_url,
+      cloneUrl: repo.clone_url,
+      sshUrl: repo.ssh_url,
       avatarUrl: repo.owner.avatar_url ?? undefined,
       updatedAt: new Date(repo.updated_at),
       raw: repo,

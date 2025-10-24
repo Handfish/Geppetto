@@ -24,8 +24,13 @@ import {
   FileText,
   Settings,
   Check,
+  Download,
 } from 'lucide-react'
 import type { ProviderRepository } from '../../../shared/schemas/provider'
+import { useAtom } from '@effect-atom/atom-react'
+import { cloneToWorkspaceAtom } from '../../atoms/workspace-atoms'
+import { WorkspaceClient } from '../../lib/ipc-client'
+import { Effect } from 'effect'
 
 interface RepositoryDropdownProps {
   repo: ProviderRepository
@@ -41,6 +46,10 @@ export function RepositoryDropdown({
   anchorRef,
 }: RepositoryDropdownProps) {
   const shouldReduceMotion = useReducedMotion()
+  const [isInWorkspace, setIsInWorkspace] = useState(false)
+  const [isCheckingWorkspace, setIsCheckingWorkspace] = useState(false)
+  const [cloneResult, cloneToWorkspace] = useAtom(cloneToWorkspaceAtom)
+
   const { refs, floatingStyles, context, middlewareData, placement } =
     useFloating({
       open: isOpen,
@@ -62,6 +71,44 @@ export function RepositoryDropdown({
     role,
     dismiss,
   ])
+
+  // Check workspace status when menu opens
+  useEffect(() => {
+    if (!isOpen) return
+
+    setIsCheckingWorkspace(true)
+
+    const checkWorkspace = Effect.gen(function* () {
+      const client = yield* WorkspaceClient
+      const result = yield* client.checkRepositoryInWorkspace({
+        owner: repo.owner,
+        repoName: repo.name,
+      })
+      return result.inWorkspace
+    })
+
+    Effect.runPromise(
+      checkWorkspace.pipe(Effect.provide(WorkspaceClient.Default))
+    )
+      .then(inWorkspace => {
+        setIsInWorkspace(inWorkspace)
+        setIsCheckingWorkspace(false)
+      })
+      .catch(() => {
+        setIsInWorkspace(false)
+        setIsCheckingWorkspace(false)
+      })
+  }, [isOpen, repo.owner, repo.name])
+
+  const handleClone = () => {
+    cloneToWorkspace({
+      cloneUrl: repo.cloneUrl,
+      repoName: repo.name,
+      owner: repo.owner,
+      defaultBranch: repo.defaultBranch,
+    })
+    onOpenChange(false)
+  }
 
   // Sync anchor element - update whenever anchorRef or isOpen changes
   useEffect(() => {
@@ -168,6 +215,25 @@ export function RepositoryDropdown({
                 {/* Actions Menu */}
                 <div className="py-1.5">
                   <MenuItem
+                    badge={
+                      isCheckingWorkspace ? (
+                        <span className="text-xs text-gray-500">Checking...</span>
+                      ) : undefined
+                    }
+                    disabled={isInWorkspace || cloneResult.waiting || isCheckingWorkspace}
+                    icon={Download}
+                    label={
+                      isCheckingWorkspace
+                        ? 'Checking Workspace...'
+                        : cloneResult.waiting
+                          ? 'Cloning...'
+                          : isInWorkspace
+                            ? 'Already in Workspace'
+                            : 'Clone to Workspace'
+                    }
+                    onClick={handleClone}
+                  />
+                  <MenuItem
                     icon={ExternalLink}
                     label={`Open in ${repo.provider}`}
                   />
@@ -177,7 +243,6 @@ export function RepositoryDropdown({
                     label="View Branches"
                   />
                   <MenuItem icon={FileText} label="View README" />
-                  <MenuItem icon={Code} label="Clone Repository" />
                 </div>
 
                 {/* Separator */}

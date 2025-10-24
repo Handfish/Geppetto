@@ -230,6 +230,35 @@ export const WorkspaceIpcContracts = {
     output: S.NullOr(S.String),
     errors: S.Union(NetworkError),
   },
+
+  cloneToWorkspace: {
+    channel: 'workspace:cloneToWorkspace' as const,
+    input: S.Struct({
+      cloneUrl: S.String,
+      repoName: S.String,
+      owner: S.String,
+      defaultBranch: S.String,
+    }),
+    output: S.Struct({
+      bareRepoPath: S.String,
+      worktreePath: S.String,
+    }),
+    errors: S.Union(NetworkError, NotFoundError),
+  },
+
+  checkRepositoryInWorkspace: {
+    channel: 'workspace:checkRepositoryInWorkspace' as const,
+    input: S.Struct({
+      owner: S.String,
+      repoName: S.String,
+    }),
+    output: S.Struct({
+      inWorkspace: S.Boolean,
+      bareRepoPath: S.NullOr(S.String),
+      worktreePath: S.NullOr(S.String),
+    }),
+    errors: S.Union(NetworkError),
+  },
 } as const
 
 /**

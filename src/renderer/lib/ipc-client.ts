@@ -198,12 +198,22 @@ export class WorkspaceClient extends Effect.Service<WorkspaceClient>()(
       type SetPathInput = S.Schema.Type<
         (typeof IpcContracts)['setWorkspacePath']['input']
       >
+      type CloneToWorkspaceInput = S.Schema.Type<
+        (typeof IpcContracts)['cloneToWorkspace']['input']
+      >
+      type CheckRepositoryInput = S.Schema.Type<
+        (typeof IpcContracts)['checkRepositoryInWorkspace']['input']
+      >
 
       return {
         getConfig: () => ipc.invoke('getWorkspaceConfig', undefined),
         setPath: (path: SetPathInput['path']) =>
           ipc.invoke('setWorkspacePath', { path }),
         selectDirectory: () => ipc.invoke('selectWorkspaceDirectory', undefined),
+        cloneToWorkspace: (input: CloneToWorkspaceInput) =>
+          ipc.invoke('cloneToWorkspace', input),
+        checkRepositoryInWorkspace: (input: CheckRepositoryInput) =>
+          ipc.invoke('checkRepositoryInWorkspace', input),
       } as const
     }),
   }

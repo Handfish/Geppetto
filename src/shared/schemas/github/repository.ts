@@ -8,6 +8,8 @@ export class GitHubRepository extends S.Class<GitHubRepository>(
   full_name: S.String,
   description: S.NullOr(S.String),
   html_url: S.String,
+  clone_url: S.String,
+  ssh_url: S.String,
   stargazers_count: S.Number,
   forks_count: S.Number,
   open_issues_count: S.Number,

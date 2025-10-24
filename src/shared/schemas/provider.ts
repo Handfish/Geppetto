@@ -41,6 +41,8 @@ export class ProviderRepository extends S.Class<ProviderRepository>(
   forks: S.Number,
   openIssues: S.Number,
   webUrl: S.String,
+  cloneUrl: S.String,
+  sshUrl: S.String,
   avatarUrl: S.optional(S.String),
   updatedAt: S.Date,
   raw: S.Unknown,

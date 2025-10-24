@@ -5,10 +5,21 @@ import {
   useProviderRepositories,
 } from '../hooks/useProviderAtoms'
 import { ErrorAlert, LoadingSpinner } from './ui/ErrorAlert'
+import { RepositoryActionsMenu } from './RepositoryActionsMenu'
+import type { ProviderRepository } from '../../shared/schemas/provider'
 
 export function RepositoryList() {
   const { accountsResult } = useProviderAuth('github')
   const { repositoriesResult } = useProviderRepositories('github')
+  const [openMenuRepoId, setOpenMenuRepoId] = React.useState<string | null>(null)
+  const buttonRefs = React.useRef<Record<string, React.RefObject<HTMLButtonElement>>>({})
+
+  const getButtonRef = (repoId: string) => {
+    if (!buttonRefs.current[repoId]) {
+      buttonRefs.current[repoId] = React.createRef<HTMLButtonElement>()
+    }
+    return buttonRefs.current[repoId]
+  }
 
   return (
     <div className="space-y-4">
@@ -62,48 +73,64 @@ export function RepositoryList() {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {group.repositories.map(repo => (
-                        <div
-                          className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors"
-                          key={repo.repositoryId}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-white truncate">
-                                {repo.name}
-                              </h4>
-                              {repo.description && (
-                                <p className="text-sm text-gray-400 mt-1 line-clamp-2">
-                                  {repo.description}
-                                </p>
-                              )}
+                      {group.repositories.map(repo => {
+                        const buttonRef = getButtonRef(repo.repositoryId)
+                        return (
+                          <div
+                            className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors relative"
+                            key={repo.repositoryId}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h4 className="font-medium text-white truncate">
+                                  {repo.name}
+                                </h4>
+                                {repo.description && (
+                                  <p className="text-sm text-gray-400 mt-1 line-clamp-2">
+                                    {repo.description}
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                ref={buttonRef}
+                                onClick={() => setOpenMenuRepoId(repo.repositoryId)}
+                                onKeyDown={(e) => {
+                                  if (e.key === ' ' || e.key === 'Enter') {
+                                    e.preventDefault()
+                                    setOpenMenuRepoId(repo.repositoryId)
+                                  }
+                                }}
+                                className="ml-2 text-gray-400 hover:text-white p-1 rounded transition-colors"
+                                type="button"
+                                aria-label="Repository actions"
+                              >
+                                ⋮
+                              </button>
                             </div>
-                          </div>
 
-                          <div className="flex items-center justify-between mt-4 text-sm text-gray-400">
-                            <div className="flex items-center space-x-4">
-                              {repo.language && (
+                            <div className="flex items-center justify-between mt-4 text-sm text-gray-400">
+                              <div className="flex items-center space-x-4">
+                                {repo.language && (
+                                  <span className="flex items-center">
+                                    <span className="w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
+                                    {repo.language}
+                                  </span>
+                                )}
                                 <span className="flex items-center">
-                                  <span className="w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
-                                  {repo.language}
+                                  ⭐ {repo.stars}
                                 </span>
-                              )}
-                              <span className="flex items-center">
-                                ⭐ {repo.stars}
-                              </span>
+                              </div>
                             </div>
 
-                            <a
-                              className="text-blue-400 hover:text-blue-300"
-                              href={repo.webUrl}
-                              rel="noopener noreferrer"
-                              target="_blank"
-                            >
-                              View →
-                            </a>
+                            <RepositoryActionsMenu
+                              repository={repo}
+                              isOpen={openMenuRepoId === repo.repositoryId}
+                              onClose={() => setOpenMenuRepoId(null)}
+                              buttonRef={buttonRef}
+                            />
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )
