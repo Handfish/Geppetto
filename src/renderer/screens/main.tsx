@@ -163,7 +163,7 @@ export function MainScreen() {
         </div>
 
         {consoleError && (
-          <div className="absolute top-36 left-8 max-w-md">
+          <div className="absolute top-36 left-8 max-w-md z-50">
             <Alert className="bg-gray-950/85 border border-yellow-500/70 text-yellow-200 shadow-lg">
               <AlertTitle className="text-lg font-semibold uppercase tracking-wide text-yellow-300">
                 Developer console message
@@ -171,7 +171,7 @@ export function MainScreen() {
               <AlertDescription className="text-sm text-yellow-100/85">
                 {consoleError.message}
               </AlertDescription>
-              <div className="mt-3 flex justify-end">
+              <div className="col-start-2 mt-3 flex justify-end">
                 <button
                   className="rounded-md border border-yellow-400/60 px-3 py-1 text-xs font-medium text-yellow-100/80 transition hover:bg-yellow-500/10 hover:text-yellow-50"
                   onClick={dismissConsoleError}
