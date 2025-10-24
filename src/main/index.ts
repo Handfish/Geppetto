@@ -27,6 +27,10 @@ import { setupAiProviderIpcHandlers } from './ipc/ai-provider-handlers'
 import { ElectronSessionService } from './ai/browser/electron-session-service'
 import { BrowserAuthService } from './ai/browser/browser-auth-service'
 import { CookieUsagePageAdapter } from './ai/browser/cookie-usage-page-adapter'
+import {
+  GitCommandService,
+  NodeGitCommandRunner,
+} from './source-control'
 
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
@@ -51,7 +55,9 @@ const MainLayer = Layer.mergeAll(
   OpenAiBrowserProviderAdapter.Default,
   ClaudeBrowserProviderAdapter.Default,
   AiProviderRegistryService.Default,
-  AiProviderService.Default
+  AiProviderService.Default,
+  NodeGitCommandRunner.Default,
+  GitCommandService.Default
 )
 
 function createMainWindow() {
