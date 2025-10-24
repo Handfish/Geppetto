@@ -33,9 +33,17 @@ import {
 } from '../lib/console-error-channel'
 
 export function MainScreen() {
-  const { accounts, activeAccount, refreshProviderRepos } =
+  const { accountsResult, activeAccount, refreshProviderRepos } =
     useProviderAuth('github')
-  const activeAccountId = activeAccount?.id ?? accounts[0]?.id ?? null
+
+  // Get first account from accountsResult if activeAccount is null
+  const firstAccountId = Result.match(accountsResult, {
+    onSuccess: accounts => accounts[0]?.id ?? null,
+    onFailure: () => null,
+    onInitial: () => null,
+  })
+
+  const activeAccountId = activeAccount?.id ?? firstAccountId
   const { repositoriesResult: repos } = useAccountRepositories(activeAccountId)
   const [isFocused, setIsFocused] = useState(true)
   const carouselRef = useRef<RepositoryCarouselRef>(null)
@@ -237,8 +245,13 @@ export function MainScreen() {
                   <RepositoryCarousel4
                     account={
                       activeAccount ??
-                      accounts.find(acc => acc.id === activeAccountId) ??
-                      null
+                      Result.match(accountsResult, {
+                        onSuccess: accounts =>
+                          accounts.find(acc => acc.id === activeAccountId) ??
+                          null,
+                        onFailure: () => null,
+                        onInitial: () => null,
+                      })
                     }
                     isFocused={isFocused}
                     ref={carouselRef}
