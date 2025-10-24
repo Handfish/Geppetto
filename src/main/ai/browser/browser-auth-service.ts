@@ -151,9 +151,17 @@ export class BrowserAuthService extends Effect.Service<BrowserAuthService>()(
           }
 
           // Handle page load completion
-          const handleDidFinishLoad = () => {
+          const handleDidFinishLoad = async () => {
             const url = window.webContents.getURL()
             console.log(`[BrowserAuth] Page loaded: ${url}`)
+
+            // Check cookies on page load
+            try {
+              const cookies = await window.webContents.session.cookies.get({})
+              console.log(`[BrowserAuth] Page loaded, session has ${cookies.length} cookies`)
+            } catch (err) {
+              console.error(`[BrowserAuth] Failed to check cookies:`, err)
+            }
 
             // Inject detection code on each page load
             injectDetectionCode().catch(err => {

@@ -66,9 +66,9 @@ export function AiUsageCard() {
     usageResult,
     isAuthenticated,
     refreshUsage,
-  } = useAiProviderAuth('openai', { loadUsage: false })
+  } = useAiProviderAuth('openai', { loadUsage: true })
 
-  // Only load usage after successful sign-in
+  // Refresh usage after successful sign-in to update with new account
   React.useEffect(() => {
     if (aiProvidersEnabled && signInResult._tag === 'Success') {
       refreshUsage()
