@@ -5,11 +5,12 @@ import SleepLight from './components/ui/SleepLight'
 import { useProviderAuth } from './hooks/useProviderAtoms'
 import { AiUsageCard } from './components/AiUsageCard'
 import { ToastViewport } from './components/ui/ToastViewport'
+import { ErrorTester } from './components/dev/ErrorTester'
 
 export function App() {
   const { isAuthenticated } = useProviderAuth('github')
 
-  return (
+  const content = (
     <div className="min-h-screen bg-gray-900 p-6">
       <ToastViewport />
       <div className="max-w-6xl mx-auto space-y-8">
@@ -37,4 +38,11 @@ export function App() {
       </div>
     </div>
   )
+
+  // Wrap with ErrorTester in development mode
+  if (process.env.NODE_ENV === 'development') {
+    return <ErrorTester>{content}</ErrorTester>
+  }
+
+  return content
 }

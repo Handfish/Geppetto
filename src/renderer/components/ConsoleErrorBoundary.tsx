@@ -157,8 +157,8 @@ export class ConsoleErrorBoundary extends React.Component<
       // Error loop detected - show persistent error
       if (errorCount > ERROR_LOOP_THRESHOLD) {
         return (
-          <div className="min-h-screen bg-gray-950 p-6">
-            <div className="mx-auto max-w-4xl">
+          <div className="p-6">
+            <div className="max-w-2xl bg-gray-800 rounded-lg p-6 border border-gray-700">
               <ErrorAlert
                 title="Critical Error"
                 message="Multiple errors detected. Please refresh the application."
@@ -177,7 +177,7 @@ export class ConsoleErrorBoundary extends React.Component<
                   <summary className="cursor-pointer hover:text-gray-300">
                     Stack Trace
                   </summary>
-                  <pre className="mt-2 p-4 bg-gray-900 rounded overflow-x-auto text-xs">
+                  <pre className="mt-2 p-4 bg-gray-900 rounded overflow-x-auto text-xs select-text border border-gray-700">
                     {error.stack}
                   </pre>
                 </details>
@@ -189,12 +189,12 @@ export class ConsoleErrorBoundary extends React.Component<
 
       // Show error with auto-recovery countdown
       return (
-        <div
-          className={`min-h-screen bg-gray-950 p-6 transition-opacity duration-500 ${
-            isRecovering ? 'opacity-0' : 'opacity-100'
-          }`}
-        >
-          <div className="mx-auto max-w-4xl">
+        <div className="p-6">
+          <div
+            className={`max-w-2xl bg-gray-800 rounded-lg p-6 border border-gray-700 transition-opacity duration-500 ${
+              isRecovering ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
             <ErrorAlert
               title="Application Error"
               message={error.message || 'Something went wrong'}
@@ -207,7 +207,7 @@ export class ConsoleErrorBoundary extends React.Component<
                   >
                     Dismiss Now
                   </button>
-                  <span className="text-sm text-red-200/60">
+                  <span className="text-sm text-red-200/80">
                     Auto-recovering in {secondsUntilRecovery}s...
                   </span>
                 </div>
@@ -219,7 +219,7 @@ export class ConsoleErrorBoundary extends React.Component<
                 <summary className="cursor-pointer hover:text-gray-300">
                   Stack Trace (Development)
                 </summary>
-                <pre className="mt-2 p-4 bg-gray-900 rounded overflow-x-auto text-xs">
+                <pre className="mt-2 p-4 bg-gray-900 rounded overflow-x-auto text-xs select-text border border-gray-700">
                   {error.stack}
                 </pre>
               </details>

@@ -47,7 +47,7 @@ export function useProviderAuth(provider: ProviderType) {
   })
 
   const activeAccount = Result.match(contextResult, {
-    onSuccess: context => context.getActiveAccount(),
+    onSuccess: ({ value }) => value.getActiveAccount(),
     onFailure: () => null,
     onInitial: () => null,
   })

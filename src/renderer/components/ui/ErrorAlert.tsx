@@ -92,12 +92,15 @@ export function ErrorAlert({
   const displayMessage = message ?? error?.message ?? 'An error occurred'
 
   return (
-    <Alert variant="destructive" className={className}>
+    <Alert
+      variant="destructive"
+      className={`border-red-500/50 bg-red-500/10 ${className || ''}`}
+    >
       <div className="flex items-start justify-between w-full">
         <div className="flex-1 min-w-0">
-          <AlertTitle>{displayTitle}</AlertTitle>
+          <AlertTitle className="text-red-200 font-semibold">{displayTitle}</AlertTitle>
           <AlertDescription>
-            <p>{displayMessage}</p>
+            <p className="text-red-100/90">{displayMessage}</p>
             {action && <div className="mt-4">{action}</div>}
           </AlertDescription>
         </div>
@@ -166,15 +169,15 @@ export function TierLimitAlert({
 }: TierLimitAlertProps) {
   return (
     <Alert
-      className={`border-yellow-500/70 bg-yellow-500/10 text-yellow-100 ${className || ''}`}
+      className={`border-yellow-500/70 bg-yellow-500/10 ${className || ''}`}
     >
-      <AlertTitle className="text-yellow-300">
+      <AlertTitle className="text-yellow-200 font-semibold">
         {requiredTier ? `${requiredTier} Tier Required` : 'Tier Limit Reached'}
       </AlertTitle>
       <AlertDescription>
-        <p className="text-yellow-100/85">{message}</p>
+        <p className="text-yellow-100">{message}</p>
         {currentCount !== undefined && maxAllowed !== undefined && (
-          <p className="text-xs text-yellow-100/65 mt-2">
+          <p className="text-xs text-yellow-200/80 mt-2">
             {currentCount} / {maxAllowed} accounts used in {tier} tier
           </p>
         )}
@@ -183,7 +186,7 @@ export function TierLimitAlert({
             <button
               onClick={onUpgrade}
               type="button"
-              className="px-4 py-2 border border-yellow-500/70 rounded-md text-yellow-100 hover:bg-yellow-500/20 transition-colors"
+              className="px-4 py-2 border border-yellow-400 rounded-md text-yellow-100 hover:bg-yellow-500/20 transition-colors"
             >
               Upgrade to Pro
             </button>
