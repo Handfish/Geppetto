@@ -20,6 +20,7 @@
     "dev": "cross-env NODE_ENV=development electron-vite dev --watch",
     "dev:free": "cross-env NODE_ENV=development APP_TIER=free electron-vite dev --watch",
     "dev:pro": "cross-env NODE_ENV=development APP_TIER=pro electron-vite dev --watch",
+    "test:errors": "echo \"Error testing guide: docs/ERROR_TESTING.md\\n\\n1. Run: pnpm dev:free (or dev:pro)\\n2. Open browser console\\n3. Use: window.__DEV_TRIGGER_ERROR__('render-error')\\n\\nAvailable types: render-error, async-error, route-error, defect, network-error\"",
     "compile:app": "electron-vite build",
     "compile:app:free": "cross-env APP_TIER=free APP_NAME=\"Geppetto Free\" electron-vite build",
     "compile:app:pro": "cross-env APP_TIER=pro APP_NAME=\"Geppetto Pro\" electron-vite build",
