@@ -19,6 +19,7 @@ import {
   ProviderFeatureUnavailableError,
   ProviderUnavailableError,
   ProviderOperationError,
+  GitOperationError,
 } from './schemas/errors'
 import {
   AiAuthenticationError,
@@ -244,7 +245,7 @@ export const WorkspaceIpcContracts = {
       bareRepoPath: S.String,
       worktreePath: S.String,
     }),
-    errors: S.Union(NetworkError, NotFoundError),
+    errors: S.Union(NetworkError, NotFoundError, GitOperationError),
   },
 
   checkRepositoryInWorkspace: {

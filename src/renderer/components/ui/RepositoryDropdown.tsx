@@ -136,11 +136,33 @@ export function RepositoryDropdown({
           }
         )
       } else if (Result.isFailure(cloneResult)) {
-        const error = Result.getFailure(cloneResult)
+        // Extract error message using Result.match
+        const errorMessage = Result.match(cloneResult, {
+          onSuccess: () => '',
+          onFailure: (failureData) => {
+            // failureData is { error: E, waiting: boolean }
+            const error = failureData.error
+
+            if (!error) {
+              return 'Failed to clone repository to workspace (no error details)'
+            }
+
+            // Handle different error types
+            if (error._tag === 'GitOperationError') {
+              // GitOperationError has stderr with detailed git output
+              return error.stderr?.trim() || error.message
+            }
+
+            // Fallback to generic message field for other error types
+            return error.message || 'Failed to clone repository to workspace'
+          },
+          onInitial: () => '',
+        })
+
         showCustomToast(
           {
             title: 'Clone Failed',
-            message: error.message || 'Failed to clone repository to workspace',
+            message: errorMessage,
             variant: 'warning',
           },
           {

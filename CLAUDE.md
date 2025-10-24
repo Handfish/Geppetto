@@ -356,11 +356,16 @@ return <div>{data.map(...)}</div>  // No loading state, no error handling
 ```typescript
 if (Result.isInitial(result)) return <Spinner />
 if (Result.isFailure(result)) {
-  const error = Result.getFailure(result)
-  // ... manual error handling
+  // Manual error extraction - verbose and easy to forget defects
+  const errorMessage = Result.match(result, {
+    onSuccess: () => '',
+    onFailure: (failureData) => failureData.error.message,
+    onInitial: () => '',
+  })
+  return <ErrorView message={errorMessage} />
 }
-const data = Result.getSuccess(result)
-return <DataView data={data} />
+// Easy to forget to handle defects!
+return <DataView data={result.value} />
 ```
 
 ### Shared Schemas (`src/shared/schemas/`)

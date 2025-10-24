@@ -224,11 +224,6 @@ Result.isSuccess(result)   // boolean
 Result.isFailure(result)   // boolean
 Result.isDefect(result)    // boolean
 
-// Extract values (unsafe - prefer builder or getOrElse)
-Result.getSuccess(result)  // T | undefined
-Result.getFailure(result)  // E | undefined
-Result.getDefect(result)   // unknown | undefined
-
 // Get value or null (useful for optional rendering)
 Result.getOrNull(result)   // T | null
 
@@ -241,6 +236,11 @@ Result.map(result, (value) => transformedValue)  // Result<U, E>
 // Transform error value
 Result.mapError(result, (error) => transformedError)  // Result<T, F>
 ```
+
+**Important:** There are NO `getSuccess()`, `getFailure()`, or `getDefect()` methods in `@effect-atom/atom-react`. Always use:
+- `Result.builder()` for UI rendering (recommended)
+- `Result.match()` for extracting values in computations
+- `Result.getOrElse()` for safe extraction with fallbacks
 
 ---
 
@@ -491,7 +491,40 @@ Property 'length' does not exist on type 'Success<readonly AiUsageSnapshot[], un
 - `onFailure: (err) => ...` where `err = { error: E, waiting: boolean }`
 - `onInitial: (init) => ...` where `init = { waiting: boolean }`
 
-### ❌ Anti-Pattern 2: Manual State Checking Instead of Builder
+**Example: Extracting error messages with Result.match:**
+```typescript
+// ✅ CORRECT - Extract error message for toast/logging
+const errorMessage = Result.match(cloneResult, {
+  onSuccess: () => '',
+  onFailure: (failureData) => {
+    // failureData is { error: E, waiting: boolean }
+    const error = failureData.error
+    return error.stderr?.trim() || error.message || 'Operation failed'
+  },
+  onInitial: () => '',
+})
+```
+
+### ❌ Anti-Pattern 2: Using Non-Existent Methods
+
+```typescript
+// ❌ WRONG - These methods DO NOT exist in @effect-atom/atom-react
+const error = Result.getFailure(result)   // TypeError: Result.getFailure is not a function
+const data = Result.getSuccess(result)    // TypeError: Result.getSuccess is not a function
+const defect = Result.getDefect(result)   // TypeError: Result.getDefect is not a function
+
+// ✅ CORRECT - Use Result.match to extract values
+const errorMessage = Result.match(result, {
+  onSuccess: () => null,
+  onFailure: (failureData) => failureData.error.message,
+  onInitial: () => null,
+})
+
+// ✅ CORRECT - Use Result.getOrElse for success values
+const data = Result.getOrElse(result, () => [])
+```
+
+### ❌ Anti-Pattern 3: Manual State Checking Instead of Builder
 
 ```typescript
 // ❌ WRONG - Manual pattern matching is verbose and error-prone
@@ -543,7 +576,7 @@ export function RepoList() {
 - ✅ Harder to forget cases (like Defect)
 - ✅ Error tags are type-checked
 
-### ❌ Anti-Pattern 3: Using `Result.getOrElse()` for Primary Data
+### ❌ Anti-Pattern 4: Using `Result.getOrElse()` for Primary Data
 
 ```typescript
 // ❌ WRONG - Loses error information for primary data
@@ -586,7 +619,7 @@ export function RepositoryList() {
 - ❌ Cannot distinguish between "no repos" and "failed to load"
 - ✅ With builder: proper feedback for all states
 
-### ❌ Anti-Pattern 4: Ignoring the `waiting` Field
+### ❌ Anti-Pattern 5: Ignoring the `waiting` Field
 
 ```typescript
 // ❌ WRONG - Only checks _tag, ignores ongoing operations
@@ -630,7 +663,7 @@ export function RepoList() {
 - ❌ Can't show stale data while refreshing
 - ✅ With waiting: granular loading states
 
-### ❌ Anti-Pattern 5: Not Handling Defects
+### ❌ Anti-Pattern 6: Not Handling Defects
 
 ```typescript
 // ❌ WRONG - Missing .onDefect() handler
