@@ -25,7 +25,9 @@ export function AuthCard() {
             )}
             <div>
               <h3 className="text-white font-medium">
-                {primaryAccount?.displayName ?? primaryAccount?.username ?? 'Connected Account'}
+                {primaryAccount?.displayName ??
+                  primaryAccount?.username ??
+                  'Connected Account'}
               </h3>
               <p className="text-gray-400 text-sm">GitHub</p>
             </div>
@@ -45,8 +47,8 @@ export function AuthCard() {
               <div className="space-y-2">
                 {accounts.map(account => (
                   <div
-                    key={account.id}
                     className="flex items-center justify-between text-sm text-gray-300 bg-gray-900/40 border border-gray-700/40 rounded-md px-3 py-2"
+                    key={account.id}
                   >
                     <span>{account.displayName ?? account.username}</span>
                     <button

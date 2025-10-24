@@ -26,7 +26,12 @@ import {
   AiFeatureUnavailableError,
   AiUsageUnavailableError,
 } from './schemas/ai/errors'
-import { Account, AccountContext, AccountId, ProviderType } from './schemas/account-context'
+import {
+  Account,
+  AccountContext,
+  AccountId,
+  ProviderType,
+} from './schemas/account-context'
 
 /**
  * Account Management IPC Contracts
@@ -86,21 +91,35 @@ export const ProviderIpcContracts = {
     channel: 'provider:signIn' as const,
     input: S.Struct({ provider: ProviderType }),
     output: ProviderSignInResult,
-    errors: S.Union(AuthenticationError, ProviderFeatureUnavailableError, ProviderUnavailableError, NetworkError),
+    errors: S.Union(
+      AuthenticationError,
+      ProviderFeatureUnavailableError,
+      ProviderUnavailableError,
+      NetworkError
+    ),
   },
 
   checkAuth: {
     channel: 'provider:checkAuth' as const,
     input: S.Struct({ accountId: AccountId }),
     output: ProviderAuthStatus,
-    errors: S.Union(AuthenticationError, NetworkError, ProviderUnavailableError, ProviderOperationError),
+    errors: S.Union(
+      AuthenticationError,
+      NetworkError,
+      ProviderUnavailableError,
+      ProviderOperationError
+    ),
   },
 
   signOut: {
     channel: 'provider:signOut' as const,
     input: S.Struct({ accountId: AccountId }),
     output: S.Void,
-    errors: S.Union(NetworkError, ProviderUnavailableError, ProviderOperationError),
+    errors: S.Union(
+      NetworkError,
+      ProviderUnavailableError,
+      ProviderOperationError
+    ),
   },
 
   getAccountRepositories: {

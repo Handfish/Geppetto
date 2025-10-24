@@ -10,9 +10,11 @@ export const DEFAULT_PRO_FEATURE_MESSAGE =
 
 const PRO_FEATURE_TOAST_ID = 'pro-feature-locked'
 
-export const showProFeatureLockedToast = (message: string = DEFAULT_PRO_FEATURE_MESSAGE) => {
+export const showProFeatureLockedToast = (
+  message: string = DEFAULT_PRO_FEATURE_MESSAGE
+) => {
   toast.custom(
-    (id) => (
+    id => (
       <div className="pointer-events-auto w-[320px] rounded-xl border border-yellow-500/80 bg-gray-950/90 px-5 py-4 text-yellow-100 shadow-2xl backdrop-blur-md">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
@@ -22,9 +24,9 @@ export const showProFeatureLockedToast = (message: string = DEFAULT_PRO_FEATURE_
             <p className="text-sm text-yellow-100/85">{message}</p>
           </div>
           <button
-            type="button"
             className="rounded-md px-2 py-1 text-xs font-medium text-yellow-100/70 transition hover:bg-yellow-500/10 hover:text-yellow-50"
             onClick={() => toast.dismiss(id)}
+            type="button"
           >
             Dismiss
           </button>
@@ -54,7 +56,9 @@ const resolveMessage = <Args extends ReadonlyArray<unknown>, T>(
   ...args: Args
 ): T extends string ? string : T => {
   if (typeof value === 'function') {
-    return (value as (...innerArgs: Args) => T)(...args) as T extends string ? string : T
+    return (value as (...innerArgs: Args) => T)(...args) as T extends string
+      ? string
+      : T
   }
   return value as T extends string ? string : T
 }
@@ -66,7 +70,9 @@ export const withToast =
   ) =>
   (...args: Args): Effect.Effect<A, E, R> =>
     Effect.gen(function* () {
-      const toastIdValue = options.id ? resolveMessage(options.id, ...args) : undefined
+      const toastIdValue = options.id
+        ? resolveMessage(options.id, ...args)
+        : undefined
       const waitingMessage = resolveMessage(options.onWaiting, ...args)
 
       const toastId = toast.loading(waitingMessage, {
@@ -76,9 +82,13 @@ export const withToast =
       })
 
       return yield* effectFactory(...args).pipe(
-        Effect.tap((result) =>
+        Effect.tap(result =>
           Effect.sync(() => {
-            const successMessage = resolveMessage(options.onSuccess, result, ...args)
+            const successMessage = resolveMessage(
+              options.onSuccess,
+              result,
+              ...args
+            )
             toast.success(successMessage, {
               id: toastId,
               duration: options.duration ?? DEFAULT_DURATION,
@@ -86,10 +96,14 @@ export const withToast =
             })
           })
         ),
-        Effect.tapErrorCause((cause) =>
+        Effect.tapErrorCause(cause =>
           Effect.sync(() => {
             const failureOption = Cause.failureOption(cause) as OptionType<E>
-            const failureMessage = resolveMessage(options.onFailure, failureOption, ...args)
+            const failureMessage = resolveMessage(
+              options.onFailure,
+              failureOption,
+              ...args
+            )
 
             if (failureMessage == null || failureMessage === '') {
               toast.dismiss(toastId)

@@ -10,7 +10,9 @@ export class BitbucketProviderAdapter extends Effect.Service<BitbucketProviderAd
   {
     sync: () => {
       const provider: ProviderAdapter['provider'] = 'bitbucket'
-      const unsupported = <A>(feature: string): Effect.Effect<A, ProviderFeatureUnsupportedError> =>
+      const unsupported = <A>(
+        feature: string
+      ): Effect.Effect<A, ProviderFeatureUnsupportedError> =>
         Effect.fail(
           new ProviderFeatureUnsupportedError({
             provider,

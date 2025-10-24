@@ -10,13 +10,6 @@ import { ConsoleErrorBoundary } from './components/ConsoleErrorBoundary'
 export function AppRoutes() {
   return (
     <Router
-      main={
-        <Route
-          element={<MainScreen />}
-          errorElement={<RouteErrorFallback />}
-          path="/"
-        />
-      }
       console={
         <Route
           element={
@@ -24,6 +17,13 @@ export function AppRoutes() {
               <App />
             </ConsoleErrorBoundary>
           }
+          path="/"
+        />
+      }
+      main={
+        <Route
+          element={<MainScreen />}
+          errorElement={<RouteErrorFallback />}
           path="/"
         />
       }

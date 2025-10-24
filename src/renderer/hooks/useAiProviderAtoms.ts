@@ -1,6 +1,15 @@
-import { useAtom, useAtomValue, useAtomRefresh, useAtomSet } from '@effect-atom/atom-react'
+import {
+  useAtom,
+  useAtomValue,
+  useAtomRefresh,
+  useAtomSet,
+} from '@effect-atom/atom-react'
 import { Result } from '@effect-atom/atom-react'
-import type { AiAccountId, AiProviderType, AiUsageSnapshot } from '../../shared/schemas/ai/provider'
+import type {
+  AiAccountId,
+  AiProviderType,
+  AiUsageSnapshot,
+} from '../../shared/schemas/ai/provider'
 import {
   aiProviderSignInAtom,
   selectAiProviderUsageAtom,
@@ -18,7 +27,10 @@ export function useAiProviderAuth(
   const refreshUsage = useAtomRefresh(usageAtom)
   const runSignOut = useAtomSet(aiProviderSignOutAtom)
 
-  const usage = Result.getOrElse(usageResult, () => [] as readonly AiUsageSnapshot[])
+  const usage = Result.getOrElse(
+    usageResult,
+    () => [] as readonly AiUsageSnapshot[]
+  )
   const isAuthenticated = usage.length > 0
 
   const signOut = (accountId: AiAccountId) => {

@@ -10,13 +10,13 @@ export const GitHubRateLimitDefaults = {
 
 const positiveInteger = (name: string, fallback: number) =>
   Config.withDefault(
-    Config.map(Config.integer(name), (value) => (value > 0 ? value : fallback)),
+    Config.map(Config.integer(name), value => (value > 0 ? value : fallback)),
     fallback
   )
 
 const nonNegativeInteger = (name: string, fallback: number) =>
   Config.withDefault(
-    Config.map(Config.integer(name), (value) => (value >= 0 ? value : fallback)),
+    Config.map(Config.integer(name), value => (value >= 0 ? value : fallback)),
     fallback
   )
 

@@ -1,11 +1,14 @@
-import { Effect } from 'effect'
-import { AccountId, ProviderType } from '../../shared/schemas/account-context'
-import {
+import type { Effect } from 'effect'
+import type {
+  AccountId,
+  ProviderType,
+} from '../../shared/schemas/account-context'
+import type {
   ProviderAuthStatus,
   ProviderRepository,
   ProviderSignInResult,
 } from '../../shared/schemas/provider'
-import {
+import type {
   ProviderAuthenticationError,
   ProviderFeatureUnsupportedError,
   ProviderNotRegisteredError,
@@ -29,7 +32,9 @@ export type CheckAuthEffect = Effect.Effect<
 
 export type FetchRepositoriesEffect = Effect.Effect<
   ReadonlyArray<ProviderRepository>,
-  ProviderRepositoryError | ProviderFeatureUnsupportedError | ProviderAuthenticationError
+  | ProviderRepositoryError
+  | ProviderFeatureUnsupportedError
+  | ProviderAuthenticationError
 >
 
 /**
@@ -52,9 +57,8 @@ export interface ProviderAdapter {
  * Registry port used by the application layer to resolve adapters.
  */
 export interface ProviderRegistryPort {
-  getAdapter(provider: ProviderType): Effect.Effect<
-    ProviderAdapter,
-    ProviderNotRegisteredError
-  >
+  getAdapter(
+    provider: ProviderType
+  ): Effect.Effect<ProviderAdapter, ProviderNotRegisteredError>
   listAdapters(): ReadonlyArray<ProviderAdapter>
 }

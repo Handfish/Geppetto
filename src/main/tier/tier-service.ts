@@ -8,23 +8,30 @@
 
 import { Effect, Layer, Context, Data } from 'effect'
 import { getCurrentTierLimits, type TierLimits } from '../../shared/tier-config'
-import { type AccountContext, type ProviderType } from '../../shared/schemas/account-context'
-import {
-  type AiAccountContext,
-  type AiProviderType,
+import type {
+  AccountContext,
+  ProviderType,
+} from '../../shared/schemas/account-context'
+import type {
+  AiAccountContext,
+  AiProviderType,
 } from '../../shared/schemas/ai/provider'
 
 /**
  * TierService errors
  */
-export class AccountLimitExceededError extends Data.TaggedError('AccountLimitExceededError')<{
+export class AccountLimitExceededError extends Data.TaggedError(
+  'AccountLimitExceededError'
+)<{
   provider: string
   currentCount: number
   maxAllowed: number
   tier: string
 }> {}
 
-export class FeatureNotAvailableError extends Data.TaggedError('FeatureNotAvailableError')<{
+export class FeatureNotAvailableError extends Data.TaggedError(
+  'FeatureNotAvailableError'
+)<{
   feature: string
   tier: string
   requiredTier: string
@@ -40,7 +47,10 @@ export class TierService extends Effect.Service<TierService>()('TierService', {
      */
     getTierLimits: () => getCurrentTierLimits(),
 
-    checkCanAddAccount: (provider: ProviderType, accountContext: AccountContext) =>
+    checkCanAddAccount: (
+      provider: ProviderType,
+      accountContext: AccountContext
+    ) =>
       Effect.gen(function* () {
         const limits = getCurrentTierLimits()
         const currentCount = accountContext.countAccountsByProvider(provider)
@@ -66,12 +76,17 @@ export class TierService extends Effect.Service<TierService>()('TierService', {
         }
       }),
 
-    checkCanAddAiAccount: (provider: AiProviderType, accountContext: AiAccountContext) =>
+    checkCanAddAiAccount: (
+      provider: AiProviderType,
+      accountContext: AiAccountContext
+    ) =>
       Effect.gen(function* () {
         const limits = getCurrentTierLimits()
         const currentCount = accountContext.countAccountsByProvider(provider)
         const maxAllowed =
-          provider === 'openai' ? limits.maxOpenAiAccounts : limits.maxClaudeAccounts
+          provider === 'openai'
+            ? limits.maxOpenAiAccounts
+            : limits.maxClaudeAccounts
 
         if (currentCount >= maxAllowed) {
           yield* Effect.fail(

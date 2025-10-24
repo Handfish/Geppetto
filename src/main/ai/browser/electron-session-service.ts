@@ -1,6 +1,9 @@
 import { Effect, Schema as S } from 'effect'
 import { session, type Session } from 'electron'
-import type { AiProviderType, AiAccountId } from '../../../shared/schemas/ai/provider'
+import type {
+  AiProviderType,
+  AiAccountId,
+} from '../../../shared/schemas/ai/provider'
 
 /**
  * Cookie stored in Electron session.
@@ -28,19 +31,31 @@ export class ElectronSessionService extends Effect.Service<ElectronSessionServic
        * Get session partition name for an AI account.
        * Format: persist:ai-{provider}-{identifier}
        */
-      const getPartitionName = (provider: AiProviderType, identifier: string): string => {
+      const getPartitionName = (
+        provider: AiProviderType,
+        identifier: string
+      ): string => {
         return `persist:ai-${provider}-${identifier}`
       }
 
       /**
        * Get or create an Electron session for an AI account.
        */
-      const getSession = (provider: AiProviderType, identifier: string): Effect.Effect<Session> =>
+      const getSession = (
+        provider: AiProviderType,
+        identifier: string
+      ): Effect.Effect<Session> =>
         Effect.sync(() => {
           const partitionName = getPartitionName(provider, identifier)
-          console.log(`[ElectronSession] Getting session for partition: ${partitionName}`)
-          const accountSession = session.fromPartition(partitionName, { cache: true })
-          console.log(`[ElectronSession] Session retrieved, path: ${accountSession.storagePath}`)
+          console.log(
+            `[ElectronSession] Getting session for partition: ${partitionName}`
+          )
+          const accountSession = session.fromPartition(partitionName, {
+            cache: true,
+          })
+          console.log(
+            `[ElectronSession] Session retrieved, path: ${accountSession.storagePath}`
+          )
           return accountSession
         })
 
@@ -76,12 +91,17 @@ export class ElectronSessionService extends Effect.Service<ElectronSessionServic
       /**
        * Check if a session has any cookies (indicates authentication).
        */
-      const hasAnyCookies = (accountSession: Session): Effect.Effect<boolean, Error> =>
+      const hasAnyCookies = (
+        accountSession: Session
+      ): Effect.Effect<boolean, Error> =>
         Effect.gen(function* () {
           const cookies = yield* getCookies(accountSession)
           console.log(`[ElectronSession] Session has ${cookies.length} cookies`)
           if (cookies.length > 0) {
-            console.log(`[ElectronSession] Cookie domains:`, cookies.map(c => c.domain))
+            console.log(
+              `[ElectronSession] Cookie domains:`,
+              cookies.map(c => c.domain)
+            )
           }
           return cookies.length > 0
         })
@@ -89,7 +109,9 @@ export class ElectronSessionService extends Effect.Service<ElectronSessionServic
       /**
        * Clear all cookies for a session (sign out).
        */
-      const clearCookies = (accountSession: Session): Effect.Effect<void, Error> =>
+      const clearCookies = (
+        accountSession: Session
+      ): Effect.Effect<void, Error> =>
         Effect.tryPromise({
           try: async () => {
             const cookies = await accountSession.cookies.get({})
@@ -109,7 +131,9 @@ export class ElectronSessionService extends Effect.Service<ElectronSessionServic
       /**
        * Clear session data including cache and storage.
        */
-      const clearSessionData = (accountSession: Session): Effect.Effect<void, Error> =>
+      const clearSessionData = (
+        accountSession: Session
+      ): Effect.Effect<void, Error> =>
         Effect.tryPromise({
           try: () =>
             accountSession.clearStorageData({
@@ -132,12 +156,20 @@ export class ElectronSessionService extends Effect.Service<ElectronSessionServic
         targetSession: Session
       ): Effect.Effect<void, Error> =>
         Effect.gen(function* () {
-          console.log(`[ElectronSession] Copying cookies from source to target session`)
-          console.log(`[ElectronSession] Source session path: ${sourceSession.storagePath}`)
-          console.log(`[ElectronSession] Target session path: ${targetSession.storagePath}`)
+          console.log(
+            `[ElectronSession] Copying cookies from source to target session`
+          )
+          console.log(
+            `[ElectronSession] Source session path: ${sourceSession.storagePath}`
+          )
+          console.log(
+            `[ElectronSession] Target session path: ${targetSession.storagePath}`
+          )
 
           const cookies = yield* getCookies(sourceSession)
-          console.log(`[ElectronSession] Found ${cookies.length} cookies to copy`)
+          console.log(
+            `[ElectronSession] Found ${cookies.length} cookies to copy`
+          )
 
           // Debug: Log cookie details
           const now = Date.now() / 1000
@@ -179,7 +211,8 @@ export class ElectronSessionService extends Effect.Service<ElectronSessionServic
 
                     if (!expirationDate) {
                       // Set session cookies to expire in 30 days
-                      const thirtyDaysFromNow = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
+                      const thirtyDaysFromNow =
+                        Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
                       expirationDate = thirtyDaysFromNow
                       console.log(
                         `[ElectronSession] Converting session cookie ${cookie.name} to persistent (30 days)`
@@ -207,7 +240,9 @@ export class ElectronSessionService extends Effect.Service<ElectronSessionServic
                 })
               )
 
-              const succeeded = results.filter(r => r.status === 'fulfilled').length
+              const succeeded = results.filter(
+                r => r.status === 'fulfilled'
+              ).length
               const failed = results.filter(r => r.status === 'rejected').length
               console.log(
                 `[ElectronSession] Cookie copy results: ${succeeded} succeeded, ${failed} failed`

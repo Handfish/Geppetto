@@ -29,13 +29,17 @@ const signInWithToast = withToast(
       return yield* client.signIn(provider)
     }),
   {
-    id: (provider) => `ai-provider:${provider}:sign-in`,
-    onWaiting: (provider) => `Connecting ${formatProviderLabel(provider)}…`,
-    onSuccess: (_result, provider) => `${formatProviderLabel(provider)} connected.`,
+    id: provider => `ai-provider:${provider}:sign-in`,
+    onWaiting: provider => `Connecting ${formatProviderLabel(provider)}…`,
+    onSuccess: (_result, provider) =>
+      `${formatProviderLabel(provider)} connected.`,
     onFailure: (errorOption, provider) => {
       if (Option.isSome(errorOption)) {
         const error = errorOption.value
-        if (error instanceof AiFeatureUnavailableError || error._tag === 'AiFeatureUnavailableError') {
+        if (
+          error instanceof AiFeatureUnavailableError ||
+          error._tag === 'AiFeatureUnavailableError'
+        ) {
           const message =
             error.message ??
             `${formatProviderLabel(provider)} integration requires the Pro tier. Upgrade to unlock AI provider usage.`
@@ -72,12 +76,19 @@ const aiProviderUsageQueryAtom = Atom.family((provider: AiProviderType) =>
         return yield* client.getProviderUsage(provider)
       }).pipe(
         // Gracefully handle no accounts case - return empty array instead of error
-        Effect.catchTag('AiUsageUnavailableError', () => Effect.succeed([] as readonly AiUsageSnapshot[])),
-        Effect.catchTag('AiAuthenticationError', () => Effect.succeed([] as readonly AiUsageSnapshot[]))
+        Effect.catchTag('AiUsageUnavailableError', () =>
+          Effect.succeed([] as readonly AiUsageSnapshot[])
+        ),
+        Effect.catchTag('AiAuthenticationError', () =>
+          Effect.succeed([] as readonly AiUsageSnapshot[])
+        )
       )
     )
     .pipe(
-      Atom.withReactivity([`ai-provider:${provider}:usage`, 'ai-provider:usage']),
+      Atom.withReactivity([
+        `ai-provider:${provider}:usage`,
+        'ai-provider:usage',
+      ]),
       Atom.setIdleTTL(Duration.minutes(5))
     )
 )
@@ -86,7 +97,10 @@ const disabledUsageAtom = Atom.family((provider: AiProviderType) =>
   Atom.make(() => Result.success([] as readonly AiUsageSnapshot[]))
 )
 
-export const selectAiProviderUsageAtom = (provider: AiProviderType, enabled: boolean) =>
+export const selectAiProviderUsageAtom = (
+  provider: AiProviderType,
+  enabled: boolean
+) =>
   enabled ? aiProviderUsageQueryAtom(provider) : disabledUsageAtom(provider)
 
 export const aiProviderSignOutAtom = aiProviderRuntime.fn(

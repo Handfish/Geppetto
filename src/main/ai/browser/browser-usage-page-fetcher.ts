@@ -60,7 +60,9 @@ export const fetchUsagePageWithBrowser = (
     const cookieCount = yield* Effect.tryPromise({
       try: async () => {
         const cookies = await accountSession.cookies.get({})
-        console.log(`[BrowserUsageFetch] Session has ${cookies.length} cookies before loading page`)
+        console.log(
+          `[BrowserUsageFetch] Session has ${cookies.length} cookies before loading page`
+        )
         // Log some cookie domains for debugging
         const domains = [...new Set(cookies.map(c => c.domain))].slice(0, 10)
         console.log(`[BrowserUsageFetch] Cookie domains (first 10):`, domains)
@@ -84,12 +86,19 @@ export const fetchUsagePageWithBrowser = (
       Effect.runFork(Deferred.succeed(pageLoaded, undefined))
     }
 
-    const handleLoadFail = (_event: Electron.Event, errorCode: number, errorDescription: string) => {
+    const handleLoadFail = (
+      _event: Electron.Event,
+      errorCode: number,
+      errorDescription: string
+    ) => {
       console.error(
         `[BrowserUsageFetch] Page load failed: ${errorDescription} (code: ${errorCode})`
       )
       Effect.runFork(
-        Deferred.fail(pageLoaded, new Error(`Page load failed: ${errorDescription} (${errorCode})`))
+        Deferred.fail(
+          pageLoaded,
+          new Error(`Page load failed: ${errorDescription} (${errorCode})`)
+        )
       )
     }
 
@@ -124,11 +133,17 @@ export const fetchUsagePageWithBrowser = (
       })
     )
 
-    yield* Console.log(`[BrowserUsageFetch] Page loaded, waiting for content to render...`)
+    yield* Console.log(
+      `[BrowserUsageFetch] Page loaded, waiting for content to render...`
+    )
 
     // Check if we got redirected to login page
     const finalUrl = yield* Effect.sync(() => window.webContents.getURL())
-    if (finalUrl.includes('/login') || finalUrl.includes('/auth') || finalUrl.includes('/signin')) {
+    if (
+      finalUrl.includes('/login') ||
+      finalUrl.includes('/auth') ||
+      finalUrl.includes('/signin')
+    ) {
       yield* Effect.fail(
         new Error(
           `Redirected to authentication page: ${finalUrl}. Session may not be authenticated.`
@@ -143,7 +158,9 @@ export const fetchUsagePageWithBrowser = (
 
     if (waitForSelector) {
       // Wait for specific selector to appear
-      yield* Console.log(`[BrowserUsageFetch] Waiting for selector: ${waitForSelector}`)
+      yield* Console.log(
+        `[BrowserUsageFetch] Waiting for selector: ${waitForSelector}`
+      )
 
       const selectorReady = yield* Effect.tryPromise({
         try: async () => {
@@ -166,7 +183,9 @@ export const fetchUsagePageWithBrowser = (
       })
 
       if (selectorReady) {
-        yield* Console.log(`[BrowserUsageFetch] Selector found, waiting for data to load...`)
+        yield* Console.log(
+          `[BrowserUsageFetch] Selector found, waiting for data to load...`
+        )
 
         // Additional wait for data to load (not just the skeleton)
         // Check if we're still seeing loading skeletons
@@ -191,14 +210,18 @@ export const fetchUsagePageWithBrowser = (
               `)
 
               if (!hasSkeletons) {
-                console.log('[BrowserUsageFetch] Loading skeletons disappeared, data should be loaded')
+                console.log(
+                  '[BrowserUsageFetch] Loading skeletons disappeared, data should be loaded'
+                )
                 return true
               }
 
               await new Promise(resolve => setTimeout(resolve, 500))
             }
 
-            console.log('[BrowserUsageFetch] Data wait timeout, proceeding anyway')
+            console.log(
+              '[BrowserUsageFetch] Data wait timeout, proceeding anyway'
+            )
             return false
           },
           catch: () => false,
@@ -207,7 +230,9 @@ export const fetchUsagePageWithBrowser = (
         if (dataLoaded) {
           yield* Console.log(`[BrowserUsageFetch] Data loaded successfully`)
         } else {
-          yield* Console.log(`[BrowserUsageFetch] WARNING: Data may not be fully loaded`)
+          yield* Console.log(
+            `[BrowserUsageFetch] WARNING: Data may not be fully loaded`
+          )
         }
 
         // Additional small delay to ensure rendering is complete
@@ -219,7 +244,9 @@ export const fetchUsagePageWithBrowser = (
       }
     } else {
       // Just wait a fixed amount of time for content to load
-      yield* Console.log(`[BrowserUsageFetch] Waiting ${maxWaitMs}ms for content to render...`)
+      yield* Console.log(
+        `[BrowserUsageFetch] Waiting ${maxWaitMs}ms for content to render...`
+      )
       yield* Effect.sleep(Duration.millis(maxWaitMs))
     }
 
@@ -235,7 +262,9 @@ export const fetchUsagePageWithBrowser = (
         ),
     })
 
-    yield* Console.log(`[BrowserUsageFetch] Extracted HTML (${html.length} characters)`)
+    yield* Console.log(
+      `[BrowserUsageFetch] Extracted HTML (${html.length} characters)`
+    )
 
     // Cleanup event listeners
     yield* Effect.sync(() => {

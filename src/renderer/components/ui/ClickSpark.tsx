@@ -11,7 +11,10 @@ interface ClickSparkProps {
   enabled?: boolean
 }
 
-export function ClickSpark({ color = '#00ffff', enabled = true }: ClickSparkProps) {
+export function ClickSpark({
+  color = '#00ffff',
+  enabled = true,
+}: ClickSparkProps) {
   const [sparks, setSparks] = useState<SparkPosition[]>([])
   const sparkIdRef = useRef(0)
 
@@ -55,12 +58,7 @@ export function ClickSpark({ color = '#00ffff', enabled = true }: ClickSparkProp
   return (
     <>
       {sparks.map(spark => (
-        <Spark
-          key={spark.id}
-          x={spark.x}
-          y={spark.y}
-          color={color}
-        />
+        <Spark color={color} key={spark.id} x={spark.x} y={spark.y} />
       ))}
     </>
   )
@@ -118,27 +116,27 @@ function Spark({ x, y, color }: SparkProps) {
       }}
     >
       <svg
-        ref={svgRef}
-        width="30"
-        height="30"
-        viewBox="0 0 100 100"
         fill="none"
+        height="30"
+        ref={svgRef}
+        stroke={color}
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="4"
-        stroke={color}
         style={{ transform: 'rotate(-20deg)' }}
+        viewBox="0 0 100 100"
+        width="30"
       >
         {Array.from({ length: 8 }, (_, i) => (
           <line
             key={i}
-            x1="50"
-            y1="30"
-            x2="50"
-            y2="4"
             strokeDasharray="30"
             strokeDashoffset="30"
             style={{ transformOrigin: 'center' }}
+            x1="50"
+            x2="50"
+            y1="30"
+            y2="4"
           />
         ))}
       </svg>

@@ -17,7 +17,9 @@ export function App() {
           <div className="flex items-center justify-center">
             <SleepLight color="#60a5fa" speed={8} />
           </div>
-          <h1 className="text-3xl font-bold text-white text-center">Geppetto</h1>
+          <h1 className="text-3xl font-bold text-white text-center">
+            Geppetto
+          </h1>
           <p className="text-gray-400 text-center">
             Manage your repositories with Effect and Electron
           </p>

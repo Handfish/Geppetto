@@ -16,22 +16,23 @@ import { CookieUsagePageAdapter } from '../browser/cookie-usage-page-adapter'
 import { usageBarsToMetrics } from '../usage-page/usage-metric-utils'
 import { ElectronSessionService } from '../browser/electron-session-service'
 
-const PROVIDER: 'openai' = 'openai'
+const PROVIDER: 'cursor' = 'cursor'
 
 /**
- * OpenAI authentication configuration.
- * User signs in via browser, we detect when they reach the usage/settings page.
+ * Cursor authentication configuration.
+ * User signs in via browser, we detect when they reach the usage dashboard.
  */
-const OPENAI_AUTH_CONFIG: Omit<BrowserAuthConfig, 'provider'> = {
-  loginUrl: 'https://chatgpt.com/auth/login',
+const CURSOR_AUTH_CONFIG: Omit<BrowserAuthConfig, 'provider'> = {
+  loginUrl: 'https://cursor.com/login',
   successUrlPatterns: [
-    /^https:\/\/chatgpt\.com\/$/,
-    /^https:\/\/chatgpt\.com\/#settings/,
-    /^https:\/\/chatgpt\.com\/settings/,
+    /^https:\/\/cursor\.com\/$/,
+    /^https:\/\/cursor\.com\/dashboard/,
+    /^https:\/\/cursor\.com\/dashboard\?tab=usage/,
+    /^https:\/\/cursor\.com\/settings/,
   ],
   width: 800,
   height: 900,
-  title: 'Sign in to OpenAI',
+  title: 'Sign in to Cursor',
 }
 
 const mapUsageError =
@@ -49,7 +50,7 @@ const mapUsageError =
   }
 
 /**
- * Extract stable user identifier from OpenAI session.
+ * Extract stable user identifier from Cursor session.
  * Tries to get user email or account ID from the authenticated session.
  */
 const extractUserIdentifier = (
@@ -62,13 +63,13 @@ const extractUserIdentifier = (
       identifier
     )
 
-    // Try to fetch user account data from OpenAI API
+    // Try to fetch user account data from Cursor API
     const userIdentifier = yield* Effect.tryPromise({
       try: async () => {
         try {
-          // Fetch account data from OpenAI API
+          // Fetch account data from Cursor API
           const response = await accountSession.fetch(
-            'https://chatgpt.com/backend-api/accounts/check',
+            'https://cursor.com/api/user',
             {
               headers: {
                 'User-Agent':
@@ -80,17 +81,20 @@ const extractUserIdentifier = (
 
           if (response.ok) {
             const data = await response.json()
-            // Extract email or account_id from response
-            if (data.account?.account_user_email) {
-              return data.account.account_user_email
+            // Extract email or user_id from response
+            if (data.email) {
+              return data.email
             }
-            if (data.account?.account_id) {
-              return data.account.account_id
+            if (data.user_id) {
+              return data.user_id
+            }
+            if (data.id) {
+              return data.id
             }
           }
         } catch (apiError) {
           // If API call fails, log but don't fail completely
-          console.log('[OpenAI] Could not fetch account data:', apiError)
+          console.log('[Cursor] Could not fetch account data:', apiError)
         }
 
         // Fallback to timestamp-based identifier
@@ -102,15 +106,15 @@ const extractUserIdentifier = (
         ),
     })
 
-    yield* Console.log(`[OpenAI] Extracted user identifier: ${userIdentifier}`)
+    yield* Console.log(`[Cursor] Extracted user identifier: ${userIdentifier}`)
     return userIdentifier
   })
 
 /**
- * OpenAI provider adapter using browser-based cookie authentication.
+ * Cursor provider adapter using browser-based cookie authentication.
  */
-export class OpenAiBrowserProviderAdapter extends Effect.Service<OpenAiBrowserProviderAdapter>()(
-  'OpenAiBrowserProviderAdapter',
+export class CursorBrowserProviderAdapter extends Effect.Service<CursorBrowserProviderAdapter>()(
+  'CursorBrowserProviderAdapter',
   {
     dependencies: [
       BrowserAuthService.Default,
@@ -131,20 +135,20 @@ export class OpenAiBrowserProviderAdapter extends Effect.Service<OpenAiBrowserPr
             // Generate temporary identifier for auth session
             const tempIdentifier = `user-${Date.now()}`
             yield* Console.log(
-              `[OpenAI] Starting sign-in flow with temp identifier: ${tempIdentifier}`
+              `[Cursor] Starting sign-in flow with temp identifier: ${tempIdentifier}`
             )
 
             // Open browser window for authentication
             const authResult = yield* browserAuth.authenticate(
               {
                 provider: PROVIDER,
-                ...OPENAI_AUTH_CONFIG,
+                ...CURSOR_AUTH_CONFIG,
               },
               tempIdentifier
             )
 
             yield* Console.log(
-              `[OpenAI] Auth window closed, checking cookies for temp session...`
+              `[Cursor] Auth window closed, checking cookies for temp session...`
             )
 
             // Verify cookies exist in temp session
@@ -155,12 +159,12 @@ export class OpenAiBrowserProviderAdapter extends Effect.Service<OpenAiBrowserPr
             const tempHasCookies =
               yield* sessionService.hasAnyCookies(tempSession)
             yield* Console.log(
-              `[OpenAI] Temp session has cookies: ${tempHasCookies}`
+              `[Cursor] Temp session has cookies: ${tempHasCookies}`
             )
 
             if (!tempHasCookies) {
               yield* Console.error(
-                `[OpenAI] CRITICAL: No cookies found in temp session after auth!`
+                `[Cursor] CRITICAL: No cookies found in temp session after auth!`
               )
             }
 
@@ -172,7 +176,7 @@ export class OpenAiBrowserProviderAdapter extends Effect.Service<OpenAiBrowserPr
               // If extraction fails, use the temp identifier
               Effect.catchAll(error =>
                 Console.log(
-                  `[OpenAI] Failed to extract stable identifier, using temp: ${error}`
+                  `[Cursor] Failed to extract stable identifier, using temp: ${error}`
                 ).pipe(
                   Effect.flatMap(() => Effect.succeed(authResult.identifier))
                 )
@@ -180,13 +184,13 @@ export class OpenAiBrowserProviderAdapter extends Effect.Service<OpenAiBrowserPr
             )
 
             yield* Console.log(
-              `[OpenAI] Using stable identifier for account: ${stableIdentifier}`
+              `[Cursor] Using stable identifier for account: ${stableIdentifier}`
             )
 
             // If stable identifier is different from temp, migrate cookies
             if (stableIdentifier !== authResult.identifier) {
               yield* Console.log(
-                `[OpenAI] Migrating cookies from temp session ${authResult.identifier} to stable session ${stableIdentifier}`
+                `[Cursor] Migrating cookies from temp session ${authResult.identifier} to stable session ${stableIdentifier}`
               )
 
               const stableSession = yield* sessionService.getSession(
@@ -198,7 +202,7 @@ export class OpenAiBrowserProviderAdapter extends Effect.Service<OpenAiBrowserPr
               const stableHasCookiesBefore =
                 yield* sessionService.hasAnyCookies(stableSession)
               yield* Console.log(
-                `[OpenAI] Stable session has cookies before migration: ${stableHasCookiesBefore}`
+                `[Cursor] Stable session has cookies before migration: ${stableHasCookiesBefore}`
               )
 
               // Copy cookies from temp session to stable session
@@ -207,13 +211,13 @@ export class OpenAiBrowserProviderAdapter extends Effect.Service<OpenAiBrowserPr
                 .pipe(
                   Effect.tap(() =>
                     Console.log(
-                      `[OpenAI] Successfully copied cookies to stable session`
+                      `[Cursor] Successfully copied cookies to stable session`
                     )
                   ),
                   Effect.catchAll(error => {
                     // Log error but don't fail - cookies might already be there
                     return Console.error(
-                      `[OpenAI] Failed to copy cookies: ${error}`
+                      `[Cursor] Failed to copy cookies: ${error}`
                     )
                   })
                 )
@@ -222,29 +226,29 @@ export class OpenAiBrowserProviderAdapter extends Effect.Service<OpenAiBrowserPr
               const stableHasCookiesAfter =
                 yield* sessionService.hasAnyCookies(stableSession)
               yield* Console.log(
-                `[OpenAI] Stable session has cookies after migration: ${stableHasCookiesAfter}`
+                `[Cursor] Stable session has cookies after migration: ${stableHasCookiesAfter}`
               )
 
               if (!stableHasCookiesAfter) {
                 yield* Console.error(
-                  `[OpenAI] CRITICAL: Cookie migration failed! Stable session has no cookies`
+                  `[Cursor] CRITICAL: Cookie migration failed! Stable session has no cookies`
                 )
               }
 
               // Clean up temp session
               yield* sessionService.clearSessionData(tempSession).pipe(
                 Effect.tap(() =>
-                  Console.log(`[OpenAI] Cleaned up temp session`)
+                  Console.log(`[Cursor] Cleaned up temp session`)
                 ),
                 Effect.catchAll(error => {
                   return Console.error(
-                    `[OpenAI] Failed to clear temp session: ${error}`
+                    `[Cursor] Failed to clear temp session: ${error}`
                   )
                 })
               )
             } else {
               yield* Console.log(
-                `[OpenAI] Using temp session as stable session (no migration needed)`
+                `[Cursor] Using temp session as stable session (no migration needed)`
               )
             }
 
@@ -252,7 +256,7 @@ export class OpenAiBrowserProviderAdapter extends Effect.Service<OpenAiBrowserPr
               PROVIDER,
               stableIdentifier
             )
-            yield* Console.log(`[OpenAI] Created account ID: ${accountId}`)
+            yield* Console.log(`[Cursor] Created account ID: ${accountId}`)
 
             // Verify final session has cookies
             const finalSession = yield* sessionService.getSession(
@@ -262,19 +266,19 @@ export class OpenAiBrowserProviderAdapter extends Effect.Service<OpenAiBrowserPr
             const finalHasCookies =
               yield* sessionService.hasAnyCookies(finalSession)
             yield* Console.log(
-              `[OpenAI] Final session (${stableIdentifier}) has cookies: ${finalHasCookies}`
+              `[Cursor] Final session (${stableIdentifier}) has cookies: ${finalHasCookies}`
             )
 
             if (!finalHasCookies) {
               yield* Console.error(
-                `[OpenAI] CRITICAL: Final session has no cookies before returning!`
+                `[Cursor] CRITICAL: Final session has no cookies before returning!`
               )
             }
 
             return new AiProviderSignInResult({
               provider: PROVIDER,
               accountId,
-              label: 'OpenAI Account',
+              label: 'Cursor Account',
               metadata: {
                 accountIdentifier: stableIdentifier,
               },
@@ -297,17 +301,17 @@ export class OpenAiBrowserProviderAdapter extends Effect.Service<OpenAiBrowserPr
         checkAuth: accountId =>
           Effect.gen(function* () {
             yield* Console.log(
-              `[OpenAI] Checking auth for account: ${accountId}`
+              `[Cursor] Checking auth for account: ${accountId}`
             )
             const { identifier } = AiAccount.parseAccountId(accountId)
-            yield* Console.log(`[OpenAI] Parsed identifier: ${identifier}`)
+            yield* Console.log(`[Cursor] Parsed identifier: ${identifier}`)
 
             const authenticated = yield* browserAuth.isAuthenticated(
               PROVIDER,
               identifier
             )
             yield* Console.log(
-              `[OpenAI] Account ${accountId} authenticated: ${authenticated}`
+              `[Cursor] Account ${accountId} authenticated: ${authenticated}`
             )
 
             return new AiProviderAuthStatus({

@@ -3,8 +3,8 @@ import Store from 'electron-store'
 import {
   AiAccount,
   AiAccountContext,
-  AiAccountId,
-  AiProviderType,
+  type AiAccountId,
+  type AiProviderType,
 } from '../../shared/schemas/ai/provider'
 import { TierService } from '../tier/tier-service'
 
@@ -16,7 +16,9 @@ export class AiAccountContextService extends Effect.Service<AiAccountContextServ
     dependencies: [TierService.Default],
     effect: Effect.gen(function* () {
       const tierService = yield* TierService
-      const defaultContext = S.encodeSync(AiAccountContext)(AiAccountContext.empty())
+      const defaultContext = S.encodeSync(AiAccountContext)(
+        AiAccountContext.empty()
+      )
 
       const store = new Store<{ aiAccountContext: StoredAiAccountContext }>({
         name: 'ai-account-context',
@@ -28,12 +30,18 @@ export class AiAccountContextService extends Effect.Service<AiAccountContextServ
       const loadContext = (): AiAccountContext => {
         const stored = store.get('aiAccountContext')
         const context = S.decodeUnknownSync(AiAccountContext)(stored)
-        console.log(`[AiAccountContext] Loaded context with ${context.accounts.length} accounts:`, context.accounts.map(a => a.id))
+        console.log(
+          `[AiAccountContext] Loaded context with ${context.accounts.length} accounts:`,
+          context.accounts.map(a => a.id)
+        )
         return context
       }
 
       const saveContext = (context: AiAccountContext): void => {
-        console.log(`[AiAccountContext] Saving context with ${context.accounts.length} accounts:`, context.accounts.map(a => a.id))
+        console.log(
+          `[AiAccountContext] Saving context with ${context.accounts.length} accounts:`,
+          context.accounts.map(a => a.id)
+        )
         const encoded = S.encodeSync(AiAccountContext)(context)
         store.set('aiAccountContext', encoded)
         console.log(`[AiAccountContext] Context saved successfully`)
@@ -49,19 +57,27 @@ export class AiAccountContextService extends Effect.Service<AiAccountContextServ
           apiKeyPreview?: string
         }) =>
           Effect.gen(function* () {
-            console.log(`[AiAccountContext] Adding account: ${params.provider}:${params.identifier}`)
+            console.log(
+              `[AiAccountContext] Adding account: ${params.provider}:${params.identifier}`
+            )
             const context = loadContext()
-            const accountId = AiAccount.makeAccountId(params.provider, params.identifier)
+            const accountId = AiAccount.makeAccountId(
+              params.provider,
+              params.identifier
+            )
             const now = new Date()
 
             if (context.hasAccount(accountId)) {
-              console.log(`[AiAccountContext] Account already exists, updating: ${accountId}`)
-              const updatedAccounts = context.accounts.map((account) =>
+              console.log(
+                `[AiAccountContext] Account already exists, updating: ${accountId}`
+              )
+              const updatedAccounts = context.accounts.map(account =>
                 account.id === accountId
                   ? new AiAccount({
                       ...account,
                       label: params.label,
-                      apiKeyPreview: params.apiKeyPreview ?? account.apiKeyPreview,
+                      apiKeyPreview:
+                        params.apiKeyPreview ?? account.apiKeyPreview,
                       lastUsedAt: now,
                     })
                   : account
@@ -76,11 +92,15 @@ export class AiAccountContextService extends Effect.Service<AiAccountContextServ
 
               saveContext(updatedContext)
               const savedAccount = updatedContext.getAccount(accountId)!
-              console.log(`[AiAccountContext] Account updated successfully: ${savedAccount.id}`)
+              console.log(
+                `[AiAccountContext] Account updated successfully: ${savedAccount.id}`
+              )
               return savedAccount
             }
 
-            console.log(`[AiAccountContext] New account, checking tier limits...`)
+            console.log(
+              `[AiAccountContext] New account, checking tier limits...`
+            )
             yield* tierService.checkCanAddAiAccount(params.provider, context)
 
             const account = new AiAccount({
@@ -92,7 +112,9 @@ export class AiAccountContextService extends Effect.Service<AiAccountContextServ
               lastUsedAt: now,
             })
 
-            console.log(`[AiAccountContext] Creating new account: ${account.id}`)
+            console.log(
+              `[AiAccountContext] Creating new account: ${account.id}`
+            )
             const updatedContext = new AiAccountContext({
               ...context,
               accounts: [...context.accounts, account],
@@ -101,17 +123,21 @@ export class AiAccountContextService extends Effect.Service<AiAccountContextServ
             })
 
             saveContext(updatedContext)
-            console.log(`[AiAccountContext] New account created successfully: ${account.id}`)
+            console.log(
+              `[AiAccountContext] New account created successfully: ${account.id}`
+            )
             return account
           }),
 
         removeAccount: (accountId: AiAccountId) =>
           Effect.sync(() => {
             const context = loadContext()
-            const updatedAccounts = context.accounts.filter((account) => account.id !== accountId)
+            const updatedAccounts = context.accounts.filter(
+              account => account.id !== accountId
+            )
             const activeAccountId =
               context.activeAccountId === accountId
-                ? updatedAccounts[0]?.id ?? null
+                ? (updatedAccounts[0]?.id ?? null)
                 : context.activeAccountId
 
             const updatedContext = new AiAccountContext({
@@ -153,7 +179,7 @@ export class AiAccountContextService extends Effect.Service<AiAccountContextServ
         touchAccount: (accountId: AiAccountId) =>
           Effect.sync(() => {
             const context = loadContext()
-            const updatedAccounts = context.accounts.map((account) =>
+            const updatedAccounts = context.accounts.map(account =>
               account.id === accountId
                 ? new AiAccount({
                     ...account,

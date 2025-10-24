@@ -7,9 +7,8 @@ import { mapDomainErrorToIpcError } from './error-mapper'
 type ContractInput<K extends keyof typeof ProviderIpcContracts> = S.Schema.Type<
   (typeof ProviderIpcContracts)[K]['input']
 >
-type ContractOutput<K extends keyof typeof ProviderIpcContracts> = S.Schema.Type<
-  (typeof ProviderIpcContracts)[K]['output']
->
+type ContractOutput<K extends keyof typeof ProviderIpcContracts> =
+  S.Schema.Type<(typeof ProviderIpcContracts)[K]['output']>
 
 export const setupProviderIpcHandlers = Effect.gen(function* () {
   const providerService = yield* VcsProviderService
@@ -21,18 +20,22 @@ export const setupProviderIpcHandlers = Effect.gen(function* () {
     const contract = ProviderIpcContracts[key]
     type InputSchema = S.Schema<
       ContractInput<K>,
-      S.Schema.Encoded<typeof ProviderIpcContracts[K]['input']>
+      S.Schema.Encoded<(typeof ProviderIpcContracts)[K]['input']>
     >
     type OutputSchema = S.Schema<
       ContractOutput<K>,
-      S.Schema.Encoded<typeof ProviderIpcContracts[K]['output']>
+      S.Schema.Encoded<(typeof ProviderIpcContracts)[K]['output']>
     >
 
     ipcMain.handle(contract.channel, async (_event, input: unknown) => {
       const program = Effect.gen(function* () {
-        const validatedInput = yield* S.decodeUnknown(contract.input as unknown as InputSchema)(input)
+        const validatedInput = yield* S.decodeUnknown(
+          contract.input as unknown as InputSchema
+        )(input)
         const result = yield* handler(validatedInput)
-        const encoded = yield* S.encode(contract.output as unknown as OutputSchema)(result)
+        const encoded = yield* S.encode(
+          contract.output as unknown as OutputSchema
+        )(result)
         return encoded
       }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
 
@@ -40,13 +43,13 @@ export const setupProviderIpcHandlers = Effect.gen(function* () {
     })
   }
 
-  setupHandler('signIn', (input) => providerService.signIn(input.provider))
-  setupHandler('signOut', (input) => providerService.signOut(input.accountId))
-  setupHandler('checkAuth', (input) => providerService.checkAuth(input.accountId))
-  setupHandler('getAccountRepositories', (input) =>
+  setupHandler('signIn', input => providerService.signIn(input.provider))
+  setupHandler('signOut', input => providerService.signOut(input.accountId))
+  setupHandler('checkAuth', input => providerService.checkAuth(input.accountId))
+  setupHandler('getAccountRepositories', input =>
     providerService.getRepositories(input.accountId)
   )
-  setupHandler('getProviderRepositories', (input) =>
+  setupHandler('getProviderRepositories', input =>
     providerService.getRepositoriesByProvider(input.provider)
   )
 })

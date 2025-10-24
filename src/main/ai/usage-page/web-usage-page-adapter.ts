@@ -34,6 +34,14 @@ const PROVIDER_CONFIG: ReadonlyArray<ProviderConfig> = [
     userAgent:
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
   },
+  {
+    provider: 'cursor',
+    url: 'https://cursor.com/dashboard?tab=usage',
+    parse: parseCursorUsagePage,
+    authRedirectIndicators: [/login/i, /signin/i, /auth/i],
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  },
 ]
 
 const providerConfigMap = new Map<AiProviderType, ProviderConfig>(
@@ -71,7 +79,9 @@ function parseClaudeUsagePage(html: string): UsageBarSnapshot[] {
     const headerBlock = match[1] ?? ''
     const percentValue = clampPercent(Number.parseFloat(match[2] ?? '0'))
     const mode =
-      match[3]?.toLowerCase() === 'remaining' ? ('remaining' as const) : ('used' as const)
+      match[3]?.toLowerCase() === 'remaining'
+        ? ('remaining' as const)
+        : ('used' as const)
 
     const titleMatch =
       headerBlock.match(
@@ -108,7 +118,9 @@ function parseClaudeUsagePage(html: string): UsageBarSnapshot[] {
   for (const match of html.matchAll(percentRegex)) {
     const percentValue = clampPercent(Number.parseFloat(match[1] ?? '0'))
     const mode =
-      match[2]?.toLowerCase() === 'remaining' ? ('remaining' as const) : ('used' as const)
+      match[2]?.toLowerCase() === 'remaining'
+        ? ('remaining' as const)
+        : ('used' as const)
     const index = match.index ?? 0
     const contextStart = Math.max(0, index - 600)
     const contextEnd = Math.min(html.length, index + 400)
@@ -191,6 +203,107 @@ function parseOpenAiUsagePage(html: string): UsageBarSnapshot[] {
       percent: percentValue,
       mode,
       detail,
+    })
+  }
+
+  return dedupeBars(bars)
+}
+
+function parseCursorUsagePage(html: string): UsageBarSnapshot[] {
+  const bars: UsageBarSnapshot[] = []
+
+  // Strategy 1: Look for usage cards with percentage indicators
+  // Cursor likely uses a similar card-based layout to other providers
+  const cardRegex = /<div[^>]*class="[^"]*usage[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
+
+  for (const match of html.matchAll(cardRegex)) {
+    const cardContent = match[1] ?? ''
+
+    // Look for percentage patterns
+    const percentMatch = cardContent.match(/(\d+(?:\.\d+)?)%/)
+    const titleMatch = cardContent.match(
+      /<[^>]*class="[^"]*(?:title|heading|name)[^"]*"[^>]*>([^<]+)<\/[^>]*>/i
+    )
+    const subtitleMatch = cardContent.match(
+      /<[^>]*class="[^"]*(?:subtitle|description)[^"]*"[^>]*>([^<]+)<\/[^>]*>/i
+    )
+
+    if (percentMatch && titleMatch) {
+      const title = sanitizeText(titleMatch[1])
+      const subtitle = subtitleMatch
+        ? sanitizeText(subtitleMatch[1])
+        : undefined
+      const percentValue = clampPercent(Number.parseFloat(percentMatch[1]))
+
+      // Determine if it's used or remaining based on context
+      const mode: 'used' | 'remaining' = cardContent
+        .toLowerCase()
+        .includes('remaining')
+        ? 'remaining'
+        : 'used'
+
+      bars.push({
+        title,
+        subtitle,
+        percent: percentValue,
+        mode,
+        detail: subtitle,
+      })
+    }
+  }
+
+  if (bars.length > 0) {
+    return dedupeBars(bars)
+  }
+
+  // Strategy 2: Look for any percentage patterns with context
+  const percentRegex =
+    /(\d+(?:\.\d+)?)%\s*(?:<[^>]*>)?(?:(?:of|used|remaining)[^<]*)/gi
+  const percentMatches = Array.from(html.matchAll(percentRegex))
+
+  for (const match of percentMatches) {
+    const percentText = match[1]
+    const context = match[0].toLowerCase()
+
+    if (!percentText) continue
+
+    // Try to find a title nearby (look backwards in HTML)
+    const matchIndex = match.index ?? 0
+    const before = html.substring(Math.max(0, matchIndex - 500), matchIndex)
+
+    // Look for common title patterns
+    const titlePatterns = [
+      /<[^>]*class="[^"]*(?:title|heading|name|label)[^"]*"[^>]*>([^<]+)<\/[^>]*>/i,
+      /<h\d[^>]*>([^<]+)<\/h\d>/i,
+      /<span[^>]*class="[^"]*(?:font-medium|font-semibold)[^"]*"[^>]*>([^<]+)<\/span>/i,
+    ]
+
+    let title = ''
+    for (const pattern of titlePatterns) {
+      const titleMatch = before.match(pattern)
+      if (titleMatch?.[1]) {
+        title = sanitizeText(titleMatch[1])
+        break
+      }
+    }
+
+    if (!title) {
+      // Fallback: extract any text that looks like a title
+      const fallbackTitle = before.match(
+        /(?:Cursor|AI|Usage|Requests?|Tokens?|Messages?)/i
+      )
+      title = fallbackTitle ? sanitizeText(fallbackTitle[0]) : 'Usage'
+    }
+
+    const percentValue = clampPercent(Number.parseFloat(percentText))
+    const mode: 'used' | 'remaining' = context.includes('remaining')
+      ? 'remaining'
+      : 'used'
+
+    bars.push({
+      title,
+      percent: percentValue,
+      mode,
     })
   }
 

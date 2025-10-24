@@ -4,7 +4,7 @@ import { Schema as S } from 'effect'
  * Provider types supported for AI integrations.
  * Kept isolated from VCS providers to avoid accidental mixing.
  */
-export const AiProviderType = S.Literal('openai', 'claude')
+export const AiProviderType = S.Literal('openai', 'claude', 'cursor')
 export type AiProviderType = S.Schema.Type<typeof AiProviderType>
 
 /**
@@ -13,7 +13,7 @@ export type AiProviderType = S.Schema.Type<typeof AiProviderType>
  */
 export const AiAccountId = S.String.pipe(
   S.brand('AiAccountId'),
-  S.pattern(/^(openai|claude):[A-Za-z0-9._-]+$/)
+  S.pattern(/^(openai|claude|cursor):[A-Za-z0-9._-]+$/)
 )
 export type AiAccountId = S.Schema.Type<typeof AiAccountId>
 
@@ -31,12 +31,21 @@ export class AiAccount extends S.Class<AiAccount>('AiAccount')({
   /**
    * Helper to construct identifiers consistently.
    */
-  static makeAccountId(provider: AiProviderType, identifier: string): AiAccountId {
+  static makeAccountId(
+    provider: AiProviderType,
+    identifier: string
+  ): AiAccountId {
     return `${provider}:${identifier}` as AiAccountId
   }
 
-  static parseAccountId(accountId: AiAccountId): { provider: AiProviderType; identifier: string } {
-    const [provider, identifier] = accountId.split(':') as [AiProviderType, string]
+  static parseAccountId(accountId: AiAccountId): {
+    provider: AiProviderType
+    identifier: string
+  } {
+    const [provider, identifier] = accountId.split(':') as [
+      AiProviderType,
+      string,
+    ]
     return { provider, identifier }
   }
 }
@@ -44,7 +53,9 @@ export class AiAccount extends S.Class<AiAccount>('AiAccount')({
 /**
  * Aggregate root storing all AI accounts.
  */
-export class AiAccountContext extends S.Class<AiAccountContext>('AiAccountContext')({
+export class AiAccountContext extends S.Class<AiAccountContext>(
+  'AiAccountContext'
+)({
   accounts: S.Array(AiAccount),
   activeAccountId: S.NullOr(AiAccountId),
   lastModified: S.Date,
@@ -53,19 +64,21 @@ export class AiAccountContext extends S.Class<AiAccountContext>('AiAccountContex
     if (!this.activeAccountId) {
       return null
     }
-    return this.accounts.find((account) => account.id === this.activeAccountId) ?? null
+    return (
+      this.accounts.find(account => account.id === this.activeAccountId) ?? null
+    )
   }
 
   getAccountsByProvider(provider: AiProviderType): ReadonlyArray<AiAccount> {
-    return this.accounts.filter((account) => account.provider === provider)
+    return this.accounts.filter(account => account.provider === provider)
   }
 
   getAccount(accountId: AiAccountId): AiAccount | null {
-    return this.accounts.find((account) => account.id === accountId) ?? null
+    return this.accounts.find(account => account.id === accountId) ?? null
   }
 
   hasAccount(accountId: AiAccountId): boolean {
-    return this.accounts.some((account) => account.id === accountId)
+    return this.accounts.some(account => account.id === accountId)
   }
 
   countAccountsByProvider(provider: AiProviderType): number {
@@ -124,7 +137,9 @@ export class AiUsageMetric extends S.Class<AiUsageMetric>('AiUsageMetric')({
 /**
  * Usage snapshot aggregated for a provider account.
  */
-export class AiUsageSnapshot extends S.Class<AiUsageSnapshot>('AiUsageSnapshot')({
+export class AiUsageSnapshot extends S.Class<AiUsageSnapshot>(
+  'AiUsageSnapshot'
+)({
   provider: AiProviderType,
   accountId: AiAccountId,
   capturedAt: S.Date,

@@ -23,7 +23,9 @@ const appIdSuffix = process.env.APP_ID_SUFFIX || appTier
 const appName = process.env.APP_NAME || displayName
 const appId = `com.${authorInKebabCase}.${name}.${appIdSuffix}`.toLowerCase()
 
-const artifactName = [`${name}-${appTier}-v${version}`, '-${os}.${ext}'].join('')
+const artifactName = [`${name}-${appTier}-v${version}`, '-${os}.${ext}'].join(
+  ''
+)
 
 export default {
   appId,

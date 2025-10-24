@@ -1,5 +1,8 @@
 import { Data } from 'effect'
-import type { AiProviderType, AiAccountId } from '../../shared/schemas/ai/provider'
+import type {
+  AiProviderType,
+  AiAccountId,
+} from '../../shared/schemas/ai/provider'
 
 export class AiProviderNotRegisteredError extends Data.TaggedError(
   'AiProviderNotRegisteredError'
@@ -21,13 +24,17 @@ export class AiProviderFeatureUnsupportedError extends Data.TaggedError(
   feature: string
 }> {}
 
-export class AiProviderUsageError extends Data.TaggedError('AiProviderUsageError')<{
+export class AiProviderUsageError extends Data.TaggedError(
+  'AiProviderUsageError'
+)<{
   provider: AiProviderType
   accountId: AiAccountId
   message: string
 }> {}
 
-export class AiAccountNotFoundError extends Data.TaggedError('AiAccountNotFoundError')<{
+export class AiAccountNotFoundError extends Data.TaggedError(
+  'AiAccountNotFoundError'
+)<{
   accountId: AiAccountId
   provider: AiProviderType
 }> {}

@@ -36,23 +36,31 @@ export const setupAccountIpcHandlers = Effect.gen(function* () {
     // Type assertions needed because TypeScript can't track the relationship between
     // the key and the contract schemas in the union type. Runtime safety is guaranteed
     // by the schema validation. We preserve both the decoded type and the encoded type.
-    type InputSchema = S.Schema<ContractInput<K>, S.Schema.Encoded<typeof AccountIpcContracts[K]['input']>>
-    type OutputSchema = S.Schema<ContractOutput<K>, S.Schema.Encoded<typeof AccountIpcContracts[K]['output']>>
+    type InputSchema = S.Schema<
+      ContractInput<K>,
+      S.Schema.Encoded<(typeof AccountIpcContracts)[K]['input']>
+    >
+    type OutputSchema = S.Schema<
+      ContractOutput<K>,
+      S.Schema.Encoded<(typeof AccountIpcContracts)[K]['output']>
+    >
 
     ipcMain.handle(contract.channel, async (_event, input: unknown) => {
       const program = Effect.gen(function* () {
         // Decode input using the contract's input schema
         // Runtime: validates and transforms from encoded to decoded type
-        const validatedInput = yield* S.decodeUnknown(contract.input as unknown as InputSchema)(input)
+        const validatedInput = yield* S.decodeUnknown(
+          contract.input as unknown as InputSchema
+        )(input)
         // Execute handler with properly typed input (now properly inferred as ContractInput<K>)
         const result = yield* handler(validatedInput)
         // Encode output using the contract's output schema
         // Runtime: transforms from decoded type to encoded (serializable) type
-        const encoded = yield* S.encode(contract.output as unknown as OutputSchema)(result)
+        const encoded = yield* S.encode(
+          contract.output as unknown as OutputSchema
+        )(result)
         return encoded
-      }).pipe(
-        Effect.catchAll(mapDomainErrorToIpcError)
-      )
+      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
 
       const finalResult = await Effect.runPromise(program)
       return finalResult
@@ -62,9 +70,13 @@ export const setupAccountIpcHandlers = Effect.gen(function* () {
   // Register handlers
   setupHandler('getAccountContext', () => accountService.getContext())
 
-  setupHandler('switchAccount', (input) => accountService.switchAccount(input.accountId))
+  setupHandler('switchAccount', input =>
+    accountService.switchAccount(input.accountId)
+  )
 
-  setupHandler('removeAccount', (input) => accountService.removeAccount(input.accountId))
+  setupHandler('removeAccount', input =>
+    accountService.removeAccount(input.accountId)
+  )
 
   setupHandler('getActiveAccount', () => accountService.getActiveAccount())
 
@@ -75,7 +87,8 @@ export const setupAccountIpcHandlers = Effect.gen(function* () {
         tier: limits.tier,
         maxGitHubAccounts: tierService.getMaxAccountsForProvider('github'),
         maxGitLabAccounts: tierService.getMaxAccountsForProvider('gitlab'),
-        maxBitbucketAccounts: tierService.getMaxAccountsForProvider('bitbucket'),
+        maxBitbucketAccounts:
+          tierService.getMaxAccountsForProvider('bitbucket'),
         maxGiteaAccounts: tierService.getMaxAccountsForProvider('gitea'),
         maxOpenAiAccounts: tierService.getMaxAiAccountsForProvider('openai'),
         maxClaudeAccounts: tierService.getMaxAiAccountsForProvider('claude'),

@@ -1,6 +1,9 @@
 import React from 'react'
 import { Result } from '@effect-atom/atom-react'
-import { useProviderAuth, useProviderRepositories } from '../hooks/useProviderAtoms'
+import {
+  useProviderAuth,
+  useProviderRepositories,
+} from '../hooks/useProviderAtoms'
 
 export function RepositoryList() {
   const { accounts } = useProviderAuth('github')
@@ -8,37 +11,48 @@ export function RepositoryList() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold text-white">Your Connected Repositories</h2>
+      <h2 className="text-xl font-semibold text-white">
+        Your Connected Repositories
+      </h2>
 
       {Result.builder(repositoriesResult)
-        .onInitial(() => <div className="text-gray-400">Loading repositories...</div>)
+        .onInitial(() => (
+          <div className="text-gray-400">Loading repositories...</div>
+        ))
         .onErrorTag('AuthenticationError', () => (
           <div className="text-red-400">Please authenticate first</div>
         ))
-        .onErrorTag('NetworkError', (error) => (
+        .onErrorTag('NetworkError', error => (
           <div className="text-red-400">Network error: {error.message}</div>
         ))
-        .onErrorTag('ProviderOperationError', (error) => (
+        .onErrorTag('ProviderOperationError', error => (
           <div className="text-red-400">Provider error: {error.message}</div>
         ))
-        .onDefect(() => <div className="text-red-400">Unexpected error occurred</div>)
-        .onSuccess((groups) => {
+        .onDefect(() => (
+          <div className="text-red-400">Unexpected error occurred</div>
+        ))
+        .onSuccess(groups => {
           if (groups.length === 0) {
             return <div className="text-gray-400">No repositories found</div>
           }
 
           return (
             <div className="space-y-6">
-              {groups.map((group) => {
-                const account = accounts.find(acc => acc.id === group.accountId) ?? null
+              {groups.map(group => {
+                const account =
+                  accounts.find(acc => acc.id === group.accountId) ?? null
                 return (
-                  <div key={group.accountId} className="space-y-3">
+                  <div className="space-y-3" key={group.accountId}>
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="text-lg font-semibold text-white">
-                          {account?.displayName ?? account?.username ?? group.accountId}
+                          {account?.displayName ??
+                            account?.username ??
+                            group.accountId}
                         </h3>
-                        <p className="text-sm text-gray-400">{group.provider.toUpperCase()}</p>
+                        <p className="text-sm text-gray-400">
+                          {group.provider.toUpperCase()}
+                        </p>
                       </div>
                       <span className="text-sm text-gray-500">
                         {group.repositories.length} repositories
@@ -48,12 +62,14 @@ export function RepositoryList() {
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                       {group.repositories.map(repo => (
                         <div
-                          key={repo.repositoryId}
                           className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors"
+                          key={repo.repositoryId}
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <h4 className="font-medium text-white truncate">{repo.name}</h4>
+                              <h4 className="font-medium text-white truncate">
+                                {repo.name}
+                              </h4>
                               {repo.description && (
                                 <p className="text-sm text-gray-400 mt-1 line-clamp-2">
                                   {repo.description}
@@ -70,14 +86,16 @@ export function RepositoryList() {
                                   {repo.language}
                                 </span>
                               )}
-                              <span className="flex items-center">⭐ {repo.stars}</span>
+                              <span className="flex items-center">
+                                ⭐ {repo.stars}
+                              </span>
                             </div>
 
                             <a
-                              href={repo.webUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
                               className="text-blue-400 hover:text-blue-300"
+                              href={repo.webUrl}
+                              rel="noopener noreferrer"
+                              target="_blank"
                             >
                               View →
                             </a>

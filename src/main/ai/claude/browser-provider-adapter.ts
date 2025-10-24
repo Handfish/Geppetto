@@ -8,7 +8,10 @@ import {
 } from '../../../shared/schemas/ai/provider'
 import { AiProviderUsageError, AiProviderAuthenticationError } from '../errors'
 import { UsagePageError } from '../usage-page/ports'
-import { BrowserAuthService, type BrowserAuthConfig } from '../browser/browser-auth-service'
+import {
+  BrowserAuthService,
+  type BrowserAuthConfig,
+} from '../browser/browser-auth-service'
 import { CookieUsagePageAdapter } from '../browser/cookie-usage-page-adapter'
 import { usageBarsToMetrics } from '../usage-page/usage-metric-utils'
 
@@ -74,7 +77,10 @@ export class ClaudeBrowserProviderAdapter extends Effect.Service<ClaudeBrowserPr
               identifier
             )
 
-            const accountId = AiAccount.makeAccountId(PROVIDER, authResult.identifier)
+            const accountId = AiAccount.makeAccountId(
+              PROVIDER,
+              authResult.identifier
+            )
 
             return new AiProviderSignInResult({
               provider: PROVIDER,
@@ -89,7 +95,10 @@ export class ClaudeBrowserProviderAdapter extends Effect.Service<ClaudeBrowserPr
               error =>
                 new AiProviderAuthenticationError({
                   provider: PROVIDER,
-                  message: error instanceof Error ? error.message : 'Authentication failed',
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : 'Authentication failed',
                 })
             )
           ),
@@ -99,7 +108,10 @@ export class ClaudeBrowserProviderAdapter extends Effect.Service<ClaudeBrowserPr
         checkAuth: accountId =>
           Effect.gen(function* () {
             const { identifier } = AiAccount.parseAccountId(accountId)
-            const authenticated = yield* browserAuth.isAuthenticated(PROVIDER, identifier)
+            const authenticated = yield* browserAuth.isAuthenticated(
+              PROVIDER,
+              identifier
+            )
 
             return new AiProviderAuthStatus({
               provider: PROVIDER,
@@ -111,14 +123,20 @@ export class ClaudeBrowserProviderAdapter extends Effect.Service<ClaudeBrowserPr
               error =>
                 new AiProviderAuthenticationError({
                   provider: PROVIDER,
-                  message: error instanceof Error ? error.message : 'Failed to check authentication',
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : 'Failed to check authentication',
                 })
             )
           ),
 
         getUsage: accountId =>
           Effect.gen(function* () {
-            const snapshot = yield* usagePage.fetchUsagePage(PROVIDER, accountId)
+            const snapshot = yield* usagePage.fetchUsagePage(
+              PROVIDER,
+              accountId
+            )
 
             return new AiUsageSnapshot({
               provider: PROVIDER,

@@ -103,8 +103,9 @@ function ProviderUsageSection({
   enabled,
 }: ProviderUsageSectionProps) {
   const copy = PROVIDER_COPY[provider]
-  const [featureLockMessage, setFeatureLockMessage] =
-    React.useState<string | null>(null)
+  const [featureLockMessage, setFeatureLockMessage] = React.useState<
+    string | null
+  >(null)
   const signInFeatureToastShownRef = React.useRef(false)
   const usageFeatureToastShownRef = React.useRef(false)
 
@@ -253,9 +254,7 @@ function ProviderUsageSection({
     .onSuccess((snapshots: readonly AiUsageSnapshot[]) => {
       if (snapshots.length === 0) {
         return (
-          <div className="text-gray-400 text-sm">
-            {copy.noAccountsMessage}
-          </div>
+          <div className="text-gray-400 text-sm">{copy.noAccountsMessage}</div>
         )
       }
 
@@ -378,14 +377,18 @@ export function AiUsageCard() {
         <div>
           <h2 className="text-xl font-semibold text-white">AI CLI Usage</h2>
           <p className="text-gray-400 text-sm">
-            Track how pro-tier CLI tools consume your quotas across OpenAI and Claude.
+            Track how pro-tier CLI tools consume your quotas across OpenAI and
+            Claude.
           </p>
         </div>
 
-        <ProviderUsageSection provider="openai" enabled={aiProvidersEnabled} />
+        <ProviderUsageSection enabled={aiProvidersEnabled} provider="openai" />
 
         <div className="border-t border-gray-700 pt-6">
-          <ProviderUsageSection provider="claude" enabled={aiProvidersEnabled} />
+          <ProviderUsageSection
+            enabled={aiProvidersEnabled}
+            provider="claude"
+          />
         </div>
       </div>
     </div>

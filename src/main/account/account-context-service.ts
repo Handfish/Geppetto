@@ -12,7 +12,7 @@ import {
   Account,
   type AccountId,
   type ProviderType,
-  AccountStatus,
+  type AccountStatus,
 } from '../../shared/schemas/account-context'
 import { TierService } from '../tier/tier-service'
 
@@ -36,7 +36,9 @@ export class AccountContextService extends Effect.Service<AccountContextService>
        * Default empty context for initial store state
        * Encoded using Schema for consistency
        */
-      const defaultContext = S.encodeSync(AccountContext)(AccountContext.empty())
+      const defaultContext = S.encodeSync(AccountContext)(
+        AccountContext.empty()
+      )
 
       const store = new Store<{ accountContext: StoredAccountContext }>({
         name: 'account-context',
@@ -45,15 +47,15 @@ export class AccountContextService extends Effect.Service<AccountContextService>
         },
       })
 
-    /**
-     * Load AccountContext from store
-     * Uses Effect.Schema decode for automatic validation and type conversion
-     */
-    const loadContext = (): AccountContext => {
-      const stored = store.get('accountContext')
-      // S.decodeUnknownSync validates and decodes (ISO strings -> Dates, etc.)
-      return S.decodeUnknownSync(AccountContext)(stored)
-    }
+      /**
+       * Load AccountContext from store
+       * Uses Effect.Schema decode for automatic validation and type conversion
+       */
+      const loadContext = (): AccountContext => {
+        const stored = store.get('accountContext')
+        // S.decodeUnknownSync validates and decodes (ISO strings -> Dates, etc.)
+        return S.decodeUnknownSync(AccountContext)(stored)
+      }
 
       /**
        * Save AccountContext to store
@@ -80,7 +82,10 @@ export class AccountContextService extends Effect.Service<AccountContextService>
 
             // Create new account
             const now = new Date()
-            const accountId = Account.makeAccountId(params.provider, params.providerId)
+            const accountId = Account.makeAccountId(
+              params.provider,
+              params.providerId
+            )
             const account = new Account({
               id: accountId,
               provider: params.provider,
@@ -128,7 +133,9 @@ export class AccountContextService extends Effect.Service<AccountContextService>
         removeAccount: (accountId: AccountId) =>
           Effect.gen(function* () {
             const context = loadContext()
-            const updatedAccounts = context.accounts.filter((acc) => acc.id !== accountId)
+            const updatedAccounts = context.accounts.filter(
+              acc => acc.id !== accountId
+            )
 
             // If removing active account, switch to another or null
             let newActiveAccountId = context.activeAccountId
@@ -217,12 +224,12 @@ export class AccountContextService extends Effect.Service<AccountContextService>
             saveContext(updatedContext)
           }),
 
-          getAccountsByProvider: (provider: ProviderType) =>
-            Effect.sync(() => {
-              const context = loadContext()
-              return context.getAccountsByProvider(provider)
-            }),
+        getAccountsByProvider: (provider: ProviderType) =>
+          Effect.sync(() => {
+            const context = loadContext()
+            return context.getAccountsByProvider(provider)
+          }),
       }
-    })
+    }),
   }
 ) {}

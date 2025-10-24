@@ -7,4 +7,3 @@ export class GitHubUser extends S.Class<GitHubUser>('GitHubUser')({
   avatar_url: S.String,
   email: S.optional(S.NullOr(S.String)),
 }) {}
-

@@ -158,7 +158,9 @@ export class BrowserAuthService extends Effect.Service<BrowserAuthService>()(
             // Check cookies on page load
             try {
               const cookies = await window.webContents.session.cookies.get({})
-              console.log(`[BrowserAuth] Page loaded, session has ${cookies.length} cookies`)
+              console.log(
+                `[BrowserAuth] Page loaded, session has ${cookies.length} cookies`
+              )
             } catch (err) {
               console.error(`[BrowserAuth] Failed to check cookies:`, err)
             }

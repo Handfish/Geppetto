@@ -1,6 +1,8 @@
 import { Schema as S } from 'effect'
 
-export class GitHubRepository extends S.Class<GitHubRepository>('GitHubRepository')({
+export class GitHubRepository extends S.Class<GitHubRepository>(
+  'GitHubRepository'
+)({
   id: S.Number,
   name: S.String,
   full_name: S.String,

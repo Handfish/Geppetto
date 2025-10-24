@@ -1,11 +1,7 @@
 import React from 'react'
 import { isRouteErrorResponse, useRouteError } from 'react-router-dom'
 
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from './ui/alert'
+import { Alert, AlertDescription, AlertTitle } from './ui/alert'
 
 export function RouteErrorFallback() {
   const error = useRouteError()
@@ -14,11 +10,15 @@ export function RouteErrorFallback() {
     if (!error) return 'Something went wrong while rendering this screen.'
 
     if (isRouteErrorResponse(error)) {
-      return error.statusText || 'Something went wrong while rendering this screen.'
+      return (
+        error.statusText || 'Something went wrong while rendering this screen.'
+      )
     }
 
     if (error instanceof Error) {
-      return error.message || 'Something went wrong while rendering this screen.'
+      return (
+        error.message || 'Something went wrong while rendering this screen.'
+      )
     }
 
     if (typeof error === 'string') {

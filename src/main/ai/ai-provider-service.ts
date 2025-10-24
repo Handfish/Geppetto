@@ -1,13 +1,13 @@
 import { Effect } from 'effect'
 import {
-  AiProviderSignInResult,
-  AiProviderType,
-  AiAccountId,
-  AiUsageSnapshot,
+  type AiProviderSignInResult,
+  type AiProviderType,
+  type AiAccountId,
+  type AiUsageSnapshot,
   AiAccount,
 } from '../../shared/schemas/ai/provider'
 import { AiProviderRegistryService } from './registry'
-import { AiProviderRegistryPort } from './ports'
+import type { AiProviderRegistryPort } from './ports'
 import { AiAccountContextService } from './account-context-service'
 import { TierService } from '../tier/tier-service'
 import { AiAccountNotFoundError } from './errors'
@@ -26,7 +26,9 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
       const tierService = yield* TierService
 
       return {
-        signIn: (provider: AiProviderType): Effect.Effect<AiProviderSignInResult> =>
+        signIn: (
+          provider: AiProviderType
+        ): Effect.Effect<AiProviderSignInResult> =>
           Effect.gen(function* () {
             yield* tierService.ensureAiProvidersEnabled()
             const adapter = yield* registry.getAdapter(provider)
@@ -60,7 +62,9 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
             const account = context.getAccount(accountId)
             if (!account) {
               const { provider } = AiAccount.parseAccountId(accountId)
-              return yield* Effect.fail(new AiAccountNotFoundError({ accountId, provider }))
+              return yield* Effect.fail(
+                new AiAccountNotFoundError({ accountId, provider })
+              )
             }
 
             const adapter = yield* registry.getAdapter(account.provider)
@@ -74,7 +78,9 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 
             if (!account) {
               const { provider } = AiAccount.parseAccountId(accountId)
-              return yield* Effect.fail(new AiAccountNotFoundError({ accountId, provider }))
+              return yield* Effect.fail(
+                new AiAccountNotFoundError({ accountId, provider })
+              )
             }
 
             const adapter = yield* registry.getAdapter(account.provider)
@@ -85,43 +91,59 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 
         getUsageByProvider: (provider: AiProviderType) =>
           Effect.gen(function* () {
-            console.log(`[AiProviderService] Fetching usage for provider: ${provider}`)
+            console.log(
+              `[AiProviderService] Fetching usage for provider: ${provider}`
+            )
             yield* tierService.ensureAiProvidersEnabled()
             const adapter = yield* registry.getAdapter(provider)
             const context = yield* accountService.getContext()
             const accounts = context.getAccountsByProvider(provider)
 
-            console.log(`[AiProviderService] Found ${accounts.length} accounts for ${provider}:`, accounts.map(a => a.id))
+            console.log(
+              `[AiProviderService] Found ${accounts.length} accounts for ${provider}:`,
+              accounts.map(a => a.id)
+            )
 
             // If no accounts exist, return empty array immediately
             if (accounts.length === 0) {
-              console.log(`[AiProviderService] No accounts for ${provider}, returning empty array`)
+              console.log(
+                `[AiProviderService] No accounts for ${provider}, returning empty array`
+              )
               return []
             }
 
-            console.log(`[AiProviderService] Fetching usage for ${accounts.length} account(s)...`)
+            console.log(
+              `[AiProviderService] Fetching usage for ${accounts.length} account(s)...`
+            )
             const usage = yield* Effect.forEach(
               accounts,
-              (account) =>
-                adapter
-                  .getUsage(account.id)
-                  .pipe(
-                    Effect.tap(() => {
-                      console.log(`[AiProviderService] Successfully fetched usage for ${account.id}`)
-                      return accountService.touchAccount(account.id)
-                    }),
-                    // Gracefully handle authentication errors per account
-                    Effect.catchAll((error) => {
-                      console.log(`[AiProviderService] Failed to fetch usage for ${account.id}:`, error)
-                      return Effect.succeed(null)
-                    })
-                  ),
+              account =>
+                adapter.getUsage(account.id).pipe(
+                  Effect.tap(() => {
+                    console.log(
+                      `[AiProviderService] Successfully fetched usage for ${account.id}`
+                    )
+                    return accountService.touchAccount(account.id)
+                  }),
+                  // Gracefully handle authentication errors per account
+                  Effect.catchAll(error => {
+                    console.log(
+                      `[AiProviderService] Failed to fetch usage for ${account.id}:`,
+                      error
+                    )
+                    return Effect.succeed(null)
+                  })
+                ),
               { concurrency: 'unbounded' }
             )
 
             // Filter out null results from failed fetches
-            const validUsage = usage.filter((u): u is AiUsageSnapshot => u !== null)
-            console.log(`[AiProviderService] Returning ${validUsage.length} valid usage snapshots`)
+            const validUsage = usage.filter(
+              (u): u is AiUsageSnapshot => u !== null
+            )
+            console.log(
+              `[AiProviderService] Returning ${validUsage.length} valid usage snapshots`
+            )
             return validUsage
           }),
       }

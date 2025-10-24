@@ -33,15 +33,15 @@ export function RepositoryCard4({
           ? 'bg-black/20 border-teal-400/40 shadow-lg shadow-teal-400/30'
           : 'bg-black/10 border-teal-400/10'
       }`}
+      initial="initial"
       style={{
         backfaceVisibility: 'hidden',
         // Only animate transform and opacity for optimal performance
         willChange: isActive ? 'transform' : 'auto',
       }}
-      variants={hoverVariants}
-      initial="initial"
-      whileHover="hover"
       transition={hoverTransition}
+      variants={hoverVariants}
+      whileHover="hover"
     >
       {/* Header with repo name */}
       <h3

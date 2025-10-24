@@ -2,7 +2,7 @@ import { Effect } from 'effect'
 import {
   AuthenticationError,
   NetworkError,
-  NotFoundError,
+  type NotFoundError,
   ProviderFeatureUnavailableError as SharedFeatureUnavailableError,
   ProviderUnavailableError as SharedProviderUnavailableError,
   ProviderOperationError as SharedProviderOperationError,
@@ -107,7 +107,9 @@ const isTierDomainError = (error: unknown): error is TierDomainError => {
   )
 }
 
-const isProviderDomainError = (error: unknown): error is ProviderDomainError => {
+const isProviderDomainError = (
+  error: unknown
+): error is ProviderDomainError => {
   return (
     error instanceof ProviderAuthenticationError ||
     error instanceof ProviderFeatureUnsupportedError ||
@@ -129,7 +131,9 @@ const isAiDomainError = (error: unknown): error is AiDomainError => {
 /**
  * Maps domain errors to shared IPC error types that can be sent across process boundaries
  */
-export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcErrorResult> => {
+export const mapDomainErrorToIpcError = (
+  error: unknown
+): Effect.Effect<IpcErrorResult> => {
   // Handle tier-related errors
   if (isTierDomainError(error)) {
     if (error instanceof AccountLimitExceededError) {
@@ -271,7 +275,10 @@ export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcError
     }
 
     // Map API and authentication state errors
-    if (error instanceof GitHubApiError || error instanceof NotAuthenticatedError) {
+    if (
+      error instanceof GitHubApiError ||
+      error instanceof NotAuthenticatedError
+    ) {
       return Effect.succeed({
         _tag: 'Error' as const,
         error: new NetworkError({ message: error.message }),
@@ -283,6 +290,8 @@ export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcError
   const message = error instanceof Error ? error.message : JSON.stringify(error)
   return Effect.succeed({
     _tag: 'Error' as const,
-    error: new NetworkError({ message: `Unexpected error occurred: ${message}` }),
+    error: new NetworkError({
+      message: `Unexpected error occurred: ${message}`,
+    }),
   })
 }

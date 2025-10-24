@@ -5,7 +5,9 @@ type ConsoleErrorPayload = {
   timestamp: number
 }
 
-const isConsoleErrorPayload = (value: unknown): value is ConsoleErrorPayload => {
+const isConsoleErrorPayload = (
+  value: unknown
+): value is ConsoleErrorPayload => {
   if (typeof value !== 'object' || value === null) return false
   const candidate = value as Record<string, unknown>
   return (
@@ -46,7 +48,10 @@ export const writeConsoleError = (message: string | null) => {
   }
 
   try {
-    window.localStorage.setItem(CONSOLE_ERROR_STORAGE_KEY, JSON.stringify(payload))
+    window.localStorage.setItem(
+      CONSOLE_ERROR_STORAGE_KEY,
+      JSON.stringify(payload)
+    )
   } catch {
     // Ignore storage quota errors for console diagnostics
   }

@@ -30,7 +30,9 @@ export type AiCheckAuthEffect = Effect.Effect<
 
 export type AiUsageEffect = Effect.Effect<
   AiUsageSnapshot,
-  AiProviderUsageError | AiProviderFeatureUnsupportedError | AiProviderAuthenticationError
+  | AiProviderUsageError
+  | AiProviderFeatureUnsupportedError
+  | AiProviderAuthenticationError
 >
 
 export interface AiProviderAdapter {
@@ -44,9 +46,8 @@ export interface AiProviderAdapter {
 }
 
 export interface AiProviderRegistryPort {
-  getAdapter(provider: AiProviderType): Effect.Effect<
-    AiProviderAdapter,
-    AiProviderNotRegisteredError
-  >
+  getAdapter(
+    provider: AiProviderType
+  ): Effect.Effect<AiProviderAdapter, AiProviderNotRegisteredError>
   listAdapters(): ReadonlyArray<AiProviderAdapter>
 }
