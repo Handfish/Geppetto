@@ -1,6 +1,7 @@
 import { Terminal } from 'lucide-react'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Result } from '@effect-atom/atom-react'
+import { toast } from 'sonner'
 
 import SleepLight from 'renderer/components/ui/SleepLight'
 import { ToastViewport } from 'renderer/components/ui/ToastViewport'
@@ -48,10 +49,25 @@ export function MainScreen() {
   const { repositoriesResult: repos } = useAccountRepositories(activeAccountId)
   const [isFocused, setIsFocused] = useState(true)
   const carouselRef = useRef<RepositoryCarouselRef>(null)
-  const [consoleError, setConsoleError] = useState(() => readConsoleError())
+  const displayedErrorTimestamp = useRef<number | null>(null)
 
   const handleConsoleErrorChange = useCallback(() => {
-    setConsoleError(readConsoleError())
+    const error = readConsoleError()
+    if (error && error.timestamp !== displayedErrorTimestamp.current) {
+      displayedErrorTimestamp.current = error.timestamp
+      toast.error('Developer Console Message', {
+        description: error.message,
+        duration: 6000, // Auto-dismiss after 6 seconds
+        position: 'top-left',
+        id: 'console-error',
+        onDismiss: () => {
+          clearConsoleError()
+        },
+        onAutoClose: () => {
+          clearConsoleError()
+        },
+      })
+    }
   }, [])
 
   // Listen for auth changes from other windows
@@ -95,11 +111,6 @@ export function MainScreen() {
       window.removeEventListener('storage', listener)
     }
   }, [handleConsoleErrorChange])
-
-  const dismissConsoleError = () => {
-    clearConsoleError()
-    handleConsoleErrorChange()
-  }
 
   return (
     <>
@@ -161,28 +172,6 @@ export function MainScreen() {
             </Alert>
           </div>
         </div>
-
-        {consoleError && (
-          <div className="absolute top-36 left-8 max-w-md z-50">
-            <Alert className="bg-gray-950/85 border border-yellow-500/70 text-yellow-200 shadow-lg">
-              <AlertTitle className="text-lg font-semibold uppercase tracking-wide text-yellow-300">
-                Developer console message
-              </AlertTitle>
-              <AlertDescription className="text-sm text-yellow-100/85">
-                {consoleError.message}
-              </AlertDescription>
-              <div className="col-start-2 mt-3 flex justify-end">
-                <button
-                  className="rounded-md border border-yellow-400/60 px-3 py-1 text-xs font-medium text-yellow-100/80 transition hover:bg-yellow-500/10 hover:text-yellow-50"
-                  onClick={dismissConsoleError}
-                  type="button"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </Alert>
-          </div>
-        )}
 
         {/* AI Usage Bars - positioned in top left quadrant */}
         <AiUsageBars />

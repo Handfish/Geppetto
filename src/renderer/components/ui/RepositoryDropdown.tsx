@@ -27,10 +27,11 @@ import {
   Download,
 } from 'lucide-react'
 import type { ProviderRepository } from '../../../shared/schemas/provider'
-import { useAtom } from '@effect-atom/atom-react'
+import { useAtom, Result } from '@effect-atom/atom-react'
 import { cloneToWorkspaceAtom } from '../../atoms/workspace-atoms'
 import { WorkspaceClient } from '../../lib/ipc-client'
 import { Effect } from 'effect'
+import { toast } from 'sonner'
 
 interface RepositoryDropdownProps {
   repo: ProviderRepository
@@ -112,6 +113,34 @@ export function RepositoryDropdown({
     })
     onOpenChange(false)
   }
+
+  // Show success/error toast when clone completes - only once per operation
+  const prevWaitingRef = useRef(false)
+
+  useEffect(() => {
+    const wasWaiting = prevWaitingRef.current
+    const isWaiting = cloneResult.waiting
+
+    // Only show toast when transitioning from waiting to not waiting (operation just completed)
+    if (wasWaiting && !isWaiting) {
+      if (Result.isSuccess(cloneResult)) {
+        toast.success('Repository Cloned', {
+          description: `${repo.owner}/${repo.name} has been cloned to your workspace`,
+          duration: 6000,
+          position: 'top-left',
+        })
+      } else if (Result.isFailure(cloneResult)) {
+        const error = Result.getFailure(cloneResult)
+        toast.error('Clone Failed', {
+          description: error.message || 'Failed to clone repository to workspace',
+          duration: 6000,
+          position: 'top-left',
+        })
+      }
+    }
+
+    prevWaitingRef.current = isWaiting
+  }, [cloneResult, repo.owner, repo.name])
 
   // Sync anchor element - update whenever anchorRef or isOpen changes
   useEffect(() => {
