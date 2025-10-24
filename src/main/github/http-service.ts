@@ -1,4 +1,11 @@
-import { Duration, Effect, RateLimiter, Schedule, Schema as S, Console } from 'effect'
+import {
+  Duration,
+  Effect,
+  RateLimiter,
+  Schedule,
+  Schema as S,
+  Console,
+} from 'effect'
 import { pipe } from 'effect/Function'
 import { GitHubApiError, GitHubTokenExchangeError } from './errors'
 import { GitHubUser } from '../../shared/schemas'

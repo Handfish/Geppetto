@@ -11,7 +11,9 @@ export class GitLabProviderAdapter extends Effect.Service<GitLabProviderAdapter>
   {
     sync: () => {
       const provider: ProviderAdapter['provider'] = 'gitlab'
-      const unsupported = <A>(feature: string): Effect.Effect<A, ProviderFeatureUnsupportedError> =>
+      const unsupported = <A>(
+        feature: string
+      ): Effect.Effect<A, ProviderFeatureUnsupportedError> =>
         Effect.fail(
           new ProviderFeatureUnsupportedError({
             provider,

@@ -9,7 +9,9 @@ export class GitHubAuthTimeout extends Data.TaggedError('GitHubAuthTimeout')<{
   readonly message: string
 }> {}
 
-export class GitHubTokenExchangeError extends Data.TaggedError('GitHubTokenExchangeError')<{
+export class GitHubTokenExchangeError extends Data.TaggedError(
+  'GitHubTokenExchangeError'
+)<{
   readonly message: string
   readonly code?: string
 }> {}
@@ -23,6 +25,8 @@ export class GitHubApiError extends Data.TaggedError('GitHubApiError')<{
   readonly retryAfter?: number
 }> {}
 
-export class NotAuthenticatedError extends Data.TaggedError('NotAuthenticatedError')<{
+export class NotAuthenticatedError extends Data.TaggedError(
+  'NotAuthenticatedError'
+)<{
   readonly message: string
 }> {}

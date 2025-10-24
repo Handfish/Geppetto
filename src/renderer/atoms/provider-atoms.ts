@@ -1,6 +1,9 @@
 import { Atom, Result } from '@effect-atom/atom-react'
 import { Effect, Duration } from 'effect'
-import type { AccountId, ProviderType } from '../../shared/schemas/account-context'
+import type {
+  AccountId,
+  ProviderType,
+} from '../../shared/schemas/account-context'
 import { ProviderClient } from '../lib/ipc-client'
 import type { ProviderRepository } from '../../shared/schemas/provider'
 

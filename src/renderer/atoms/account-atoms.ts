@@ -1,7 +1,7 @@
 import { Atom, Result } from '@effect-atom/atom-react'
 import { Effect, Duration } from 'effect'
 import { AccountClient } from '../lib/ipc-client'
-import { ProviderType } from '../../shared/schemas/account-context'
+import type { ProviderType } from '../../shared/schemas/account-context'
 
 const accountRuntime = Atom.runtime(AccountClient.Default)
 
@@ -14,15 +14,17 @@ export const accountContextAtom = accountRuntime
   )
   .pipe(Atom.withReactivity(['accounts:context']), Atom.keepAlive)
 
-export const activeAccountAtom = Atom.make((get) => {
+export const activeAccountAtom = Atom.make(get => {
   const contextResult = get(accountContextAtom)
-  return Result.map(contextResult, (context) => context.getActiveAccount())
+  return Result.map(contextResult, context => context.getActiveAccount())
 })
 
 export const providerAccountsAtom = Atom.family((provider: ProviderType) =>
-  Atom.make((get) => {
+  Atom.make(get => {
     const contextResult = get(accountContextAtom)
-    return Result.map(contextResult, (context) => context.getAccountsByProvider(provider))
+    return Result.map(contextResult, context =>
+      context.getAccountsByProvider(provider)
+    )
   })
 )
 
@@ -33,4 +35,7 @@ export const tierLimitsAtom = accountRuntime
       return yield* accountClient.getTierLimits()
     })
   )
-  .pipe(Atom.withReactivity(['accounts:tier']), Atom.setIdleTTL(Duration.minutes(10)))
+  .pipe(
+    Atom.withReactivity(['accounts:tier']),
+    Atom.setIdleTTL(Duration.minutes(10))
+  )

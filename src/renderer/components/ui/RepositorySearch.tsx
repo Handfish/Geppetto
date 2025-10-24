@@ -48,7 +48,7 @@ export function RepositorySearch({
   const filteredRepos = searchQuery.trim()
     ? repos
         .filter(repo =>
-          repo.name.toLowerCase().includes(searchQuery.toLowerCase()),
+          repo.name.toLowerCase().includes(searchQuery.toLowerCase())
         )
         .sort((a, b) => {
           const aIndex = a.name.toLowerCase().indexOf(searchQuery.toLowerCase())
@@ -107,9 +107,9 @@ export function RepositorySearch({
         case 'Enter':
           e.preventDefault()
           if (filteredRepos[selectedIndex]) {
-              const repoIndex = repos.findIndex(
-                r => r.repositoryId === filteredRepos[selectedIndex].repositoryId
-              )
+            const repoIndex = repos.findIndex(
+              r => r.repositoryId === filteredRepos[selectedIndex].repositoryId
+            )
             if (repoIndex !== -1) {
               onSelectRepo(repoIndex)
               setIsOpen(false)

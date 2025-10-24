@@ -24,7 +24,9 @@ export class ProviderUser extends S.Class<ProviderUser>('ProviderUser')({
  * Standard repository descriptor for UI consumption.
  * Provider-specific payloads can be accessed via `raw`.
  */
-export class ProviderRepository extends S.Class<ProviderRepository>('ProviderRepository')({
+export class ProviderRepository extends S.Class<ProviderRepository>(
+  'ProviderRepository'
+)({
   provider: ProviderType,
   accountId: AccountId,
   repositoryId: S.String,
@@ -47,7 +49,9 @@ export class ProviderRepository extends S.Class<ProviderRepository>('ProviderRep
 /**
  * Output returned after a successful provider sign-in.
  */
-export class ProviderSignInResult extends S.Class<ProviderSignInResult>('ProviderSignInResult')({
+export class ProviderSignInResult extends S.Class<ProviderSignInResult>(
+  'ProviderSignInResult'
+)({
   provider: ProviderType,
   accountId: AccountId,
   user: ProviderUser,
@@ -56,7 +60,9 @@ export class ProviderSignInResult extends S.Class<ProviderSignInResult>('Provide
 /**
  * Authentication status for a provider account.
  */
-export class ProviderAuthStatus extends S.Class<ProviderAuthStatus>('ProviderAuthStatus')({
+export class ProviderAuthStatus extends S.Class<ProviderAuthStatus>(
+  'ProviderAuthStatus'
+)({
   provider: ProviderType,
   accountId: AccountId,
   authenticated: S.Boolean,

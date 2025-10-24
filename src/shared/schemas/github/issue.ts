@@ -12,4 +12,3 @@ export class GitHubIssue extends S.Class<GitHubIssue>('GitHubIssue')({
   updated_at: S.String,
   html_url: S.String,
 }) {}
-

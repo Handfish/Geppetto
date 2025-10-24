@@ -2,7 +2,9 @@ import { Schema as S } from 'effect'
 import { GitHubUser } from './user'
 
 // Branch reference in a pull request
-export class PullRequestBranch extends S.Class<PullRequestBranch>('PullRequestBranch')({
+export class PullRequestBranch extends S.Class<PullRequestBranch>(
+  'PullRequestBranch'
+)({
   label: S.String,
   ref: S.String,
   sha: S.String,
@@ -17,7 +19,9 @@ export class PullRequestBranch extends S.Class<PullRequestBranch>('PullRequestBr
 }) {}
 
 // GitHub Pull Request
-export class GitHubPullRequest extends S.Class<GitHubPullRequest>('GitHubPullRequest')({
+export class GitHubPullRequest extends S.Class<GitHubPullRequest>(
+  'GitHubPullRequest'
+)({
   id: S.Number,
   number: S.Number,
   state: S.Literal('open', 'closed'),

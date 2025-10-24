@@ -2,11 +2,17 @@ import { Effect } from 'effect'
 import {
   AuthenticationError,
   NetworkError,
-  NotFoundError,
+  type NotFoundError,
   ProviderFeatureUnavailableError as SharedFeatureUnavailableError,
   ProviderUnavailableError as SharedProviderUnavailableError,
   ProviderOperationError as SharedProviderOperationError,
 } from '../../shared/schemas/errors'
+import {
+  AiAuthenticationError as SharedAiAuthenticationError,
+  AiProviderUnavailableError as SharedAiProviderUnavailableError,
+  AiFeatureUnavailableError as SharedAiFeatureUnavailableError,
+  AiUsageUnavailableError as SharedAiUsageUnavailableError,
+} from '../../shared/schemas/ai/errors'
 import {
   GitHubAuthError,
   GitHubAuthTimeout,
@@ -24,6 +30,13 @@ import {
   ProviderNotRegisteredError,
   ProviderRepositoryError,
 } from '../providers/errors'
+import {
+  AiProviderAuthenticationError,
+  AiProviderFeatureUnsupportedError,
+  AiProviderNotRegisteredError,
+  AiProviderUsageError,
+  AiAccountNotFoundError,
+} from '../ai/errors'
 
 /**
  * Result type for IPC error responses
@@ -37,6 +50,10 @@ export type IpcErrorResult = {
     | SharedFeatureUnavailableError
     | SharedProviderUnavailableError
     | SharedProviderOperationError
+    | SharedAiAuthenticationError
+    | SharedAiProviderUnavailableError
+    | SharedAiFeatureUnavailableError
+    | SharedAiUsageUnavailableError
 }
 
 /**
@@ -59,6 +76,13 @@ type ProviderDomainError =
   | ProviderFeatureUnsupportedError
   | ProviderNotRegisteredError
   | ProviderRepositoryError
+
+type AiDomainError =
+  | AiProviderAuthenticationError
+  | AiProviderFeatureUnsupportedError
+  | AiProviderNotRegisteredError
+  | AiProviderUsageError
+  | AiAccountNotFoundError
 
 /**
  * Type guard to check if an error is a tagged GitHub domain error
@@ -83,7 +107,9 @@ const isTierDomainError = (error: unknown): error is TierDomainError => {
   )
 }
 
-const isProviderDomainError = (error: unknown): error is ProviderDomainError => {
+const isProviderDomainError = (
+  error: unknown
+): error is ProviderDomainError => {
   return (
     error instanceof ProviderAuthenticationError ||
     error instanceof ProviderFeatureUnsupportedError ||
@@ -92,10 +118,22 @@ const isProviderDomainError = (error: unknown): error is ProviderDomainError => 
   )
 }
 
+const isAiDomainError = (error: unknown): error is AiDomainError => {
+  return (
+    error instanceof AiProviderAuthenticationError ||
+    error instanceof AiProviderFeatureUnsupportedError ||
+    error instanceof AiProviderNotRegisteredError ||
+    error instanceof AiProviderUsageError ||
+    error instanceof AiAccountNotFoundError
+  )
+}
+
 /**
  * Maps domain errors to shared IPC error types that can be sent across process boundaries
  */
-export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcErrorResult> => {
+export const mapDomainErrorToIpcError = (
+  error: unknown
+): Effect.Effect<IpcErrorResult> => {
   // Handle tier-related errors
   if (isTierDomainError(error)) {
     if (error instanceof AccountLimitExceededError) {
@@ -108,6 +146,17 @@ export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcError
     }
 
     if (error instanceof FeatureNotAvailableError) {
+      if (error.feature === 'ai-providers') {
+        return Effect.succeed({
+          _tag: 'Error' as const,
+          error: new SharedAiFeatureUnavailableError({
+            feature: error.feature,
+            tier: error.tier,
+            requiredTier: error.requiredTier,
+            message: `Feature '${error.feature}' requires ${error.requiredTier} tier.`,
+          }),
+        })
+      }
       return Effect.succeed({
         _tag: 'Error' as const,
         error: new AuthenticationError({
@@ -157,6 +206,60 @@ export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcError
     }
   }
 
+  if (isAiDomainError(error)) {
+    if (error instanceof AiProviderAuthenticationError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedAiAuthenticationError({
+          provider: error.provider,
+          message: error.message,
+        }),
+      })
+    }
+
+    if (error instanceof AiProviderFeatureUnsupportedError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedAiProviderUnavailableError({
+          provider: error.provider,
+          message: `Provider '${error.provider}' does not support feature '${error.feature}' yet.`,
+        }),
+      })
+    }
+
+    if (error instanceof AiProviderNotRegisteredError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedAiProviderUnavailableError({
+          provider: error.provider,
+          message: `AI provider '${error.provider}' is not configured.`,
+        }),
+      })
+    }
+
+    if (error instanceof AiProviderUsageError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedAiUsageUnavailableError({
+          provider: error.provider,
+          accountId: error.accountId,
+          message: error.message,
+        }),
+      })
+    }
+
+    if (error instanceof AiAccountNotFoundError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new SharedAiUsageUnavailableError({
+          provider: error.provider,
+          accountId: error.accountId,
+          message: `AI account '${error.accountId}' could not be located.`,
+        }),
+      })
+    }
+  }
+
   // Handle known GitHub domain errors
   if (isGitHubDomainError(error)) {
     // Map authentication-related errors
@@ -172,7 +275,10 @@ export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcError
     }
 
     // Map API and authentication state errors
-    if (error instanceof GitHubApiError || error instanceof NotAuthenticatedError) {
+    if (
+      error instanceof GitHubApiError ||
+      error instanceof NotAuthenticatedError
+    ) {
       return Effect.succeed({
         _tag: 'Error' as const,
         error: new NetworkError({ message: error.message }),
@@ -184,6 +290,8 @@ export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcError
   const message = error instanceof Error ? error.message : JSON.stringify(error)
   return Effect.succeed({
     _tag: 'Error' as const,
-    error: new NetworkError({ message: `Unexpected error occurred: ${message}` }),
+    error: new NetworkError({
+      message: `Unexpected error occurred: ${message}`,
+    }),
   })
 }

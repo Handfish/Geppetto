@@ -1,5 +1,5 @@
 import { Effect } from 'effect'
-import { ProviderAdapter } from '../providers/ports'
+import type { ProviderAdapter } from '../providers/ports'
 import {
   ProviderAuthStatus,
   ProviderRepository,
@@ -8,7 +8,7 @@ import {
 } from '../../shared/schemas/provider'
 import { GitHubAuthService } from './auth-service'
 import { GitHubApiService } from './api-service'
-import { GitHubRepository } from '../../shared/schemas'
+import type { GitHubRepository } from '../../shared/schemas'
 import type { AccountId } from '../../shared/schemas/account-context'
 
 const makeRepositoryMapper =
@@ -67,9 +67,9 @@ export class GitHubProviderAdapter extends Effect.Service<GitHubProviderAdapter>
             })
           }),
 
-        signOut: (accountId) => authService.signOutAccount(accountId),
+        signOut: accountId => authService.signOutAccount(accountId),
 
-        checkAuth: (accountId) =>
+        checkAuth: accountId =>
           Effect.gen(function* () {
             const status = yield* authService.checkAuthForAccount(accountId)
             return new ProviderAuthStatus({
@@ -79,7 +79,7 @@ export class GitHubProviderAdapter extends Effect.Service<GitHubProviderAdapter>
             })
           }),
 
-        getRepositories: (accountId) =>
+        getRepositories: accountId =>
           Effect.gen(function* () {
             const repositories = yield* apiService.getReposForAccount(accountId)
             const mapRepo = makeRepositoryMapper(accountId)

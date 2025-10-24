@@ -1,4 +1,10 @@
-import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
+import {
+  useState,
+  useEffect,
+  useRef,
+  useImperativeHandle,
+  forwardRef,
+} from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Result } from '@effect-atom/atom-react'
 import type { ProviderRepository } from '../../../shared/schemas/provider'
@@ -35,37 +41,39 @@ export interface RepositoryCarouselRef {
 // global persistent singleton for Electron listener
 let ipcListenerAttached = false
 
-export const RepositoryCarousel3 = forwardRef<RepositoryCarouselRef, RepositoryCarouselProps>(
-  function RepositoryCarousel3({ repos, isFocused, account = null }, ref) {
-    const [currentIndex, setCurrentIndex] = useState(0)
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-    const prevIndexRef = useRef(0)
-    const currentIndexRef = useRef(currentIndex)
-    const staticAnchorRef = useRef<HTMLDivElement>(null)
-    currentIndexRef.current = currentIndex
+export const RepositoryCarousel3 = forwardRef<
+  RepositoryCarouselRef,
+  RepositoryCarouselProps
+>(function RepositoryCarousel3({ repos, isFocused, account = null }, ref) {
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const prevIndexRef = useRef(0)
+  const currentIndexRef = useRef(currentIndex)
+  const staticAnchorRef = useRef<HTMLDivElement>(null)
+  currentIndexRef.current = currentIndex
 
-    // Expose methods to parent component
-    useImperativeHandle(ref, () => ({
-      jumpToIndex: (index: number, shuffleRight = false) => {
-        if (shuffleRight) {
-          // Shuffle right 5 times quickly
-          let count = 0
-          const interval = setInterval(() => {
-            count++
-            setCurrentIndex(prev => prev + 1)
-            if (count >= 5) {
-              clearInterval(interval)
-              // Then jump to the target index
-              setTimeout(() => {
-                setCurrentIndex(index)
-              }, 100)
-            }
-          }, 100)
-        } else {
-          setCurrentIndex(index)
-        }
-      },
-    }))
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    jumpToIndex: (index: number, shuffleRight = false) => {
+      if (shuffleRight) {
+        // Shuffle right 5 times quickly
+        let count = 0
+        const interval = setInterval(() => {
+          count++
+          setCurrentIndex(prev => prev + 1)
+          if (count >= 5) {
+            clearInterval(interval)
+            // Then jump to the target index
+            setTimeout(() => {
+              setCurrentIndex(index)
+            }, 100)
+          }
+        }, 100)
+      } else {
+        setCurrentIndex(index)
+      }
+    },
+  }))
 
   useEffect(() => {
     if (ipcListenerAttached) return
@@ -110,7 +118,10 @@ export const RepositoryCarousel3 = forwardRef<RepositoryCarouselRef, RepositoryC
   const visibleOffsets = [-2, -1, 0, 1, 2]
 
   return (
-    <div className="relative w-full flex items-center justify-center" style={{ height: '160px', overflow: 'visible' }}>
+    <div
+      className="relative w-full flex items-center justify-center"
+      style={{ height: '160px', overflow: 'visible' }}
+    >
       {/* Static anchor point for dropdown - positioned at center, no animation */}
       <div
         ref={staticAnchorRef}
@@ -174,9 +185,17 @@ export const RepositoryCarousel3 = forwardRef<RepositoryCarouselRef, RepositoryC
                         transformStyle: 'preserve-3d',
                         zIndex: isActive ? 10 : 10 - Math.abs(offset),
                       }}
-                      transition={{ type: 'spring', stiffness: 180, damping: 20 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 180,
+                        damping: 20,
+                      }}
                     >
-                      <RepositoryCard isActive={isActive} repo={repo} account={account} />
+                      <RepositoryCard
+                        account={account}
+                        isActive={isActive}
+                        repo={repo}
+                      />
                     </motion.div>
                   )
                 })}
@@ -185,10 +204,10 @@ export const RepositoryCarousel3 = forwardRef<RepositoryCarouselRef, RepositoryC
               {/* Dropdown Menu for center item */}
               {total > 0 && (
                 <RepositoryDropdown
-                  repo={repositories[current]}
+                  anchorRef={staticAnchorRef}
                   isOpen={isDropdownOpen}
                   onOpenChange={setIsDropdownOpen}
-                  anchorRef={staticAnchorRef}
+                  repo={repositories[current]}
                 />
               )}
             </>

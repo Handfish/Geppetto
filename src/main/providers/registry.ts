@@ -1,9 +1,6 @@
 import { Effect } from 'effect'
 import type { ProviderType } from '../../shared/schemas/account-context'
-import {
-  ProviderAdapter,
-  ProviderRegistryPort,
-} from './ports'
+import type { ProviderAdapter, ProviderRegistryPort } from './ports'
 import { ProviderNotRegisteredError } from './errors'
 import { GitHubProviderAdapter } from '../github/provider-adapter'
 import { GitLabProviderAdapter } from '../gitlab/provider-adapter'
@@ -29,7 +26,7 @@ export class ProviderRegistryService extends Effect.Service<ProviderRegistryServ
       const gitea = yield* GiteaProviderAdapter
 
       const map = new Map<ProviderType, ProviderAdapter>()
-      ;[github, gitlab, bitbucket, gitea].forEach((adapter) => {
+      ;[github, gitlab, bitbucket, gitea].forEach(adapter => {
         map.set(adapter.provider, adapter)
       })
 
@@ -43,7 +40,8 @@ export class ProviderRegistryService extends Effect.Service<ProviderRegistryServ
             return adapter!
           }),
 
-        listAdapters: (): ReadonlyArray<ProviderAdapter> => Array.from(map.values()),
+        listAdapters: (): ReadonlyArray<ProviderAdapter> =>
+          Array.from(map.values()),
       } satisfies ProviderRegistryPort
     }),
   }

@@ -63,8 +63,14 @@ export class Account extends S.Class<Account>('Account')({
   /**
    * Parse an AccountId into its components
    */
-  static parseAccountId(accountId: AccountId): { provider: ProviderType; providerId: string } {
-    const [provider, providerId] = accountId.split(':') as [ProviderType, string]
+  static parseAccountId(accountId: AccountId): {
+    provider: ProviderType
+    providerId: string
+  } {
+    const [provider, providerId] = accountId.split(':') as [
+      ProviderType,
+      string,
+    ]
     return { provider, providerId }
   }
 }
@@ -88,28 +94,28 @@ export class AccountContext extends S.Class<AccountContext>('AccountContext')({
    */
   getActiveAccount(): Account | null {
     if (!this.activeAccountId) return null
-    return this.accounts.find((acc) => acc.id === this.activeAccountId) ?? null
+    return this.accounts.find(acc => acc.id === this.activeAccountId) ?? null
   }
 
   /**
    * Get all accounts for a specific provider
    */
   getAccountsByProvider(provider: ProviderType): Account[] {
-    return this.accounts.filter((acc) => acc.provider === provider)
+    return this.accounts.filter(acc => acc.provider === provider)
   }
 
   /**
    * Get an account by its ID
    */
   getAccount(accountId: AccountId): Account | null {
-    return this.accounts.find((acc) => acc.id === accountId) ?? null
+    return this.accounts.find(acc => acc.id === accountId) ?? null
   }
 
   /**
    * Check if an account exists
    */
   hasAccount(accountId: AccountId): boolean {
-    return this.accounts.some((acc) => acc.id === accountId)
+    return this.accounts.some(acc => acc.id === accountId)
   }
 
   /**
@@ -150,25 +156,33 @@ export class AccountContext extends S.Class<AccountContext>('AccountContext')({
 /**
  * Domain events for AccountContext
  */
-export class AccountAddedEvent extends S.Class<AccountAddedEvent>('AccountAddedEvent')({
+export class AccountAddedEvent extends S.Class<AccountAddedEvent>(
+  'AccountAddedEvent'
+)({
   accountId: AccountId,
   provider: ProviderType,
   occurredAt: S.Date,
 }) {}
 
-export class AccountRemovedEvent extends S.Class<AccountRemovedEvent>('AccountRemovedEvent')({
+export class AccountRemovedEvent extends S.Class<AccountRemovedEvent>(
+  'AccountRemovedEvent'
+)({
   accountId: AccountId,
   provider: ProviderType,
   occurredAt: S.Date,
 }) {}
 
-export class AccountSwitchedEvent extends S.Class<AccountSwitchedEvent>('AccountSwitchedEvent')({
+export class AccountSwitchedEvent extends S.Class<AccountSwitchedEvent>(
+  'AccountSwitchedEvent'
+)({
   fromAccountId: S.NullOr(AccountId),
   toAccountId: AccountId,
   occurredAt: S.Date,
 }) {}
 
-export class AccountExpiredEvent extends S.Class<AccountExpiredEvent>('AccountExpiredEvent')({
+export class AccountExpiredEvent extends S.Class<AccountExpiredEvent>(
+  'AccountExpiredEvent'
+)({
   accountId: AccountId,
   occurredAt: S.Date,
 }) {}

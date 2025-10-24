@@ -18,6 +18,19 @@ import { makeAppSetup } from '../lib/electron-app/factories/app/setup'
 import { ProviderRegistryService } from './providers/registry'
 import { VcsProviderService } from './providers/vcs-provider-service'
 import { setupProviderIpcHandlers } from './ipc/provider-handlers'
+import { AiAccountContextService } from './ai/account-context-service'
+import { OpenAiBrowserProviderAdapter } from './ai/openai/browser-provider-adapter'
+import { ClaudeBrowserProviderAdapter } from './ai/claude/browser-provider-adapter'
+import { AiProviderRegistryService } from './ai/registry'
+import { AiProviderService } from './ai/ai-provider-service'
+import { setupAiProviderIpcHandlers } from './ipc/ai-provider-handlers'
+import { ElectronSessionService } from './ai/browser/electron-session-service'
+import { BrowserAuthService } from './ai/browser/browser-auth-service'
+import { CookieUsagePageAdapter } from './ai/browser/cookie-usage-page-adapter'
+import {
+  GitCommandService,
+  NodeGitCommandRunner,
+} from './source-control'
 
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
@@ -27,6 +40,7 @@ const MainLayer = Layer.mergeAll(
   SecureStoreService.Default,
   TierService.Default,
   AccountContextService.Default,
+  AiAccountContextService.Default,
   GitHubAuthService.Default,
   GitHubApiService.Default,
   GitHubProviderAdapter.Default,
@@ -34,7 +48,16 @@ const MainLayer = Layer.mergeAll(
   BitbucketProviderAdapter.Default,
   GiteaProviderAdapter.Default,
   ProviderRegistryService.Default,
-  VcsProviderService.Default
+  VcsProviderService.Default,
+  ElectronSessionService.Default,
+  BrowserAuthService.Default,
+  CookieUsagePageAdapter.Default,
+  OpenAiBrowserProviderAdapter.Default,
+  ClaudeBrowserProviderAdapter.Default,
+  AiProviderRegistryService.Default,
+  AiProviderService.Default,
+  NodeGitCommandRunner.Default,
+  GitCommandService.Default
 )
 
 function createMainWindow() {
@@ -65,7 +88,10 @@ function createMainWindow() {
 
   // Silence unnecessary Autofill errors in dev tools
   mainWindow.webContents.on('console-message', (event, level, message) => {
-    if (message.includes('Autofill.enable') || message.includes('Autofill.setAddresses')) {
+    if (
+      message.includes('Autofill.enable') ||
+      message.includes('Autofill.setAddresses')
+    ) {
       event.preventDefault()
     }
   })
@@ -114,7 +140,9 @@ function createConsoleWindow() {
 // This must be done before app is ready
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient(PROTOCOL_SCHEME, process.execPath, [join(__dirname, '..')])
+    app.setAsDefaultProtocolClient(PROTOCOL_SCHEME, process.execPath, [
+      join(__dirname, '..'),
+    ])
   }
 } else {
   app.setAsDefaultProtocolClient(PROTOCOL_SCHEME)
@@ -129,6 +157,7 @@ app.whenReady().then(async () => {
     Effect.gen(function* () {
       yield* setupAccountIpcHandlers
       yield* setupProviderIpcHandlers
+      yield* setupAiProviderIpcHandlers
     }).pipe(Effect.provide(MainLayer))
   )
 
@@ -190,7 +219,9 @@ app.whenReady().then(async () => {
             if (process.platform === 'darwin') {
               app.hide()
             }
-            console.log('[Window] Hidden - focus restored to previous application')
+            console.log(
+              '[Window] Hidden - focus restored to previous application'
+            )
           }
         }, 500)
 
@@ -206,7 +237,9 @@ app.whenReady().then(async () => {
         mainWindow.focus()
         mainWindow.webContents.send('window:focus')
         registerArrowKeys()
-        console.log('[Window] Focused - window shown, click-through disabled, arrow keys captured')
+        console.log(
+          '[Window] Focused - window shown, click-through disabled, arrow keys captured'
+        )
       }
     }
   }
@@ -216,7 +249,9 @@ app.whenReady().then(async () => {
   const registered = globalShortcut.register(toggleShortcut, toggleWindowFocus)
 
   if (registered) {
-    console.log(`[Hotkeys] Successfully registered: ${toggleShortcut} for toggle focus`)
+    console.log(
+      `[Hotkeys] Successfully registered: ${toggleShortcut} for toggle focus`
+    )
   } else {
     console.error(`[Hotkeys] Failed to register: ${toggleShortcut}`)
   }

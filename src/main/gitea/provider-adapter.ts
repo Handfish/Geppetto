@@ -10,7 +10,9 @@ export class GiteaProviderAdapter extends Effect.Service<GiteaProviderAdapter>()
   {
     sync: () => {
       const provider: ProviderAdapter['provider'] = 'gitea'
-      const unsupported = <A>(feature: string): Effect.Effect<A, ProviderFeatureUnsupportedError> =>
+      const unsupported = <A>(
+        feature: string
+      ): Effect.Effect<A, ProviderFeatureUnsupportedError> =>
         Effect.fail(
           new ProviderFeatureUnsupportedError({
             provider,
