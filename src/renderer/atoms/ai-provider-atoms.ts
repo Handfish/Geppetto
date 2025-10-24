@@ -22,8 +22,7 @@ const formatProviderLabel = (provider: AiProviderType): string => {
 }
 
 /**
- * Sign in to AI provider with error handling
- * Uses new withErrorHandling wrapper for clean, type-safe error presentation
+ * Sign in to AI provider with error handling and success toast
  */
 const signIn = (provider: AiProviderType) =>
   Effect.gen(function* () {
@@ -60,7 +59,7 @@ export const aiProviderSignInAtom = Atom.family((provider: AiProviderType) =>
 /**
  * Query AI provider usage data
  *
- * NOTE: Intentionally catches auth/usage errors and returns empty array.
+ * NOTE: Intentionally catches usage/provider unavailable errors and returns empty array.
  * This is EXPECTED behavior when no accounts are configured - not a real error.
  * The UI will show "No accounts" state instead of error state.
  */
@@ -71,17 +70,24 @@ const aiProviderUsageQueryAtom = Atom.family((provider: AiProviderType) =>
         const client = yield* AiProviderClient
         return yield* client.getProviderUsage(provider)
       }).pipe(
-        // EXPECTED: No accounts configured → empty array (not an error)
+        // EXPECTED: No usage data available → empty array (not an error)
         Effect.catchTag('AiUsageUnavailableError', error => {
           if (process.env.NODE_ENV === 'development') {
             console.log(`[${provider}] No usage data:`, error.message)
           }
           return Effect.succeed([] as readonly AiUsageSnapshot[])
         }),
-        // EXPECTED: Not authenticated → empty array (not an error)
-        Effect.catchTag('AiAuthenticationError', error => {
+        // EXPECTED: Provider not available → empty array (not an error)
+        Effect.catchTag('AiProviderUnavailableError', error => {
           if (process.env.NODE_ENV === 'development') {
-            console.log(`[${provider}] Not authenticated`)
+            console.log(`[${provider}] Provider unavailable:`, error.message)
+          }
+          return Effect.succeed([] as readonly AiUsageSnapshot[])
+        }),
+        // EXPECTED: Feature not available in current tier → empty array (not an error)
+        Effect.catchTag('AiFeatureUnavailableError', error => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[${provider}] Feature unavailable:`, error.message)
           }
           return Effect.succeed([] as readonly AiUsageSnapshot[])
         })
@@ -98,7 +104,14 @@ const aiProviderUsageQueryAtom = Atom.family((provider: AiProviderType) =>
 )
 
 const disabledUsageAtom = Atom.family((provider: AiProviderType) =>
-  Atom.make(() => Result.success([] as readonly AiUsageSnapshot[]))
+  aiProviderRuntime
+    .atom(Effect.succeed([] as readonly AiUsageSnapshot[]))
+    .pipe(
+      Atom.withReactivity([
+        `ai-provider:${provider}:usage`,
+        'ai-provider:usage',
+      ])
+    )
 )
 
 export const selectAiProviderUsageAtom = (

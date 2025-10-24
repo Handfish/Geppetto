@@ -12,6 +12,7 @@
  */
 
 import { Effect } from 'effect'
+import { dual } from 'effect/Function'
 import type { ErrorPresenter, ErrorContext } from './ports'
 import { defaultErrorPresenter } from './adapters/toast-error-presenter'
 import type { IpcError } from '../../../shared/schemas/errors'
@@ -33,7 +34,24 @@ export type WithErrorHandlingOptions<A> = {
 /**
  * Wrap an Effect with error presentation
  *
- * @example
+ * Supports both data-first and data-last (pipeable) usage via Effect.dual
+ *
+ * @example Data-first (function call)
+ * ```typescript
+ * const signIn = (provider: ProviderType) =>
+ *   withErrorHandling(
+ *     Effect.gen(function* () {
+ *       const client = yield* ProviderClient
+ *       return yield* client.signIn(provider)
+ *     }),
+ *     {
+ *       context: { operation: 'sign-in', provider },
+ *       onSuccess: (result) => Effect.sync(() => toast.success(`${provider} connected!`))
+ *     }
+ *   )
+ * ```
+ *
+ * @example Data-last (pipeable)
  * ```typescript
  * const signIn = (provider: ProviderType) =>
  *   Effect.gen(function* () {
@@ -42,33 +60,43 @@ export type WithErrorHandlingOptions<A> = {
  *   }).pipe(
  *     withErrorHandling({
  *       context: { operation: 'sign-in', provider },
- *       onSuccess: (result) =>
- *         Effect.sync(() => {
- *           toast.success(`${provider} connected!`)
- *         })
+ *       onSuccess: (result) => Effect.sync(() => toast.success(`${provider} connected!`))
  *     })
  *   )
  * ```
  */
-export const withErrorHandling = <A, E extends IpcError, R>(
-  effect: Effect.Effect<A, E, R>,
-  options: WithErrorHandlingOptions<A> = {}
-): Effect.Effect<A, E, R> => {
-  const presenter = options.presenter ?? defaultErrorPresenter
+export const withErrorHandling: {
+  <A, E extends IpcError, R>(
+    options: WithErrorHandlingOptions<A>
+  ): (effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>
+  <A, E extends IpcError, R>(
+    effect: Effect.Effect<A, E, R>,
+    options?: WithErrorHandlingOptions<A>
+  ): Effect.Effect<A, E, R>
+} = dual(
+  // Arity check: 2 args = data-first, 1 arg = data-last
+  2,
+  // Implementation
+  <A, E extends IpcError, R>(
+    effect: Effect.Effect<A, E, R>,
+    options: WithErrorHandlingOptions<A> = {}
+  ): Effect.Effect<A, E, R> => {
+    const presenter = options.presenter ?? defaultErrorPresenter
 
-  return effect.pipe(
-    // On success
-    Effect.tap(value =>
-      options.onSuccess ? options.onSuccess(value) : Effect.void
-    ),
-    // On error
-    Effect.tapError(error =>
-      options.suppressErrors
-        ? Effect.void
-        : presenter.present(error as IpcError, options.context)
+    return effect.pipe(
+      // On success
+      Effect.tap(value =>
+        options.onSuccess ? options.onSuccess(value) : Effect.void
+      ),
+      // On error
+      Effect.tapError(error =>
+        options.suppressErrors
+          ? Effect.void
+          : presenter.present(error as IpcError, options.context)
+      )
     )
-  )
-}
+  }
+)
 
 /**
  * Alternative syntax for wrapping effect factories
@@ -90,7 +118,12 @@ export const withErrorHandling = <A, E extends IpcError, R>(
  * const result = await Effect.runPromise(signIn('github'))
  * ```
  */
-export const withErrorHandlingFactory = <Args extends readonly unknown[], A, E extends IpcError, R>(
+export const withErrorHandlingFactory = <
+  Args extends readonly unknown[],
+  A,
+  E extends IpcError,
+  R,
+>(
   effectFactory: (...args: Args) => Effect.Effect<A, E, R>,
   optionsFactory: (...args: Args) => WithErrorHandlingOptions<A>
 ) => {

@@ -6,10 +6,91 @@ import {
   ProviderSignInResult,
   ProviderUser,
 } from '../../shared/schemas/provider'
+import {
+  ProviderAuthenticationError,
+  ProviderFeatureUnsupportedError,
+  ProviderRepositoryError,
+} from '../providers/errors'
 import { GitHubAuthService } from './auth-service'
 import { GitHubApiService } from './api-service'
+import {
+  GitHubAuthError,
+  GitHubTokenExchangeError,
+  GitHubApiError,
+  NotAuthenticatedError,
+} from './errors'
 import type { GitHubRepository } from '../../shared/schemas'
 import type { AccountId } from '../../shared/schemas/account-context'
+import { AccountLimitExceededError } from '../tier/tier-service'
+
+/**
+ * Map GitHub domain errors to Provider port errors
+ * This preserves the hexagonal architecture by translating domain-specific
+ * errors to port-defined errors at the adapter boundary
+ */
+const mapGitHubAuthErrorToProviderError = (
+  error: unknown
+): ProviderAuthenticationError | ProviderFeatureUnsupportedError => {
+  if (error instanceof GitHubAuthError) {
+    return new ProviderAuthenticationError({
+      provider: 'github',
+      message: error.message,
+    })
+  }
+  if (error instanceof GitHubTokenExchangeError) {
+    return new ProviderAuthenticationError({
+      provider: 'github',
+      message: `Token exchange failed: ${error.message}`,
+    })
+  }
+  if (error instanceof GitHubApiError) {
+    return new ProviderAuthenticationError({
+      provider: 'github',
+      message: error.message,
+    })
+  }
+  if (error instanceof AccountLimitExceededError) {
+    // Map tier limit errors to ProviderFeatureUnsupportedError
+    // The IPC layer will handle mapping this to a tier-specific error for the UI
+    return new ProviderFeatureUnsupportedError({
+      provider: 'github',
+      feature: 'multiple-accounts',
+    })
+  }
+  if (error instanceof NotAuthenticatedError) {
+    return new ProviderAuthenticationError({
+      provider: 'github',
+      message: error.message,
+    })
+  }
+  // Fallback for unknown errors
+  return new ProviderAuthenticationError({
+    provider: 'github',
+    message: error instanceof Error ? error.message : 'Unknown error',
+  })
+}
+
+const mapGitHubApiErrorToRepositoryError = (
+  error: unknown
+): ProviderRepositoryError | ProviderAuthenticationError => {
+  if (error instanceof NotAuthenticatedError) {
+    return new ProviderAuthenticationError({
+      provider: 'github',
+      message: error.message,
+    })
+  }
+  if (error instanceof GitHubApiError) {
+    return new ProviderRepositoryError({
+      provider: 'github',
+      message: error.message,
+    })
+  }
+  // Fallback for unknown errors
+  return new ProviderRepositoryError({
+    provider: 'github',
+    message: error instanceof Error ? error.message : 'Unknown error',
+  })
+}
 
 const makeRepositoryMapper =
   (accountId: AccountId) =>
@@ -65,9 +146,15 @@ export class GitHubProviderAdapter extends Effect.Service<GitHubProviderAdapter>
               accountId: result.account.id,
               user: providerUser,
             })
-          }),
+          }).pipe(
+            // Map all GitHub domain errors to Provider port errors
+            Effect.mapError(mapGitHubAuthErrorToProviderError)
+          ),
 
-        signOut: accountId => authService.signOutAccount(accountId),
+        signOut: accountId =>
+          authService.signOutAccount(accountId).pipe(
+            Effect.mapError(mapGitHubAuthErrorToProviderError)
+          ),
 
         checkAuth: accountId =>
           Effect.gen(function* () {
@@ -77,14 +164,18 @@ export class GitHubProviderAdapter extends Effect.Service<GitHubProviderAdapter>
               accountId,
               authenticated: status.authenticated,
             })
-          }),
+          }).pipe(
+            Effect.mapError(mapGitHubAuthErrorToProviderError)
+          ),
 
         getRepositories: accountId =>
           Effect.gen(function* () {
             const repositories = yield* apiService.getReposForAccount(accountId)
             const mapRepo = makeRepositoryMapper(accountId)
             return repositories.map(mapRepo)
-          }),
+          }).pipe(
+            Effect.mapError(mapGitHubApiErrorToRepositoryError)
+          ),
       }
 
       return adapter
