@@ -1,15 +1,14 @@
 import { Atom, Result } from '@effect-atom/atom-react'
 import { Effect, Duration } from 'effect'
-import * as Option from 'effect/Option'
+import { toast } from 'sonner'
 import { AiProviderClient } from '../lib/ipc-client'
-import { withToast, showProFeatureLockedToast } from '../lib/toast'
+import { withErrorHandling } from '../lib/error-handling'
 import type {
   AiAccountId,
   AiProviderType,
   AiUsageSnapshot,
 } from '../../shared/schemas/ai/provider'
 import type { AiProviderSignInResult } from '../../shared/schemas/ai/provider'
-import { AiFeatureUnavailableError } from '../../shared/schemas/ai/errors'
 
 const aiProviderRuntime = Atom.runtime(AiProviderClient.Default)
 
@@ -22,45 +21,35 @@ const formatProviderLabel = (provider: AiProviderType): string => {
   }
 }
 
-const signInWithToast = withToast(
-  (provider: AiProviderType): Effect.Effect<AiProviderSignInResult> =>
-    Effect.gen(function* () {
-      const client = yield* AiProviderClient
-      return yield* client.signIn(provider)
-    }),
-  {
-    id: provider => `ai-provider:${provider}:sign-in`,
-    onWaiting: provider => `Connecting ${formatProviderLabel(provider)}…`,
-    onSuccess: (_result, provider) =>
-      `${formatProviderLabel(provider)} connected.`,
-    onFailure: (errorOption, provider) => {
-      if (Option.isSome(errorOption)) {
-        const error = errorOption.value
-        if (
-          error instanceof AiFeatureUnavailableError ||
-          error._tag === 'AiFeatureUnavailableError'
-        ) {
-          const message =
-            error.message ??
-            `${formatProviderLabel(provider)} integration requires the Pro tier. Upgrade to unlock AI provider usage.`
-          showProFeatureLockedToast(message)
-          return null
-        }
-
-        if (typeof (error as { message?: unknown }).message === 'string') {
-          return (error as { message: string }).message
-        }
-      }
-
-      return `Unable to connect to ${formatProviderLabel(provider)}.`
-    },
-  }
-)
+/**
+ * Sign in to AI provider with error handling
+ * Uses new withErrorHandling wrapper for clean, type-safe error presentation
+ */
+const signIn = (provider: AiProviderType) =>
+  Effect.gen(function* () {
+    const client = yield* AiProviderClient
+    return yield* client.signIn(provider)
+  }).pipe(
+    withErrorHandling({
+      context: {
+        operation: 'sign-in',
+        provider,
+      },
+      onSuccess: result =>
+        Effect.sync(() => {
+          toast.success(`${formatProviderLabel(provider)} connected.`, {
+            id: `ai-provider:${provider}:sign-in`,
+            position: 'top-left',
+            duration: 6000,
+          })
+        }),
+    })
+  )
 
 export const aiProviderSignInAtom = Atom.family((provider: AiProviderType) =>
   aiProviderRuntime.fn(
     Effect.fnUntraced(function* () {
-      return yield* signInWithToast(provider)
+      return yield* signIn(provider)
     }),
     {
       reactivityKeys: [`ai-provider:${provider}:auth`, 'ai-provider:usage'],
@@ -68,6 +57,13 @@ export const aiProviderSignInAtom = Atom.family((provider: AiProviderType) =>
   )
 )
 
+/**
+ * Query AI provider usage data
+ *
+ * NOTE: Intentionally catches auth/usage errors and returns empty array.
+ * This is EXPECTED behavior when no accounts are configured - not a real error.
+ * The UI will show "No accounts" state instead of error state.
+ */
 const aiProviderUsageQueryAtom = Atom.family((provider: AiProviderType) =>
   aiProviderRuntime
     .atom(
@@ -75,13 +71,21 @@ const aiProviderUsageQueryAtom = Atom.family((provider: AiProviderType) =>
         const client = yield* AiProviderClient
         return yield* client.getProviderUsage(provider)
       }).pipe(
-        // Gracefully handle no accounts case - return empty array instead of error
-        Effect.catchTag('AiUsageUnavailableError', () =>
-          Effect.succeed([] as readonly AiUsageSnapshot[])
-        ),
-        Effect.catchTag('AiAuthenticationError', () =>
-          Effect.succeed([] as readonly AiUsageSnapshot[])
-        )
+        // EXPECTED: No accounts configured → empty array (not an error)
+        Effect.catchTag('AiUsageUnavailableError', error => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[${provider}] No usage data:`, error.message)
+          }
+          return Effect.succeed([] as readonly AiUsageSnapshot[])
+        }),
+        // EXPECTED: Not authenticated → empty array (not an error)
+        Effect.catchTag('AiAuthenticationError', error => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[${provider}] Not authenticated`)
+          }
+          return Effect.succeed([] as readonly AiUsageSnapshot[])
+        })
+        // NetworkError is NOT caught - that's a real error that should propagate
       )
     )
     .pipe(

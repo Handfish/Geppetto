@@ -16,7 +16,7 @@ import type {
   NetworkError,
 } from '../../shared/schemas/errors'
 import { tierLimitsAtom } from '../atoms/account-atoms'
-import { Alert, AlertDescription, AlertTitle } from './ui/alert'
+import { ErrorAlert, TierLimitAlert, LoadingSpinner } from './ui/ErrorAlert'
 import {
   showProFeatureLockedToast,
   DEFAULT_PRO_FEATURE_MESSAGE,
@@ -224,32 +224,39 @@ function ProviderUsageSection({
     usageResult as Result.Result<readonly AiUsageSnapshot[], UsageError>
   )
     .onInitial(() =>
-      usageResult.waiting ? (
-        <div className="text-gray-400 text-sm">Loading usage…</div>
-      ) : null
+      usageResult.waiting ? <LoadingSpinner size="sm" /> : null
     )
     .onErrorTag('AiAuthenticationError', error => (
-      <div className="text-red-400 text-sm">
-        {error.message ?? copy.authenticationFallback}
-      </div>
+      <ErrorAlert
+        error={error}
+        message={error.message ?? copy.authenticationFallback}
+      />
     ))
     .onErrorTag('AiProviderUnavailableError', error => (
-      <div className="text-red-400 text-sm">
-        {error.message ?? copy.providerUnavailableFallback}
-      </div>
+      <ErrorAlert
+        error={error}
+        message={error.message ?? copy.providerUnavailableFallback}
+      />
     ))
     .onErrorTag('AiUsageUnavailableError', error => (
-      <div className="text-red-400 text-sm">
-        {error.message ?? copy.usageUnavailableFallback}
-      </div>
+      <ErrorAlert
+        error={error}
+        message={error.message ?? copy.usageUnavailableFallback}
+      />
     ))
     .onErrorTag('NetworkError', error => (
-      <div className="text-red-400 text-sm">Network error: {error.message}</div>
+      <ErrorAlert error={error} action={
+        <button
+          className="mt-2 px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500"
+          onClick={() => refreshUsage()}
+          type="button"
+        >
+          Retry
+        </button>
+      } />
     ))
     .onDefect(defect => (
-      <div className="text-red-400 text-sm">
-        Unexpected error: {String(defect)}
-      </div>
+      <ErrorAlert message={String(defect)} />
     ))
     .onSuccess((snapshots: readonly AiUsageSnapshot[]) => {
       if (snapshots.length === 0) {
@@ -311,18 +318,27 @@ function ProviderUsageSection({
     .onInitial(() => null)
     .onSuccess(() => null)
     .onErrorTag('AuthenticationError', error => (
-      <p className="text-red-400 text-sm">
-        {error.message ?? `Unable to connect to ${copy.providerDisplayName}.`}
-      </p>
+      <ErrorAlert
+        error={error}
+        message={error.message ?? `Unable to connect to ${copy.providerDisplayName}.`}
+      />
     ))
     .onErrorTag('NetworkError', error => (
-      <p className="text-red-400 text-sm">Network error: {error.message}</p>
+      <ErrorAlert error={error} action={
+        <button
+          className="mt-2 px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500"
+          onClick={() => signIn()}
+          type="button"
+        >
+          Retry
+        </button>
+      } />
     ))
     .onErrorTag('AiAuthenticationError', error => (
-      <p className="text-red-400 text-sm">{error.message}</p>
+      <ErrorAlert error={error} />
     ))
     .onErrorTag('AiProviderUnavailableError', error => (
-      <p className="text-red-400 text-sm">{error.message}</p>
+      <ErrorAlert error={error} />
     ))
     .render()
 
@@ -348,14 +364,11 @@ function ProviderUsageSection({
       )}
 
       {featureLockMessage && (
-        <Alert className="bg-gray-950/85 border border-yellow-500/70 text-yellow-200 shadow-lg">
-          <AlertTitle className="text-lg font-semibold uppercase tracking-wide text-yellow-300">
-            Pro feature locked
-          </AlertTitle>
-          <AlertDescription className="text-sm text-yellow-100/85">
-            {featureLockMessage}
-          </AlertDescription>
-        </Alert>
+        <TierLimitAlert
+          tier="free"
+          requiredTier="pro"
+          message={featureLockMessage}
+        />
       )}
 
       {usageContent}

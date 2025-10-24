@@ -16,6 +16,12 @@ import {
   aiProviderSignOutAtom,
 } from '../atoms/ai-provider-atoms'
 
+/**
+ * Hook for AI provider authentication and usage
+ *
+ * Returns full Results for exhaustive error handling in components.
+ * Also provides convenience properties for common use cases.
+ */
 export function useAiProviderAuth(
   provider: AiProviderType,
   options?: { loadUsage?: boolean }
@@ -27,27 +33,42 @@ export function useAiProviderAuth(
   const refreshUsage = useAtomRefresh(usageAtom)
   const runSignOut = useAtomSet(aiProviderSignOutAtom)
 
-  const usage = Result.getOrElse(
-    usageResult,
-    () => [] as readonly AiUsageSnapshot[]
-  )
-  const isAuthenticated = usage.length > 0
+  // Computed convenience properties (use Result.match for type-safe extraction)
+  const isAuthenticated = Result.match(usageResult, {
+    onSuccess: usage => usage.length > 0,
+    onFailure: () => false,
+    onInitial: () => false,
+  })
+
+  const isLoading =
+    usageResult._tag === 'Initial' && usageResult.waiting
 
   const signOut = (accountId: AiAccountId) => {
     runSignOut({ accountId })
   }
 
   return {
-    signIn,
+    // Primary: Full Results for exhaustive error handling
     signInResult,
     usageResult,
-    usage,
-    isAuthenticated,
+
+    // Actions
+    signIn,
     signOut,
     refreshUsage,
+
+    // Computed convenience properties
+    isAuthenticated,
+    isLoading,
   }
 }
 
+/**
+ * Hook for AI provider usage data only (no auth actions)
+ *
+ * Returns full usageResult for exhaustive error handling.
+ * Use Result.builder in components to handle all states.
+ */
 export function useAiProviderUsage(
   provider: AiProviderType,
   options?: { enabled?: boolean }
@@ -55,9 +76,12 @@ export function useAiProviderUsage(
   const enabled = options?.enabled ?? true
   const usageAtom = selectAiProviderUsageAtom(provider, enabled)
   const usageResult = useAtomValue(usageAtom)
+
   return {
+    // Primary: Full Result for exhaustive error handling
     usageResult,
-    usage: Result.getOrElse(usageResult, () => []),
+
+    // Computed convenience property
     isLoading: usageResult._tag === 'Initial' && usageResult.waiting,
   }
 }

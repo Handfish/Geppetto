@@ -297,15 +297,55 @@ function ProviderUsageBars({ provider, isEnabled }: UsageBarProps) {
   const Icon = getProviderIcon(provider)
   const color = getProviderColor(provider)
 
+  /**
+   * Silent error handling: Usage bars are optional UI enhancements.
+   * We intentionally hide errors here because:
+   * - AiAuthenticationError/AiUsageUnavailableError: EXPECTED when no accounts configured
+   * - AiProviderUnavailableError: Provider might not be available (free tier limitation)
+   * - NetworkError: Transient, user sees errors in main AI Usage card
+   * - Initial state: Bars only appear after successful data load
+   *
+   * This component gracefully degrades - if usage data is unavailable,
+   * the bars simply don't render rather than showing error UI.
+   */
   const usageContent = Result.builder(
     usageResult as Result.Result<readonly AiUsageSnapshot[], UsageError>
   )
-    .onInitial(() => null)
-    .onErrorTag('AiAuthenticationError', () => null)
-    .onErrorTag('AiProviderUnavailableError', () => null)
-    .onErrorTag('AiUsageUnavailableError', () => null)
-    .onErrorTag('NetworkError', () => null)
-    .onDefect(() => null)
+    .onInitial(() => {
+      if (process.env.NODE_ENV === 'development' && usageResult.waiting) {
+        console.log(`[AiUsageBars] Loading ${provider} usage...`)
+      }
+      return null
+    })
+    .onErrorTag('AiAuthenticationError', (error) => {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[AiUsageBars] ${provider} - Not authenticated (expected):`, error.message)
+      }
+      return null
+    })
+    .onErrorTag('AiProviderUnavailableError', (error) => {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[AiUsageBars] ${provider} - Provider unavailable (expected for free tier):`, error.message)
+      }
+      return null
+    })
+    .onErrorTag('AiUsageUnavailableError', (error) => {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[AiUsageBars] ${provider} - Usage unavailable (expected):`, error.message)
+      }
+      return null
+    })
+    .onErrorTag('NetworkError', (error) => {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`[AiUsageBars] ${provider} - Network error (transient):`, error.message)
+      }
+      return null
+    })
+    .onDefect((defect) => {
+      // Defects in usage bars should be logged even in production
+      console.error(`[AiUsageBars] ${provider} - Unexpected defect:`, defect)
+      return null
+    })
     .onSuccess((data: readonly AiUsageSnapshot[]) => {
       if (data.length === 0) return null
 
