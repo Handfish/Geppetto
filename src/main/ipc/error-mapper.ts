@@ -3,16 +3,27 @@ import {
   AuthenticationError,
   NetworkError,
   type NotFoundError,
+  TierLimitError,
+  GitOperationError,
+  ValidationError,
   ProviderFeatureUnavailableError as SharedFeatureUnavailableError,
   ProviderUnavailableError as SharedProviderUnavailableError,
   ProviderOperationError as SharedProviderOperationError,
 } from '../../shared/schemas/errors'
+import type { ProviderType } from '../../shared/schemas/account-context'
 import {
   AiAuthenticationError as SharedAiAuthenticationError,
   AiProviderUnavailableError as SharedAiProviderUnavailableError,
   AiFeatureUnavailableError as SharedAiFeatureUnavailableError,
   AiUsageUnavailableError as SharedAiUsageUnavailableError,
 } from '../../shared/schemas/ai/errors'
+import {
+  GitExecutableUnavailableError,
+  GitCommandTimeoutError,
+  GitCommandFailedError,
+  GitCommandSpawnError,
+  type GitCommandDomainError,
+} from '../../shared/schemas/source-control/errors'
 import {
   GitHubAuthError,
   GitHubAuthTimeout,
@@ -40,6 +51,7 @@ import {
 
 /**
  * Result type for IPC error responses
+ * Maps to IpcError union type from shared schemas
  */
 export type IpcErrorResult = {
   _tag: 'Error'
@@ -47,6 +59,9 @@ export type IpcErrorResult = {
     | AuthenticationError
     | NetworkError
     | NotFoundError
+    | TierLimitError
+    | GitOperationError
+    | ValidationError
     | SharedFeatureUnavailableError
     | SharedProviderUnavailableError
     | SharedProviderOperationError
@@ -85,6 +100,11 @@ type AiDomainError =
   | AiAccountNotFoundError
 
 /**
+ * Union of all Git command domain errors
+ */
+type GitDomainError = GitCommandDomainError
+
+/**
  * Type guard to check if an error is a tagged GitHub domain error
  */
 const isGitHubDomainError = (error: unknown): error is GitHubDomainError => {
@@ -94,6 +114,18 @@ const isGitHubDomainError = (error: unknown): error is GitHubDomainError => {
     error instanceof GitHubTokenExchangeError ||
     error instanceof GitHubApiError ||
     error instanceof NotAuthenticatedError
+  )
+}
+
+/**
+ * Type guard to check if an error is a Git command domain error
+ */
+const isGitDomainError = (error: unknown): error is GitDomainError => {
+  return (
+    error instanceof GitExecutableUnavailableError ||
+    error instanceof GitCommandTimeoutError ||
+    error instanceof GitCommandFailedError ||
+    error instanceof GitCommandSpawnError
   )
 }
 
@@ -134,12 +166,65 @@ const isAiDomainError = (error: unknown): error is AiDomainError => {
 export const mapDomainErrorToIpcError = (
   error: unknown
 ): Effect.Effect<IpcErrorResult> => {
-  // Handle tier-related errors
+  // Handle Git command errors - preserve command context
+  if (isGitDomainError(error)) {
+    if (error instanceof GitExecutableUnavailableError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new GitOperationError({
+          message: `Git executable not found: ${error.binary}`,
+        }),
+      })
+    }
+
+    if (error instanceof GitCommandTimeoutError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new GitOperationError({
+          commandId: error.commandId,
+          message:
+            error.message ??
+            `Git command timed out after ${error.timeoutMs}ms`,
+        }),
+      })
+    }
+
+    if (error instanceof GitCommandFailedError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new GitOperationError({
+          commandId: error.commandId,
+          exitCode: error.exitCode,
+          stderr: error.stderr,
+          message:
+            error.message ??
+            `Git command failed with exit code ${error.exitCode}`,
+        }),
+      })
+    }
+
+    if (error instanceof GitCommandSpawnError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new GitOperationError({
+          commandId: error.commandId,
+          message: error.message,
+          stderr: error.cause,
+        }),
+      })
+    }
+  }
+
+  // Handle tier-related errors - PRESERVE CONTEXT (no more lossy mapping)
   if (isTierDomainError(error)) {
     if (error instanceof AccountLimitExceededError) {
       return Effect.succeed({
         _tag: 'Error' as const,
-        error: new AuthenticationError({
+        error: new TierLimitError({
+          provider: error.provider as ProviderType,
+          currentCount: error.currentCount,
+          maxAllowed: error.maxAllowed,
+          tier: error.tier,
           message: `Account limit exceeded for ${error.provider}. Maximum ${error.maxAllowed} account(s) allowed in ${error.tier} tier.`,
         }),
       })
@@ -157,9 +242,15 @@ export const mapDomainErrorToIpcError = (
           }),
         })
       }
+      // Map other feature errors to TierLimitError to preserve context
       return Effect.succeed({
         _tag: 'Error' as const,
-        error: new AuthenticationError({
+        error: new TierLimitError({
+          provider: 'github' as const, // Default provider for non-AI features
+          currentCount: 0,
+          maxAllowed: 0,
+          tier: error.tier,
+          requiredTier: error.requiredTier,
           message: `Feature '${error.feature}' requires ${error.requiredTier} tier.`,
         }),
       })
@@ -286,8 +377,28 @@ export const mapDomainErrorToIpcError = (
     }
   }
 
-  // Handle unexpected errors
-  const message = error instanceof Error ? error.message : JSON.stringify(error)
+  // Handle unexpected errors - use ValidationError for parse/schema errors
+  const message =
+    error instanceof Error ? error.message : JSON.stringify(error)
+
+  // If it looks like a parse/validation error, use ValidationError
+  if (
+    message.includes('validation') ||
+    message.includes('schema') ||
+    message.includes('decode') ||
+    message.includes('parse') ||
+    message.includes('expected')
+  ) {
+    return Effect.succeed({
+      _tag: 'Error' as const,
+      error: new ValidationError({
+        message: `Data validation failed: ${message}`,
+        details: message,
+      }),
+    })
+  }
+
+  // Generic fallback for truly unexpected errors
   return Effect.succeed({
     _tag: 'Error' as const,
     error: new NetworkError({
