@@ -1,7 +1,6 @@
 import { Terminal } from 'lucide-react'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Result } from '@effect-atom/atom-react'
-import { toast } from 'sonner'
 
 import SleepLight from 'renderer/components/ui/SleepLight'
 import { ToastViewport } from 'renderer/components/ui/ToastViewport'
@@ -33,6 +32,7 @@ import {
   clearConsoleError,
 } from '../lib/console-error-channel'
 import { WorkspaceSelector } from '../components/WorkspaceSelector'
+import { showCustomToast } from '../lib/toast'
 
 export function MainScreen() {
   const { accountsResult, activeAccount, refreshProviderRepos } =
@@ -55,18 +55,19 @@ export function MainScreen() {
     const error = readConsoleError()
     if (error && error.timestamp !== displayedErrorTimestamp.current) {
       displayedErrorTimestamp.current = error.timestamp
-      toast.error('Developer Console Message', {
-        description: error.message,
-        duration: 6000, // Auto-dismiss after 6 seconds
-        position: 'top-left',
-        id: 'console-error',
-        onDismiss: () => {
-          clearConsoleError()
+      showCustomToast(
+        {
+          title: 'Developer Console Message',
+          message: error.message,
+          onDismiss: clearConsoleError,
         },
-        onAutoClose: () => {
-          clearConsoleError()
-        },
-      })
+        {
+          id: 'console-error',
+          duration: 6000,
+          onDismiss: clearConsoleError,
+          onAutoClose: clearConsoleError,
+        }
+      )
     }
   }, [])
 

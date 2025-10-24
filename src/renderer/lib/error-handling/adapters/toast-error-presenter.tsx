@@ -5,7 +5,6 @@
  * This is the default error presenter for the application.
  */
 
-import React from 'react'
 import { Effect } from 'effect'
 import { toast } from 'sonner'
 import type { ErrorPresenter, ErrorContext } from '../ports'
@@ -17,9 +16,9 @@ import {
   isGitError,
   isValidationError,
 } from '../../../../shared/schemas/errors'
+import { showCustomToast } from '../../toast'
 
 const DEFAULT_TOAST_DURATION = 6000
-const TOAST_POSITION = 'top-left' as const
 
 /**
  * Toast Error Presenter Implementation
@@ -35,25 +34,25 @@ export class ToastErrorPresenter implements ErrorPresenter {
     Effect.sync(() => {
       const title = this.formatErrorTitle(error, context)
       const message = this.formatErrorMessage(error, context)
-      const id = context?.operation
-        ? `error:${context.operation}`
-        : undefined
-
-      // Tier errors get special treatment (yellow warning style)
-      if (isTierError(error)) {
-        this.presentTierError(error, context, id)
-        return
-      }
-
-      // Standard error toast
+      const id = context?.operation ? `error:${context.operation}` : undefined
       const duration = context?.severity === 'warning' ? 8000 : DEFAULT_TOAST_DURATION
 
-      toast.error(message, {
-        id,
-        description: title !== 'Error' ? title : undefined,
-        duration,
-        position: TOAST_POSITION,
-      })
+      // Build description for tier errors
+      const description = isTierError(error) && error._tag === 'TierLimitError'
+        ? `${error.currentCount} / ${error.maxAllowed} accounts used`
+        : undefined
+
+      showCustomToast(
+        {
+          title,
+          message,
+          description,
+        },
+        {
+          id,
+          duration,
+        }
+      )
     })
 
   dismiss = (id?: string): Effect.Effect<void> =>
@@ -106,49 +105,6 @@ export class ToastErrorPresenter implements ErrorPresenter {
       : ''
 
     return `${prefix}${error.message}`
-  }
-
-  /**
-   * Present tier error with special yellow styling
-   */
-  private presentTierError(
-    error: Extract<IpcError, { _tag: 'TierLimitError' | 'AiFeatureUnavailableError' }>,
-    context?: ErrorContext,
-    id?: string
-  ): void {
-    toast.custom(
-      toastId => (
-        <div className="pointer-events-auto w-[320px] rounded-xl border border-yellow-500/80 bg-gray-950/90 px-5 py-4 text-yellow-100 shadow-2xl backdrop-blur-md">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold uppercase tracking-wide text-yellow-300">
-                {error._tag === 'TierLimitError'
-                  ? 'Tier Limit Reached'
-                  : 'Pro Feature Required'}
-              </p>
-              <p className="text-sm text-yellow-100/85">{error.message}</p>
-              {error._tag === 'TierLimitError' && (
-                <p className="text-xs text-yellow-100/65">
-                  {error.currentCount} / {error.maxAllowed} accounts used
-                </p>
-              )}
-            </div>
-            <button
-              className="rounded-md px-2 py-1 text-xs font-medium text-yellow-100/70 transition hover:bg-yellow-500/10 hover:text-yellow-50"
-              onClick={() => toast.dismiss(toastId)}
-              type="button"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      ),
-      {
-        id: id ?? 'tier-error',
-        duration: 10000,
-        position: TOAST_POSITION,
-      }
-    )
   }
 }
 
