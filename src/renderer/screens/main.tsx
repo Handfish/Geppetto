@@ -21,6 +21,7 @@ import {
 } from 'renderer/components/ui/RepositoryCarousel4'
 import { RepositorySearch } from 'renderer/components/ui/RepositorySearch'
 import { ClickSpark } from 'renderer/components/ui/ClickSpark'
+import { AiUsageBars } from 'renderer/components/ui/AiUsageBars'
 import {
   useProviderAuth,
   useAccountRepositories,
@@ -173,6 +174,9 @@ export function MainScreen() {
             </Alert>
           </div>
         )}
+
+        {/* AI Usage Bars - positioned in top left quadrant */}
+        <AiUsageBars />
 
         {userName && activeAccountId && (
           <div
