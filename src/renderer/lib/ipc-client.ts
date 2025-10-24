@@ -188,3 +188,23 @@ export class AccountClient extends Effect.Service<AccountClient>()(
     }),
   }
 ) {}
+
+export class WorkspaceClient extends Effect.Service<WorkspaceClient>()(
+  'WorkspaceClient',
+  {
+    dependencies: [ElectronIpcClient.Default],
+    effect: Effect.gen(function* () {
+      const ipc = yield* ElectronIpcClient
+      type SetPathInput = S.Schema.Type<
+        (typeof IpcContracts)['setWorkspacePath']['input']
+      >
+
+      return {
+        getConfig: () => ipc.invoke('getWorkspaceConfig', undefined),
+        setPath: (path: SetPathInput['path']) =>
+          ipc.invoke('setWorkspacePath', { path }),
+        selectDirectory: () => ipc.invoke('selectWorkspaceDirectory', undefined),
+      } as const
+    }),
+  }
+) {}

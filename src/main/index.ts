@@ -31,6 +31,8 @@ import {
   GitCommandService,
   NodeGitCommandRunner,
 } from './source-control'
+import { WorkspaceService } from './workspace/workspace-service'
+import { setupWorkspaceIpcHandlers } from './ipc/workspace-handlers'
 
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
@@ -57,7 +59,8 @@ const MainLayer = Layer.mergeAll(
   AiProviderRegistryService.Default,
   AiProviderService.Default,
   NodeGitCommandRunner.Default,
-  GitCommandService.Default
+  GitCommandService.Default,
+  WorkspaceService.Default
 )
 
 function createMainWindow() {
@@ -158,6 +161,7 @@ app.whenReady().then(async () => {
       yield* setupAccountIpcHandlers
       yield* setupProviderIpcHandlers
       yield* setupAiProviderIpcHandlers
+      yield* setupWorkspaceIpcHandlers
     }).pipe(Effect.provide(MainLayer))
   )
 

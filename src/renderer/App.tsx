@@ -6,13 +6,15 @@ import { useProviderAuth } from './hooks/useProviderAtoms'
 import { AiUsageCard } from './components/AiUsageCard'
 import { ToastViewport } from './components/ui/ToastViewport'
 import { ErrorTester } from './components/dev/ErrorTester'
+import { WorkspaceSelector } from './components/WorkspaceSelector'
 
 export function App() {
   const { isAuthenticated } = useProviderAuth('github')
 
   const content = (
-    <div className="min-h-screen bg-gray-900 p-6">
+    <div className="min-h-screen bg-gray-900 p-6 relative">
       <ToastViewport />
+      <WorkspaceSelector />
       <div className="max-w-6xl mx-auto space-y-8">
         <header className="space-y-4">
           <div className="flex items-center justify-center">

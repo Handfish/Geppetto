@@ -32,6 +32,7 @@ import {
   AccountId,
   ProviderType,
 } from './schemas/account-context'
+import { WorkspaceConfig } from './schemas/workspace'
 
 /**
  * Account Management IPC Contracts
@@ -206,12 +207,39 @@ export const AiProviderIpcContracts = {
 } as const
 
 /**
+ * Workspace Management IPC Contracts
+ */
+export const WorkspaceIpcContracts = {
+  getWorkspaceConfig: {
+    channel: 'workspace:getConfig' as const,
+    input: S.Void,
+    output: WorkspaceConfig,
+    errors: S.Union(NetworkError),
+  },
+
+  setWorkspacePath: {
+    channel: 'workspace:setPath' as const,
+    input: S.Struct({ path: S.String }),
+    output: S.Void,
+    errors: S.Union(NetworkError),
+  },
+
+  selectWorkspaceDirectory: {
+    channel: 'workspace:selectDirectory' as const,
+    input: S.Void,
+    output: S.NullOr(S.String),
+    errors: S.Union(NetworkError),
+  },
+} as const
+
+/**
  * Combined IPC Contracts
  */
 export const IpcContracts = {
   ...AccountIpcContracts,
   ...ProviderIpcContracts,
   ...AiProviderIpcContracts,
+  ...WorkspaceIpcContracts,
 } as const
 
 export type IpcContracts = typeof IpcContracts
