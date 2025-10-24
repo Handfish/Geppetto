@@ -16,7 +16,8 @@ export const workspaceConfigAtom = workspaceRuntime
   )
   .pipe(
     Atom.withReactivity(['workspace:config']),
-    Atom.setIdleTTL(Duration.minutes(5))
+    Atom.setIdleTTL(Duration.minutes(5)),
+    Atom.keepAlive
   )
 
 /**

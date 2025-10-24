@@ -5,7 +5,7 @@
  */
 
 import { Effect, Schema as S } from 'effect'
-import { ipcMain } from 'electron'
+import { ipcMain, BrowserWindow } from 'electron'
 import { WorkspaceIpcContracts } from '../../shared/ipc-contracts'
 import { WorkspaceService } from '../workspace/workspace-service'
 import { mapDomainErrorToIpcError } from './error-mapper'
@@ -65,11 +65,23 @@ export const setupWorkspaceIpcHandlers = Effect.gen(function* () {
     })
   }
 
+  /**
+   * Broadcast workspace change to all windows
+   */
+  const broadcastWorkspaceChange = () => {
+    BrowserWindow.getAllWindows().forEach(window => {
+      window.webContents.send('workspace:changed')
+    })
+  }
+
   // Register handlers
   setupHandler('getWorkspaceConfig', () => workspaceService.getConfig)
 
   setupHandler('setWorkspacePath', input =>
-    workspaceService.setWorkspacePath(input.path)
+    Effect.gen(function* () {
+      yield* workspaceService.setWorkspacePath(input.path)
+      broadcastWorkspaceChange()
+    })
   )
 
   setupHandler('selectWorkspaceDirectory', () => workspaceService.selectDirectory)

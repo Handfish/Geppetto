@@ -31,6 +31,7 @@ import {
   readConsoleError,
   clearConsoleError,
 } from '../lib/console-error-channel'
+import { WorkspaceSelector } from '../components/WorkspaceSelector'
 
 export function MainScreen() {
   const { accountsResult, activeAccount, refreshProviderRepos } =
@@ -185,6 +186,9 @@ export function MainScreen() {
 
         {/* AI Usage Bars - positioned in top left quadrant */}
         <AiUsageBars />
+
+        {/* Workspace Selector - positioned in top right */}
+        <WorkspaceSelector />
 
         {userName && activeAccountId && (
           <div
