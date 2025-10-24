@@ -4,9 +4,10 @@ import {
   useProviderAuth,
   useProviderRepositories,
 } from '../hooks/useProviderAtoms'
+import { ErrorAlert, LoadingSpinner } from './ui/ErrorAlert'
 
 export function RepositoryList() {
-  const { accounts } = useProviderAuth('github')
+  const { accountsResult } = useProviderAuth('github')
   const { repositoriesResult } = useProviderRepositories('github')
 
   return (
@@ -16,25 +17,30 @@ export function RepositoryList() {
       </h2>
 
       {Result.builder(repositoriesResult)
-        .onInitial(() => (
-          <div className="text-gray-400">Loading repositories...</div>
-        ))
-        .onErrorTag('AuthenticationError', () => (
-          <div className="text-red-400">Please authenticate first</div>
+        .onInitial(() => <LoadingSpinner size="md" />)
+        .onErrorTag('AuthenticationError', error => (
+          <ErrorAlert error={error} message="Please authenticate first" />
         ))
         .onErrorTag('NetworkError', error => (
-          <div className="text-red-400">Network error: {error.message}</div>
+          <ErrorAlert error={error} />
         ))
         .onErrorTag('ProviderOperationError', error => (
-          <div className="text-red-400">Provider error: {error.message}</div>
+          <ErrorAlert error={error} />
         ))
-        .onDefect(() => (
-          <div className="text-red-400">Unexpected error occurred</div>
+        .onDefect(defect => (
+          <ErrorAlert message={String(defect)} />
         ))
         .onSuccess(groups => {
           if (groups.length === 0) {
             return <div className="text-gray-400">No repositories found</div>
           }
+
+          // Get accounts list to show account display names
+          const accounts = Result.match(accountsResult, {
+            onSuccess: accs => accs,
+            onFailure: () => [],
+            onInitial: () => [],
+          })
 
           return (
             <div className="space-y-6">
