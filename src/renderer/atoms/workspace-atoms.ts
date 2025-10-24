@@ -78,6 +78,7 @@ export const cloneToWorkspaceAtom = workspaceRuntime.fn(
     repoName: string
     owner: string
     defaultBranch: string
+    provider: string
   }) =>
     Effect.gen(function* () {
       const client = yield* WorkspaceClient

@@ -83,6 +83,8 @@ export function RepositoryDropdown({
       const result = yield* client.checkRepositoryInWorkspace({
         owner: repo.owner,
         repoName: repo.name,
+        provider: repo.provider,
+        defaultBranch: repo.defaultBranch,
       })
       return result.inWorkspace
     })
@@ -106,6 +108,7 @@ export function RepositoryDropdown({
       repoName: repo.name,
       owner: repo.owner,
       defaultBranch: repo.defaultBranch,
+      provider: repo.provider,
     })
     onOpenChange(false)
   }

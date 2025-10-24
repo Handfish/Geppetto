@@ -48,6 +48,8 @@ export function RepositoryActionsMenu({
       const result = yield* client.checkRepositoryInWorkspace({
         owner: repository.owner,
         repoName: repository.name,
+        provider: repository.provider,
+        defaultBranch: repository.defaultBranch,
       })
       return result.inWorkspace
     })
@@ -71,6 +73,7 @@ export function RepositoryActionsMenu({
       repoName: repository.name,
       owner: repository.owner,
       defaultBranch: repository.defaultBranch,
+      provider: repository.provider,
     })
     onClose()
   }

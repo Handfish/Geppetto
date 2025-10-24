@@ -84,7 +84,7 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
         /**
          * Check if a repository is already cloned in the workspace
          */
-        checkRepositoryInWorkspace: (owner: string, repoName: string) =>
+        checkRepositoryInWorkspace: (owner: string, repoName: string, provider: string, defaultBranch: string) =>
           Effect.gen(function* () {
             const currentPath = store.get('currentPath') as string | null | undefined
 
@@ -96,8 +96,12 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
               }
             }
 
-            const bareRepoPath = path.join(currentPath, 'repos', `${owner}_${repoName}.git`)
-            const worktreePath = path.join(currentPath, 'worktrees', `${owner}_${repoName}`)
+            // New structure: {owner}-{provider}-{repoName}/
+            //   ├── .git (bare repo)
+            //   └── {defaultBranch}/ (worktree)
+            const repoParentDir = path.join(currentPath, `${owner}-${provider}-${repoName}`)
+            const bareRepoPath = path.join(repoParentDir, '.git')
+            const worktreePath = path.join(repoParentDir, defaultBranch)
 
             // Check if both paths exist, catching errors gracefully
             const checkPath = (pathToCheck: string) =>
@@ -129,12 +133,17 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
 
         /**
          * Clone repository to workspace using bare repo + worktree pattern
+         *
+         * New structure: {owner}-{provider}-{repoName}/
+         *   ├── .git (bare repo cloned here)
+         *   └── {defaultBranch}/ (worktree added as sibling)
          */
         cloneToWorkspace: (
           cloneUrl: string,
           repoName: string,
           owner: string,
-          defaultBranch: string
+          defaultBranch: string,
+          provider: string
         ) =>
           Effect.gen(function* () {
             const currentPath = store.get('currentPath') as string | null | undefined
@@ -143,35 +152,33 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
               return yield* Effect.fail(new Error('No workspace path configured'))
             }
 
-            // Create directory structure
-            const reposDir = path.join(currentPath, 'repos')
-            const worktreesDir = path.join(currentPath, 'worktrees')
-            const bareRepoPath = path.join(reposDir, `${owner}_${repoName}.git`)
-            const worktreePath = path.join(worktreesDir, `${owner}_${repoName}`)
+            // Create parent directory: {owner}-{provider}-{repoName}
+            const repoParentDir = path.join(currentPath, `${owner}-${provider}-${repoName}`)
+            const bareRepoPath = path.join(repoParentDir, '.git')
+            const worktreePath = path.join(repoParentDir, defaultBranch)
 
             console.log('[WorkspaceService] Starting clone:', {
               cloneUrl,
               repoName,
               owner,
+              provider,
               defaultBranch,
+              repoParentDir,
               bareRepoPath,
               worktreePath,
             })
 
-            // Ensure directories exist
-            yield* Effect.promise(() => fs.mkdir(reposDir, { recursive: true }))
-            yield* Effect.promise(() => fs.mkdir(worktreesDir, { recursive: true }))
+            // Ensure workspace directory exists (but NOT the repo parent dir - let git create it)
+            console.log('[WorkspaceService] Starting clone...')
 
-            console.log('[WorkspaceService] Directories created, starting bare clone...')
-
-            // Step 1: Clone bare repository
-            // Run from reposDir as working directory
+            // Step 1: Clone with --no-checkout and bare config
+            // Git will create the directory for us
             const cloneRequest = new GitCommandRequest({
               id: S.UUID.make(randomUUID()),
               binary: 'git',
-              args: ['clone', '--bare', cloneUrl, bareRepoPath],
+              args: ['clone', '--no-checkout', '-c', 'core.bare=true', cloneUrl, `${owner}-${provider}-${repoName}`],
               worktree: new GitWorktreeContext({
-                repositoryPath: reposDir,  // cwd for the clone command
+                repositoryPath: currentPath,  // Run from workspace root, git creates the dir
               }),
             })
 
@@ -179,25 +186,61 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
             const cloneResult = yield* gitCommandService.runToCompletion(cloneRequest).pipe(
               Effect.tap(() => Effect.sync(() => console.log('[WorkspaceService] Clone completed successfully'))),
               Effect.tapError((error) => Effect.sync(() => console.error('[WorkspaceService] Clone failed:', error))),
-              Effect.timeout('60 seconds')
+              Effect.timeout('120 seconds')
             )
             console.log('[WorkspaceService] Clone result:', cloneResult)
+            if (cloneResult.stdout) {
+              console.log('[WorkspaceService] Clone stdout:', cloneResult.stdout)
+            }
+            if (cloneResult.stderr) {
+              console.log('[WorkspaceService] Clone stderr:', cloneResult.stderr)
+            }
 
-            // Step 2: Add worktree for default branch
-            // Run from bare repo directory (must be inside git repo)
+            // Step 2: cd into directory and add worktree
             console.log('[WorkspaceService] Starting worktree add...')
             const worktreeRequest = new GitCommandRequest({
               id: S.UUID.make(randomUUID()),
               binary: 'git',
-              args: ['worktree', 'add', worktreePath, defaultBranch],
+              args: ['worktree', 'add', defaultBranch, defaultBranch],
               worktree: new GitWorktreeContext({
-                repositoryPath: bareRepoPath,  // cwd must be the bare repo
+                repositoryPath: repoParentDir,  // cd into the cloned directory
               }),
             })
 
             console.log('[WorkspaceService] Worktree request:', worktreeRequest)
-            const worktreeResult = yield* gitCommandService.runToCompletion(worktreeRequest)
+            const worktreeResult = yield* gitCommandService.runToCompletion(worktreeRequest).pipe(
+              Effect.tap(() => Effect.sync(() => console.log('[WorkspaceService] Worktree completed successfully'))),
+              Effect.tapError((error) => Effect.sync(() => console.error('[WorkspaceService] Worktree failed:', error))),
+              Effect.timeout('30 seconds')
+            )
             console.log('[WorkspaceService] Worktree result:', worktreeResult)
+            if (worktreeResult.stdout) {
+              console.log('[WorkspaceService] Worktree stdout:', worktreeResult.stdout)
+            }
+            if (worktreeResult.stderr) {
+              console.log('[WorkspaceService] Worktree stderr:', worktreeResult.stderr)
+            }
+
+            // Verify the worktree was created
+            const worktreeExists = yield* Effect.tryPromise({
+              try: () => fs.access(worktreePath),
+              catch: () => new Error('Worktree directory was not created'),
+            }).pipe(
+              Effect.map(() => true),
+              Effect.catchAll((error) =>
+                Effect.sync(() => {
+                  console.error('[WorkspaceService] Worktree verification failed:', error)
+                  return false
+                })
+              )
+            )
+
+            if (!worktreeExists) {
+              console.error('[WorkspaceService] Worktree was not created at:', worktreePath)
+              return yield* Effect.fail(new Error('Failed to create worktree'))
+            }
+
+            console.log('[WorkspaceService] Worktree verified at:', worktreePath)
 
             return {
               bareRepoPath,

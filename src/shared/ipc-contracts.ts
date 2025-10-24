@@ -238,6 +238,7 @@ export const WorkspaceIpcContracts = {
       repoName: S.String,
       owner: S.String,
       defaultBranch: S.String,
+      provider: S.String,
     }),
     output: S.Struct({
       bareRepoPath: S.String,
@@ -251,6 +252,8 @@ export const WorkspaceIpcContracts = {
     input: S.Struct({
       owner: S.String,
       repoName: S.String,
+      provider: S.String,
+      defaultBranch: S.String,
     }),
     output: S.Struct({
       inWorkspace: S.Boolean,

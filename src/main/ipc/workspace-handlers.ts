@@ -91,11 +91,17 @@ export const setupWorkspaceIpcHandlers = Effect.gen(function* () {
       input.cloneUrl,
       input.repoName,
       input.owner,
-      input.defaultBranch
+      input.defaultBranch,
+      input.provider
     )
   )
 
   setupHandler('checkRepositoryInWorkspace', input =>
-    workspaceService.checkRepositoryInWorkspace(input.owner, input.repoName)
+    workspaceService.checkRepositoryInWorkspace(
+      input.owner,
+      input.repoName,
+      input.provider,
+      input.defaultBranch
+    )
   )
 })

@@ -80,7 +80,7 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
                       GitCommandDomainError
                     >()
 
-                    const emit = (event: GitCommandEvent) =>
+                    const emit = (event: GitCommandEvent) => {
                       Effect.runFork(
                         queue.offer(event).pipe(
                           Effect.catchAllCause(cause =>
@@ -92,6 +92,7 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
                           )
                         )
                       )
+                    }
 
                     let stdoutBuffer = ''
                     let stderrBuffer = ''
@@ -107,12 +108,16 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
 
                     const completeSuccess = (result: GitCommandResult) => {
                       if (!markCompleted()) return
+                      console.log('[GitCommandRunner] About to complete deferred with result')
 
                       Effect.runFork(
                         Deferred.succeed(resultDeferred, result).pipe(
-                          Effect.zipRight(queue.shutdown)
+                          Effect.tap(() => Effect.sync(() => console.log('[GitCommandRunner] Deferred succeeded'))),
+                          Effect.zipRight(queue.shutdown),
+                          Effect.tap(() => Effect.sync(() => console.log('[GitCommandRunner] Queue shut down')))
                         )
                       )
+                      console.log('[GitCommandRunner] Effect.runFork returned')
                     }
 
                     const completeFailure = (
@@ -217,6 +222,7 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
                     })
 
                     child.once('exit', (code, signal) => {
+                      console.log(`[GitCommandRunner] Process exited - code: ${code}, signal: ${signal}`)
                       const endedAt = new Date()
                       const exitEvent = {
                         _tag: 'Exited' as const,
@@ -227,11 +233,15 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
 
                       emit(exitEvent)
 
-                      if (!markCompleted()) {
+                      // Check if already completed but don't mark as completed yet
+                      // Let completeSuccess/completeFailure handle that
+                      if (completed) {
+                        console.log(`[GitCommandRunner] Already completed, skipping`)
                         return
                       }
 
                       const durationMs = endedAt.getTime() - startedAt.getTime()
+                      console.log(`[GitCommandRunner] Duration: ${durationMs}ms, completing...`)
 
                       if (signal || terminatedByUser) {
                         const result = new GitCommandResult({
@@ -250,6 +260,7 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
                       }
 
                       if (code === 0) {
+                        console.log(`[GitCommandRunner] Success - calling completeSuccess`)
                         const result = new GitCommandResult({
                           commandId: id,
                           exitCode: 0,
@@ -262,6 +273,7 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
                         })
 
                         completeSuccess(result)
+                        console.log(`[GitCommandRunner] completeSuccess called`)
                         return
                       }
 
