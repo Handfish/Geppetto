@@ -35,7 +35,7 @@ export function useAiProviderAuth(
 
   // Computed convenience properties (use Result.match for type-safe extraction)
   const isAuthenticated = Result.match(usageResult, {
-    onSuccess: usage => usage.length > 0,
+    onSuccess: (data) => data.value.length > 0,
     onFailure: () => false,
     onInitial: () => false,
   })

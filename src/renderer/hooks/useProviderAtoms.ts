@@ -39,18 +39,12 @@ export function useProviderAuth(provider: ProviderType) {
     providerRepositoriesAtom(provider)
   )
 
-  // Computed convenience properties (use Result.match for type-safe extraction)
-  const isAuthenticated = Result.match(accountsResult, {
-    onSuccess: accounts => accounts.length > 0,
-    onFailure: () => false,
-    onInitial: () => false,
-  })
+  // Computed convenience properties
+  const accounts = Result.getOrElse(accountsResult, () => [])
+  const context = Result.getOrElse(contextResult, () => AccountContext.empty())
 
-  const activeAccount = Result.match(contextResult, {
-    onSuccess: ({ value }) => value.getActiveAccount(),
-    onFailure: () => null,
-    onInitial: () => null,
-  })
+  const isAuthenticated = accounts.length > 0
+  const activeAccount = context.getActiveAccount()
 
   const isLoading =
     (contextResult._tag === 'Initial' && contextResult.waiting) ||
@@ -73,6 +67,7 @@ export function useProviderAuth(provider: ProviderType) {
     refreshProviderRepos,
 
     // Computed convenience properties
+    accounts,
     activeAccount,
     isAuthenticated,
     isSigningIn: signInResult.waiting,

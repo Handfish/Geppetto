@@ -36,11 +36,7 @@ export function RepositoryList() {
           }
 
           // Get accounts list to show account display names
-          const accounts = Result.match(accountsResult, {
-            onSuccess: accs => accs,
-            onFailure: () => [],
-            onInitial: () => [],
-          })
+          const accounts = Result.getOrElse(accountsResult, () => [])
 
           return (
             <div className="space-y-6">

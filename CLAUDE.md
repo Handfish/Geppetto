@@ -438,7 +438,120 @@ const value = Redacted.value(token)  // explicit unwrap required
 ```
 Used throughout for GitHub tokens in storage, IPC contracts, and API calls.
 
-### 6. TypeScript Type Safety - Avoid `unknown` and `any`
+### 6. Result API for Error Handling in Components
+
+**CRITICAL: All atoms that perform async operations return `Result<T, E>` types from `@effect-atom/atom-react`.**
+
+**The Result Type:**
+```typescript
+type Result<T, E> =
+  | { _tag: 'Initial'; waiting: boolean }     // Loading (no data yet)
+  | { _tag: 'Success'; value: T; waiting: boolean }  // Has data
+  | { _tag: 'Failure'; error: E; waiting: boolean }  // Has error
+  | { _tag: 'Defect'; defect: unknown; waiting: boolean }  // Bug
+```
+
+**REQUIRED Pattern - Use `Result.builder()` for UI Rendering:**
+
+```typescript
+// ✅ CORRECT: Exhaustive error handling with Result.builder
+export function RepositoryList() {
+  const { repositoriesResult } = useProviderRepositories('github')
+
+  return Result.builder(repositoriesResult)
+    .onInitial(() => <LoadingSpinner />)
+    .onErrorTag('AuthenticationError', (error) => <LoginPrompt error={error} />)
+    .onErrorTag('NetworkError', (error) => <ErrorAlert error={error} />)
+    .onDefect((defect) => <UnexpectedError defect={defect} />)
+    .onSuccess((data) => <DataView data={data} />)
+    .render()  // Required final call
+}
+```
+
+**Safe Data Extraction - Use `Result.match()` or `Result.getOrElse()`:**
+
+```typescript
+// ✅ CORRECT: Use Result.match() for derived boolean/simple computations
+const isAuthenticated = Result.match(usageResult, {
+  onSuccess: (data) => data.value.length > 0,  // Note: access data.value, not just data
+  onFailure: () => false,
+  onInitial: () => false,
+})
+
+// ✅ CORRECT: Use Result.getOrElse() for extracting data with fallback
+const accounts = Result.getOrElse(accountsResult, () => [])
+
+// Use Result.match when:
+// - Computing derived boolean flags (isAuthenticated, hasData, etc.)
+// - You need different logic per Result state
+// - You're in a non-rendering context (hooks, utilities)
+
+// Use Result.getOrElse when:
+// - You need a default value for missing/error cases
+// - Errors are handled elsewhere (e.g., primary Result uses builder)
+// - You're extracting secondary data in a success callback
+```
+
+**CRITICAL - Result.match Receives Full Result Object:**
+
+```typescript
+// ❌ WRONG: Trying to access value directly
+const isAuthenticated = Result.match(usageResult, {
+  onSuccess: (usage) => usage.length > 0,  // ❌ Type error: Success object has no length
+  onFailure: () => false,
+  onInitial: () => false,
+})
+
+// ✅ CORRECT: Access data.value to get the actual data
+const isAuthenticated = Result.match(usageResult, {
+  onSuccess: (data) => data.value.length > 0,  // ✅ data is { value: T, waiting: boolean }
+  onFailure: () => false,
+  onInitial: () => false,
+})
+```
+
+**Handling Loading States - Check `waiting` Field:**
+
+```typescript
+// ✅ CORRECT: Check both _tag and waiting for granular states
+const isInitialLoad = result._tag === 'Initial' && result.waiting
+const isRefreshing = result._tag === 'Success' && result.waiting
+const isRetrying = result._tag === 'Failure' && result.waiting
+const isFetching = result.waiting  // Any state
+```
+
+**Complete Example:**
+
+```typescript
+export function RepositoryList() {
+  const { accountsResult } = useProviderAuth('github')
+  const { repositoriesResult } = useProviderRepositories('github')
+
+  return Result.builder(repositoriesResult)
+    .onInitial(() => <LoadingSpinner />)
+    .onErrorTag('AuthenticationError', (err) => <LoginPrompt error={err} />)
+    .onErrorTag('NetworkError', (err) => <ErrorAlert error={err} />)
+    .onDefect((defect) => <UnexpectedError defect={defect} />)
+    .onSuccess((groups) => {
+      // Extract secondary data safely with fallback
+      const accounts = Result.getOrElse(accountsResult, () => [])
+
+      return (
+        <div>
+          {groups.map(group => {
+            const account = accounts.find(acc => acc.id === group.accountId)
+            return <RepoGroup key={group.accountId} group={group} account={account} />
+          })}
+        </div>
+      )
+    })
+    .render()
+}
+```
+
+**For comprehensive details, see `docs/RESULT_API_AND_ERROR_HANDLING.md`**
+
+### 7. TypeScript Type Safety - Avoid `unknown` and `any`
 
 **CRITICAL RULE: This codebase maintains strict type safety. DO NOT use `unknown` or `any` types except in very specific, justified cases.**
 

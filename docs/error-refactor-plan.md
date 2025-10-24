@@ -920,7 +920,7 @@
       isLoading: Result.isInitial(usageResult) && usageResult.waiting,
       hasError: Result.isFailure(usageResult),
       isAuthenticated: Result.match(usageResult, {
-        onSuccess: (usage) => usage.length > 0,
+        onSuccess: (data) => data.value.length > 0,  // NOTE: access data.value
         onFailure: () => false,
         onInitial: () => false,
       }),

@@ -438,7 +438,204 @@ const value = Redacted.value(token)  // explicit unwrap required
 ```
 Used throughout for GitHub tokens in storage, IPC contracts, and API calls.
 
-### 6. TypeScript Type Safety - Avoid `unknown` and `any`
+### 6. Result API for Error Handling - CRITICAL PATTERNS
+
+**CRITICAL: All atoms that perform async operations return `Result<T, E>` types from `@effect-atom/atom-react`.**
+
+#### The Result Type Structure
+
+```typescript
+type Result<T, E> =
+  | { _tag: 'Initial'; waiting: boolean }     // Loading (no data yet)
+  | { _tag: 'Success'; value: T; waiting: boolean }  // Has data
+  | { _tag: 'Failure'; error: E; waiting: boolean }  // Has error
+  | { _tag: 'Defect'; defect: unknown; waiting: boolean }  // Unexpected error (bug)
+```
+
+#### REQUIRED Pattern: Use `Result.builder()` for ALL UI Rendering
+
+This is the **ONLY** correct way to handle Result types in components:
+
+```typescript
+// ✅ CORRECT: Exhaustive error handling with Result.builder
+export function RepositoryList() {
+  const { repositoriesResult } = useProviderRepositories('github')
+
+  return Result.builder(repositoriesResult)
+    .onInitial(() => <LoadingSpinner />)
+    .onErrorTag('AuthenticationError', (error) => <LoginPrompt error={error} />)
+    .onErrorTag('NetworkError', (error) => <ErrorAlert error={error} />)
+    .onErrorTag('ProviderOperationError', (error) => <ErrorAlert error={error} />)
+    .onDefect((defect) => <UnexpectedError defect={defect} />)
+    .onSuccess((data) => <DataView data={data} />)
+    .render()  // ← REQUIRED final call
+}
+```
+
+**Builder Methods (ALL REQUIRED):**
+- `.onInitial(render)` - Handle initial loading state
+- `.onErrorTag(tag, render)` - Handle EACH specific error type individually
+- `.onDefect(render)` - Handle unexpected errors (bugs) - MUST ALWAYS INCLUDE
+- `.onSuccess(render)` - Handle successful result with typed data
+- `.render()` - **REQUIRED** final call to produce React elements
+
+#### Safe Data Extraction: `Result.match()` and `Result.getOrElse()`
+
+**Use `Result.match()` for derived computations:**
+
+```typescript
+// ✅ CORRECT: Use Result.match() for boolean flags and derived values
+const isAuthenticated = Result.match(usageResult, {
+  onSuccess: (data) => data.value.length > 0,  // CRITICAL: access data.value, not data directly
+  onFailure: () => false,
+  onInitial: () => false,
+})
+
+const accountCount = Result.match(accountsResult, {
+  onSuccess: (data) => data.value.length,  // data is { value: T, waiting: boolean }
+  onFailure: () => 0,
+  onInitial: () => 0,
+})
+
+// Use Result.match when:
+// - Computing derived boolean flags (isAuthenticated, hasData, isEmpty)
+// - You need different return values based on Result state
+// - You're in a non-rendering context (hooks, utility functions)
+```
+
+**Use `Result.getOrElse()` for data extraction with fallback:**
+
+```typescript
+// ✅ CORRECT: Safe extraction with fallback for secondary data
+const accounts = Result.getOrElse(accountsResult, () => [])
+
+// Use Result.getOrElse when:
+// - You need a default value for secondary/auxiliary data
+// - Primary error handling is done elsewhere (e.g., via Result.builder)
+// - You're extracting data within a success callback
+```
+
+#### CRITICAL - Result.match Callback Signature
+
+**Result.match callbacks receive the full Result object, NOT the unwrapped value:**
+
+```typescript
+// ❌ WRONG: Trying to access value directly
+const isAuthenticated = Result.match(usageResult, {
+  onSuccess: (usage) => usage.length > 0,  // ❌ Type error: Success has no length
+  onFailure: () => false,
+  onInitial: () => false,
+})
+
+// ✅ CORRECT: Access data.value to get the actual data
+const isAuthenticated = Result.match(usageResult, {
+  onSuccess: (data) => data.value.length > 0,  // ✅ data is { value: T, waiting: boolean }
+  onFailure: (err) => false,                    // err is { error: E, waiting: boolean }
+  onInitial: (init) => false,                   // init is { waiting: boolean }
+})
+```
+
+#### Handling Loading States: Check `waiting` Field
+
+The `waiting` boolean indicates whether an Effect is currently executing:
+
+```typescript
+// ✅ CORRECT: Check both _tag and waiting for granular states
+const isInitialLoad = result._tag === 'Initial' && result.waiting      // First load
+const isRefreshing = result._tag === 'Success' && result.waiting      // Refetching with stale data
+const isRetrying = result._tag === 'Failure' && result.waiting        // Retrying after error
+const isFetching = result.waiting                                      // Any active operation
+```
+
+#### Complete Real-World Example
+
+```typescript
+export function RepositoryList() {
+  const { accountsResult } = useProviderAuth('github')
+  const { repositoriesResult } = useProviderRepositories('github')
+
+  // Primary data MUST use Result.builder for full error handling
+  return Result.builder(repositoriesResult)
+    .onInitial(() => <LoadingSpinner size="md" />)
+    .onErrorTag('AuthenticationError', (error) => (
+      <ErrorAlert error={error} message="Please authenticate first" />
+    ))
+    .onErrorTag('NetworkError', (error) => (
+      <ErrorAlert error={error} />
+    ))
+    .onErrorTag('ProviderOperationError', (error) => (
+      <ErrorAlert error={error} />
+    ))
+    .onDefect((defect) => (
+      <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
+    ))
+    .onSuccess((groups) => {
+      // Secondary data can use safe extraction with fallback
+      const accounts = Result.getOrElse(accountsResult, () => [])
+
+      if (groups.length === 0) {
+        return <EmptyState message="No repositories found" />
+      }
+
+      return (
+        <div className="space-y-6">
+          {groups.map(group => {
+            // Graceful degradation if account data is unavailable
+            const account = accounts.find(acc => acc.id === group.accountId) ?? null
+            return (
+              <RepoGroup
+                key={group.accountId}
+                group={group}
+                accountName={account?.displayName ?? account?.username ?? group.accountId}
+              />
+            )
+          })}
+        </div>
+      )
+    })
+    .render()
+}
+```
+
+**Why This Pattern Works:**
+1. ✅ Primary data (repositories) has exhaustive error handling
+2. ✅ All 4 Result states handled: Initial, Error (by tag), Defect, Success
+3. ✅ Secondary data (accounts) uses safe extraction with graceful fallback
+4. ✅ Empty success case handled within `.onSuccess()`
+5. ✅ No null checks or optional chaining needed
+6. ✅ TypeScript enforces handling all error types
+
+#### Anti-Patterns to NEVER Use
+
+```typescript
+// ❌ WRONG: Accessing value directly in Result.match (forgetting data.value)
+const isAuthenticated = Result.match(usageResult, {
+  onSuccess: (usage) => usage.length > 0,  // Type error: Success object has no length!
+  onFailure: () => false,
+  onInitial: () => false,
+})
+
+// ❌ WRONG: Using getOrElse for primary data (loses error handling)
+const repos = Result.getOrElse(repositoriesResult, () => [])
+return <div>{repos.map(...)}</div>  // No loading, no errors shown!
+
+// ❌ WRONG: Manual pattern matching (verbose, easy to forget cases)
+if (result._tag === 'Initial') return <Spinner />
+if (result._tag === 'Failure') return <Error />
+// ... missing Defect case!
+
+// ❌ WRONG: Not handling Defect state
+Result.builder(result)
+  .onInitial(() => <Loading />)
+  .onErrorTag('NetworkError', () => <Error />)
+  .onSuccess((data) => <UI />)
+  .render()
+  // ^ TypeScript should error: missing .onDefect()
+```
+
+**For comprehensive details and more examples, see `docs/RESULT_API_AND_ERROR_HANDLING.md`**
+
+### 7. TypeScript Type Safety - Avoid `unknown` and `any`
 
 **CRITICAL RULE: This codebase maintains strict type safety. DO NOT use `unknown` or `any` types except in very specific, justified cases.**
 
