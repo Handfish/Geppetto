@@ -1,7 +1,10 @@
 import React from 'react'
 import { Result, useAtomValue } from '@effect-atom/atom-react'
 import { useAiProviderAuth } from '../hooks/useAiProviderAtoms'
-import type { AiUsageSnapshot } from '../../shared/schemas/ai/provider'
+import type {
+  AiProviderType,
+  AiUsageSnapshot,
+} from '../../shared/schemas/ai/provider'
 import type {
   AiAuthenticationError,
   AiProviderUnavailableError,
@@ -46,16 +49,62 @@ const renderUsageBar = (percent: number) => {
 const formatPercent = (value: number) =>
   clampPercent(value).toFixed(1).replace(/\.0$/, '')
 
-export function AiUsageCard() {
-  const tierLimitsResult = useAtomValue(tierLimitsAtom)
-  const aiProvidersEnabled = Result.match(tierLimitsResult, {
-    onSuccess: ({ value }) => value.enableAiProviders,
-    onInitial: () => false,
-    onFailure: () => false,
-  })
-  const [featureLockMessage, setFeatureLockMessage] = React.useState<
-    string | null
-  >(null)
+type ProviderCopy = {
+  title: string
+  description: string
+  connectDescription: string
+  connectCta: string
+  noAccountsMessage: string
+  authenticationFallback: string
+  providerUnavailableFallback: string
+  usageUnavailableFallback: string
+  usageConsoleLabel: string
+  providerDisplayName: string
+}
+
+const PROVIDER_COPY: Record<AiProviderType, ProviderCopy> = {
+  openai: {
+    title: 'OpenAI CLI Usage',
+    description:
+      'Track how the pro-tier CLI tools are consuming your OpenAI quota.',
+    connectDescription:
+      'Connect OpenAI to start monitoring usage. Pro tier is required.',
+    connectCta: 'Connect OpenAI',
+    noAccountsMessage: 'No OpenAI accounts connected yet.',
+    authenticationFallback: 'Authentication required to fetch OpenAI usage.',
+    providerUnavailableFallback: 'OpenAI provider is currently unavailable.',
+    usageUnavailableFallback: 'Unable to fetch OpenAI usage right now.',
+    usageConsoleLabel: 'OpenAI Usage',
+    providerDisplayName: 'OpenAI',
+  },
+  claude: {
+    title: 'Claude CLI Usage',
+    description:
+      'Monitor Claude Code activity and track how the pro-tier CLI tools use Claude credits.',
+    connectDescription:
+      'Connect Claude to sync usage from Claude Code. Pro tier is required.',
+    connectCta: 'Connect Claude',
+    noAccountsMessage: 'No Claude accounts connected yet.',
+    authenticationFallback: 'Authentication required to fetch Claude usage.',
+    providerUnavailableFallback: 'Claude provider is currently unavailable.',
+    usageUnavailableFallback: 'Unable to fetch Claude usage right now.',
+    usageConsoleLabel: 'Claude Usage',
+    providerDisplayName: 'Claude',
+  },
+}
+
+type ProviderUsageSectionProps = {
+  provider: AiProviderType
+  enabled: boolean
+}
+
+function ProviderUsageSection({
+  provider,
+  enabled,
+}: ProviderUsageSectionProps) {
+  const copy = PROVIDER_COPY[provider]
+  const [featureLockMessage, setFeatureLockMessage] =
+    React.useState<string | null>(null)
   const signInFeatureToastShownRef = React.useRef(false)
   const usageFeatureToastShownRef = React.useRef(false)
 
@@ -66,22 +115,22 @@ export function AiUsageCard() {
     usageResult,
     isAuthenticated,
     refreshUsage,
-  } = useAiProviderAuth('openai', { loadUsage: true })
+  } = useAiProviderAuth(provider, { loadUsage: enabled })
 
   // Refresh usage after successful sign-in to update with new account
   React.useEffect(() => {
-    if (aiProvidersEnabled && signInResult._tag === 'Success') {
+    if (enabled && signInResult._tag === 'Success') {
       refreshUsage()
     }
-  }, [aiProvidersEnabled, refreshUsage, signInResult])
+  }, [enabled, refreshUsage, signInResult])
 
   React.useEffect(() => {
-    if (aiProvidersEnabled) {
+    if (enabled) {
       setFeatureLockMessage(null)
       signInFeatureToastShownRef.current = false
       usageFeatureToastShownRef.current = false
     }
-  }, [aiProvidersEnabled])
+  }, [enabled])
 
   React.useEffect(() => {
     if (signInResult.waiting) {
@@ -148,8 +197,10 @@ export function AiUsageCard() {
     }
     lastLoggedUsageRef.current = key
 
+    const consoleLabel = PROVIDER_COPY[provider].usageConsoleLabel
+
     snapshots.forEach(snapshot => {
-      console.group(`[OpenAI Usage] ${snapshot.accountId}`)
+      console.group(`[${consoleLabel}] ${snapshot.accountId}`)
       snapshot.metrics.forEach(metric => {
         const percentUsed = clampPercent(metric.usagePercentage)
         const bar = renderUsageBar(percentUsed)
@@ -166,7 +217,7 @@ export function AiUsageCard() {
       })
       console.groupEnd()
     })
-  }, [usageResult])
+  }, [provider, usageResult])
 
   const usageContent = Result.builder(
     usageResult as Result.Result<readonly AiUsageSnapshot[], UsageError>
@@ -178,17 +229,17 @@ export function AiUsageCard() {
     )
     .onErrorTag('AiAuthenticationError', error => (
       <div className="text-red-400 text-sm">
-        {error.message ?? 'Authentication required to fetch OpenAI usage.'}
+        {error.message ?? copy.authenticationFallback}
       </div>
     ))
     .onErrorTag('AiProviderUnavailableError', error => (
       <div className="text-red-400 text-sm">
-        {error.message ?? 'OpenAI provider is currently unavailable.'}
+        {error.message ?? copy.providerUnavailableFallback}
       </div>
     ))
     .onErrorTag('AiUsageUnavailableError', error => (
       <div className="text-red-400 text-sm">
-        {error.message ?? 'Unable to fetch OpenAI usage right now.'}
+        {error.message ?? copy.usageUnavailableFallback}
       </div>
     ))
     .onErrorTag('NetworkError', error => (
@@ -203,7 +254,7 @@ export function AiUsageCard() {
       if (snapshots.length === 0) {
         return (
           <div className="text-gray-400 text-sm">
-            No OpenAI accounts connected yet.
+            {copy.noAccountsMessage}
           </div>
         )
       }
@@ -262,7 +313,7 @@ export function AiUsageCard() {
     .onSuccess(() => null)
     .onErrorTag('AuthenticationError', error => (
       <p className="text-red-400 text-sm">
-        {error.message ?? 'Unable to connect to OpenAI.'}
+        {error.message ?? `Unable to connect to ${copy.providerDisplayName}.`}
       </p>
     ))
     .onErrorTag('NetworkError', error => (
@@ -277,43 +328,65 @@ export function AiUsageCard() {
     .render()
 
   return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h3 className="text-lg font-semibold text-white">{copy.title}</h3>
+        <p className="text-gray-400 text-sm">{copy.description}</p>
+      </div>
+
+      {!isAuthenticated && (
+        <div className="flex flex-col gap-3">
+          <p className="text-gray-300 text-sm">{copy.connectDescription}</p>
+          <button
+            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition-colors disabled:opacity-50"
+            disabled={signInResult.waiting}
+            onClick={() => signIn()}
+          >
+            {signInResult.waiting ? 'Connecting…' : copy.connectCta}
+          </button>
+          {signInErrorContent}
+        </div>
+      )}
+
+      {featureLockMessage && (
+        <Alert className="bg-gray-950/85 border border-yellow-500/70 text-yellow-200 shadow-lg">
+          <AlertTitle className="text-lg font-semibold uppercase tracking-wide text-yellow-300">
+            Pro feature locked
+          </AlertTitle>
+          <AlertDescription className="text-sm text-yellow-100/85">
+            {featureLockMessage}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {usageContent}
+    </div>
+  )
+}
+
+export function AiUsageCard() {
+  const tierLimitsResult = useAtomValue(tierLimitsAtom)
+  const aiProvidersEnabled = Result.match(tierLimitsResult, {
+    onSuccess: ({ value }) => value.enableAiProviders,
+    onInitial: () => false,
+    onFailure: () => false,
+  })
+
+  return (
     <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-8">
         <div>
-          <h2 className="text-xl font-semibold text-white">OpenAI CLI Usage</h2>
+          <h2 className="text-xl font-semibold text-white">AI CLI Usage</h2>
           <p className="text-gray-400 text-sm">
-            Track how the pro-tier CLI tools are consuming your OpenAI quota.
+            Track how pro-tier CLI tools consume your quotas across OpenAI and Claude.
           </p>
         </div>
 
-        {!isAuthenticated && (
-          <div className="flex flex-col gap-3">
-            <p className="text-gray-300 text-sm">
-              Connect OpenAI to start monitoring usage. Pro tier is required.
-            </p>
-            <button
-              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition-colors disabled:opacity-50"
-              disabled={signInResult.waiting}
-              onClick={() => signIn()}
-            >
-              {signInResult.waiting ? 'Connecting…' : 'Connect OpenAI'}
-            </button>
-            {signInErrorContent}
-          </div>
-        )}
+        <ProviderUsageSection provider="openai" enabled={aiProvidersEnabled} />
 
-        {featureLockMessage && (
-          <Alert className="bg-gray-950/85 border border-yellow-500/70 text-yellow-200 shadow-lg">
-            <AlertTitle className="text-lg font-semibold uppercase tracking-wide text-yellow-300">
-              Pro feature locked
-            </AlertTitle>
-            <AlertDescription className="text-sm text-yellow-100/85">
-              {featureLockMessage}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {usageContent}
+        <div className="border-t border-gray-700 pt-6">
+          <ProviderUsageSection provider="claude" enabled={aiProvidersEnabled} />
+        </div>
       </div>
     </div>
   )

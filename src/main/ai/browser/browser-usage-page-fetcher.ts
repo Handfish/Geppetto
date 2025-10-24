@@ -166,7 +166,52 @@ export const fetchUsagePageWithBrowser = (
       })
 
       if (selectorReady) {
-        yield* Console.log(`[BrowserUsageFetch] Selector found, extracting content`)
+        yield* Console.log(`[BrowserUsageFetch] Selector found, waiting for data to load...`)
+
+        // Additional wait for data to load (not just the skeleton)
+        // Check if we're still seeing loading skeletons
+        const dataLoaded = yield* Effect.tryPromise({
+          try: async () => {
+            const maxDataWaitMs = 10000 // 10 seconds for data
+            const startTime = Date.now()
+
+            while (Date.now() - startTime < maxDataWaitMs) {
+              // Check if we still have loading skeletons (shimmer animation)
+              // Look for skeleton loaders which have the shimmer animation
+              const hasSkeletons = await window.webContents.executeJavaScript(`
+                (() => {
+                  const shimmerElements = document.querySelectorAll('[class*="shimmer"]');
+                  // Filter for actual loading skeletons (not just any shimmer effect)
+                  const loadingSkeletons = Array.from(shimmerElements).filter(el => {
+                    const classes = el.className;
+                    return classes.includes('animate-[shimmer') || classes.includes('animate-shimmer');
+                  });
+                  return loadingSkeletons.length > 0;
+                })()
+              `)
+
+              if (!hasSkeletons) {
+                console.log('[BrowserUsageFetch] Loading skeletons disappeared, data should be loaded')
+                return true
+              }
+
+              await new Promise(resolve => setTimeout(resolve, 500))
+            }
+
+            console.log('[BrowserUsageFetch] Data wait timeout, proceeding anyway')
+            return false
+          },
+          catch: () => false,
+        })
+
+        if (dataLoaded) {
+          yield* Console.log(`[BrowserUsageFetch] Data loaded successfully`)
+        } else {
+          yield* Console.log(`[BrowserUsageFetch] WARNING: Data may not be fully loaded`)
+        }
+
+        // Additional small delay to ensure rendering is complete
+        yield* Effect.sleep(Duration.millis(1000))
       } else {
         yield* Console.log(
           `[BrowserUsageFetch] WARNING: Selector not found within ${maxWaitMs}ms, proceeding anyway`

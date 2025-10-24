@@ -43,6 +43,10 @@ const PROVIDER_CONFIGS: ReadonlyArray<ProviderUsageConfig> = [
     authRedirectIndicators: [/login/i, /signin/i, /auth/i],
     userAgent:
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    useBrowserFetch: true, // Claude's usage page is client-side rendered
+    waitForSelector:
+      'section, [role="main"], .usage-card, [data-testid="usage"]', // Wait for content sections to load
+    maxWaitMs: 8000,
   },
 ]
 
@@ -209,23 +213,30 @@ function parseOpenAiUsagePage(html: string): UsageBarSnapshot[] {
 }
 
 function parseClaudeUsagePage(html: string): UsageBarSnapshot[] {
-  const cardRegex =
-    /<div class="flex flex-col gap-1">([\s\S]*?)<\/div>\s*<div class="flex items-center gap-3[\s\S]*?<span class="text-text-300[^>]*">([\d.]+)%\s*(used|remaining)<\/span>/g
-
-  const matches = Array.from(html.matchAll(cardRegex))
   const bars: UsageBarSnapshot[] = []
 
-  for (const match of matches) {
+  // Strategy 1: Tailwind-based card layout (flex containers)
+  const cardRegex =
+    /<div class="flex flex-col[^"]*">([\s\S]*?)<\/div>\s*<div class="flex[^"]*">\s*<span[^>]*>([\d.]+)\s*%[\s\S]*?(used|remaining)<\/span>/gi
+
+  for (const match of html.matchAll(cardRegex)) {
     const headerBlock = match[1] ?? ''
     const percentValue = clampPercent(Number.parseFloat(match[2] ?? '0'))
-    const modeRaw =
-      match[3]?.toLowerCase() === 'remaining' ? 'remaining' : 'used'
+    const mode =
+      match[3]?.toLowerCase() === 'remaining'
+        ? ('remaining' as const)
+        : ('used' as const)
 
-    const titleMatch = headerBlock.match(
-      /<p class="font-medium text-text-100">([^<]+)<\/p>/
-    )
+    const titleMatch =
+      headerBlock.match(
+        /<p[^>]*class="[^"]*(?:font-medium|text-text-100|text-base|text-lg)[^"]*"[^>]*>([^<]+)<\/p>/i
+      ) ??
+      headerBlock.match(
+        /<span[^>]*class="[^"]*(?:font-medium|text-text-100|text-base|text-lg)[^"]*"[^>]*>([^<]+)<\/span>/i
+      )
+
     const subtitleMatch = headerBlock.match(
-      /<p class="text-text-500[^>]*">([^<]+)<\/p>/
+      /<p[^>]*class="[^"]*(?:text-text-500|text-sm|text-xs|text-text-300)[^"]*"[^>]*>([^<]+)<\/p>/i
     )
 
     const title = sanitizeText(titleMatch?.[1] ?? '')
@@ -237,8 +248,61 @@ function parseClaudeUsagePage(html: string): UsageBarSnapshot[] {
       title,
       subtitle,
       percent: percentValue,
-      mode: modeRaw,
+      mode,
       detail: subtitle,
+    })
+  }
+
+  if (bars.length > 0) {
+    return dedupeBars(bars)
+  }
+
+  // Strategy 2: Generic percentage search with nearby titles
+  const percentRegex =
+    /<span[^>]*>([\d.]+)\s*%\s*(?:<\/span>|<\/span>\s*<span[^>]*>)?[\s\S]{0,120}?(used|remaining)/gi
+  for (const match of html.matchAll(percentRegex)) {
+    const percentValue = clampPercent(Number.parseFloat(match[1] ?? '0'))
+    const mode =
+      match[2]?.toLowerCase() === 'remaining'
+        ? ('remaining' as const)
+        : ('used' as const)
+    const index = match.index ?? 0
+    const contextStart = Math.max(0, index - 600)
+    const contextEnd = Math.min(html.length, index + 400)
+    const context = html.slice(contextStart, contextEnd)
+
+    const titlePatterns = [
+      /<p[^>]*class="[^"]*(?:font-medium|text-text-100|text-lg|text-base)[^"]*"[^>]*>([^<]+)<\/p>/i,
+      /<span[^>]*class="[^"]*(?:font-medium|text-text-100|text-lg|text-base)[^"]*"[^>]*>([^<]+)<\/span>/i,
+      /<h\d[^>]*>([^<]+)<\/h\d>/i,
+      /aria-label="([^"]+Usage[^"]*)"/i,
+    ]
+
+    let title = ''
+    for (const pattern of titlePatterns) {
+      const titleMatch = context.match(pattern)
+      if (titleMatch?.[1]) {
+        title = sanitizeText(titleMatch[1])
+        if (title) break
+      }
+    }
+
+    if (!title) continue
+
+    const subtitleMatch = context.match(
+      /<p[^>]*class="[^"]*(?:text-text-500|text-sm|text-xs|text-text-300)[^"]*"[^>]*>([^<]+)<\/p>/i
+    )
+    const detailMatch = context.match(/Resets[^<]*(?:<\/span>|<\/p>)/i)
+
+    const subtitle = subtitleMatch ? sanitizeText(subtitleMatch[1]) : undefined
+    const detail = detailMatch ? sanitizeText(detailMatch[0]) : subtitle
+
+    bars.push({
+      title,
+      subtitle,
+      percent: percentValue,
+      mode,
+      detail,
     })
   }
 
@@ -450,21 +514,23 @@ export class CookieUsagePageAdapter extends Effect.Service<CookieUsagePageAdapte
             )
 
             // Save HTML to file for debugging (in development)
-            // if (process.env.NODE_ENV === 'development') {
-            //   yield* Effect.tryPromise({
-            //     try: async () => {
-            //       const fs = await import('fs/promises')
-            //       const path = await import('path')
-            //       const debugPath = path.join(
-            //         process.cwd(),
-            //         `debug-${provider}-usage-page-${Date.now()}.html`
-            //       )
-            //       await fs.writeFile(debugPath, html, 'utf-8')
-            //       console.log(`[CookieUsagePage] Saved HTML to ${debugPath} for debugging`)
-            //     },
-            //     catch: () => undefined,
-            //   }).pipe(Effect.catchAll(() => Effect.void))
-            // }
+            if (process.env.NODE_ENV === 'development') {
+              yield* Effect.tryPromise({
+                try: async () => {
+                  // const fs = await import('fs/promises')
+                  // const path = await import('path')
+                  // const debugPath = path.join(
+                  //   process.cwd(),
+                  //   `debug-${provider}-usage-page-${Date.now()}.html`
+                  // )
+                  // await fs.writeFile(debugPath, html, 'utf-8')
+                  // console.log(
+                  //   `[CookieUsagePage] Saved HTML to ${debugPath} for debugging`
+                  // )
+                },
+                catch: () => undefined,
+              }).pipe(Effect.catchAll(() => Effect.void))
+            }
 
             return yield* Effect.fail(
               new UsagePageError({
