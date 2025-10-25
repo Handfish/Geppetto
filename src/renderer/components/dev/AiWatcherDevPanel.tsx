@@ -31,6 +31,9 @@ function cleanConfig<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return result
 }
 
+const LOG_REFRESH_SCHEDULE_MS = [2000, 5000, 15000] as const
+const LOG_REFRESH_MAX_INTERVAL_MS = 30000
+
 /**
  * Component to display logs for a watcher
  */
@@ -44,15 +47,42 @@ function WatcherLogsDisplay({
   const { logsResult, refreshLogs } = useWatcherLogs(watcherId, 50)
   const logsEndRef = useRef<HTMLDivElement>(null)
 
-  // Auto-refresh logs every 2 seconds if enabled
+  // Auto-refresh logs with a backoff schedule if enabled
   useEffect(() => {
     if (!autoRefresh) return
 
-    const interval = setInterval(() => {
-      refreshLogs()
-    }, 2000)
+    let timeoutId: number | undefined
+    let cancelled = false
+    let scheduleIndex = 0
 
-    return () => clearInterval(interval)
+    const runRefresh = () => {
+      if (cancelled) {
+        return
+      }
+
+      refreshLogs()
+
+      const delay =
+        scheduleIndex < LOG_REFRESH_SCHEDULE_MS.length
+          ? LOG_REFRESH_SCHEDULE_MS[scheduleIndex]
+          : LOG_REFRESH_MAX_INTERVAL_MS
+
+      scheduleIndex = Math.min(
+        scheduleIndex + 1,
+        LOG_REFRESH_SCHEDULE_MS.length
+      )
+
+      timeoutId = window.setTimeout(runRefresh, delay)
+    }
+
+    runRefresh()
+
+    return () => {
+      cancelled = true
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId)
+      }
+    }
   }, [autoRefresh, refreshLogs])
 
   // Auto-scroll to bottom when logs change

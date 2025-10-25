@@ -1,4 +1,5 @@
 import * as Effect from 'effect/Effect'
+import * as Duration from 'effect/Duration'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { ProcessConfig } from './ports'
@@ -43,12 +44,84 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
     effect: Effect.gen(function* () {
       const processMonitor = yield* ProcessMonitorService
 
+      /**
+       * Attach to a session by name, getting both pane ID and PID
+       */
+      const attachSessionByName = (sessionName: string) =>
+        Effect.gen(function* () {
+          // Get tmux session info
+          const sessionInfo = yield* executeTmuxCommand(
+            `tmux list-sessions -F "#{session_name}:#{session_id}" | grep "^${sessionName}:"`
+          ).pipe(
+            Effect.catchAll(() =>
+              Effect.fail(
+                new TmuxSessionNotFoundError({
+                  message: `Tmux session "${sessionName}" not found`,
+                  sessionName,
+                })
+              )
+            )
+          )
+
+          const parts = sessionInfo.split(':')
+          if (parts.length < 2) {
+            return yield* Effect.fail(
+              new TmuxSessionNotFoundError({
+                message: `Invalid tmux session info format for "${sessionName}"`,
+                sessionName,
+              })
+            )
+          }
+
+          const sessionId = parts[1]
+
+          // Get pane info (pane id and PID)
+          const paneInfo = yield* executeTmuxCommand(
+            `tmux list-panes -t '${sessionId}' -F "#{pane_id}:#{pane_pid}" | head -n 1`
+          ).pipe(
+            Effect.catchAll(() =>
+              Effect.fail(
+                new TmuxSessionNotFoundError({
+                  message: `Could not get pane info for tmux session "${sessionName}"`,
+                  sessionName,
+                })
+              )
+            )
+          )
+
+          const [paneId, panePidStr] = paneInfo.split(':')
+          if (!paneId || !panePidStr) {
+            return yield* Effect.fail(
+              new TmuxSessionNotFoundError({
+                message: `Invalid pane info "${paneInfo}" for tmux session "${sessionName}"`,
+                sessionName,
+              })
+            )
+          }
+
+          const panePid = parseInt(panePidStr, 10)
+          if (isNaN(panePid)) {
+            return yield* Effect.fail(
+              new TmuxSessionNotFoundError({
+                message: `Invalid PID "${panePidStr}" for tmux session "${sessionName}"`,
+                sessionName,
+              })
+            )
+          }
+
+          // Attach to the process
+          const handle = yield* processMonitor.attach(panePid)
+
+          // Pipe the tmux pane output
+          yield* processMonitor.pipeTmuxSession(handle, paneId)
+
+          return handle
+        })
+
       return {
         /**
          * Create a new tmux session and spawn a command in it
          *
-      <WorkspaceSelector />
-      <AiWatcherDevPanel />
          * @param name - Session name
          * @param command - Command to run in the session
          * @param cwd - Working directory for the command
@@ -78,7 +151,44 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
               env: process.env as Record<string, string>,
             }
 
-            return yield* processMonitor.spawn(config)
+            // Spawn the tmux session
+            yield* processMonitor.spawn(config)
+
+            // Attach to the session with retry logic
+            // The session may not be immediately available after spawning
+            const attachWithRetry = (
+              attempt: number
+            ): Effect.Effect<
+              ProcessHandle,
+              TmuxSessionNotFoundError
+            > =>
+              attachSessionByName(name).pipe(
+                Effect.catchTags({
+                  TmuxSessionNotFoundError: (error) =>
+                    attempt < 12
+                      ? Effect.sleep(Duration.millis(250)).pipe(
+                          Effect.flatMap(() => attachWithRetry(attempt + 1))
+                        )
+                      : Effect.fail(error),
+                  // Convert other errors to TmuxSessionNotFoundError for simplicity
+                  ProcessAttachError: (error) =>
+                    Effect.fail(
+                      new TmuxSessionNotFoundError({
+                        message: `Failed to attach to session "${name}": ${error.message}`,
+                        sessionName: name,
+                      })
+                    ),
+                  ProcessMonitorError: (error) =>
+                    Effect.fail(
+                      new TmuxSessionNotFoundError({
+                        message: `Failed to pipe session "${name}": ${error.message}`,
+                        sessionName: name,
+                      })
+                    ),
+                })
+              )
+
+            return yield* attachWithRetry(0)
           }),
 
         /**
@@ -87,62 +197,7 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
          * @param sessionName - Name of the tmux session to attach to
          * @returns ProcessHandle for the attached session
          */
-        attachToSession: (sessionName: string) =>
-          Effect.gen(function* () {
-            // Get tmux session info
-            // Note: Use single quotes to prevent shell expansion/injection
-            const sessionInfo = yield* executeTmuxCommand(
-              `tmux list-sessions -F "#{session_name}:#{session_id}" | grep "^${sessionName}:"`
-            ).pipe(
-              Effect.catchAll(error =>
-                Effect.fail(
-                  new TmuxSessionNotFoundError({
-                    message: `Tmux session "${sessionName}" not found`,
-                    sessionName,
-                  })
-                )
-              )
-            )
-
-            const parts = sessionInfo.split(':')
-            if (parts.length < 2) {
-              return yield* Effect.fail(
-                new TmuxSessionNotFoundError({
-                  message: `Invalid tmux session info format for "${sessionName}"`,
-                  sessionName,
-                })
-              )
-            }
-
-            const sessionId = parts[1]
-
-            // Get PID of the main pane
-            // Note: Session IDs contain $ (e.g., $0, $1), so we must quote to prevent shell expansion
-            const pidStr = yield* executeTmuxCommand(
-              `tmux list-panes -t '${sessionId}' -F "#{pane_pid}" | head -n 1`
-            ).pipe(
-              Effect.catchAll(() =>
-                Effect.fail(
-                  new TmuxSessionNotFoundError({
-                    message: `Could not get PID for tmux session "${sessionName}"`,
-                    sessionName,
-                  })
-                )
-              )
-            )
-
-            const pid = parseInt(pidStr, 10)
-            if (isNaN(pid)) {
-              return yield* Effect.fail(
-                new TmuxSessionNotFoundError({
-                  message: `Invalid PID "${pidStr}" for tmux session "${sessionName}"`,
-                  sessionName,
-                })
-              )
-            }
-
-            return yield* processMonitor.attach(pid)
-          }),
+        attachToSession: (sessionName: string) => attachSessionByName(sessionName),
 
         /**
          * List all active tmux sessions

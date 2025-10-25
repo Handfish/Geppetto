@@ -70,6 +70,15 @@ export class TmuxSession extends S.Class<TmuxSession>('TmuxSession')({
 }) {}
 
 /**
+ * Tmux pipe configuration - represents an active tmux pipe stream
+ */
+export class TmuxPipeConfig extends S.Class<TmuxPipeConfig>('TmuxPipeConfig')({
+  targetPane: S.String,
+  fifoPath: S.String,
+  tempDir: S.String,
+}) {}
+
+/**
  * Log entry for AI watcher logs
  */
 export class LogEntry extends S.Class<LogEntry>('LogEntry')({
