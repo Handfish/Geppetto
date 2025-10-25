@@ -7,11 +7,16 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Result } from '@effect-atom/atom-react'
-import { useAiWatchers, useTmuxSessions } from '../../hooks/useAiWatchers'
+import {
+  useAiWatchers,
+  useTmuxSessions,
+  useWatcherLogs,
+} from '../../hooks/useAiWatchers'
 import type {
   AiWatcherConfig,
   AiWatcher,
   TmuxSession,
+  LogEntry,
 } from '../../../shared/schemas/ai-watchers'
 
 // Helper to clean object by removing undefined properties
@@ -24,6 +29,96 @@ function cleanConfig<T extends Record<string, unknown>>(obj: T): Partial<T> {
     }
   }
   return result
+}
+
+/**
+ * Component to display logs for a watcher
+ */
+function WatcherLogsDisplay({
+  watcherId,
+  autoRefresh,
+}: {
+  watcherId: string
+  autoRefresh: boolean
+}) {
+  const { logsResult, refreshLogs } = useWatcherLogs(watcherId, 50)
+  const logsEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto-refresh logs every 2 seconds if enabled
+  useEffect(() => {
+    if (!autoRefresh) return
+
+    const interval = setInterval(() => {
+      refreshLogs()
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [autoRefresh, refreshLogs])
+
+  // Auto-scroll to bottom when logs change
+  useEffect(() => {
+    if (logsResult._tag === 'Success') {
+      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [logsResult])
+
+  return (
+    <div className="mt-2 border-t border-gray-600 pt-2">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-gray-400">Logs (last 50 entries)</span>
+        <button
+          className="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white rounded text-xs"
+          onClick={() => refreshLogs()}
+          title="Refresh logs"
+        >
+          ↻
+        </button>
+      </div>
+      <div className="bg-gray-900 rounded p-2 max-h-64 overflow-y-auto text-xs font-mono">
+        {Result.builder(logsResult)
+          .onInitial(() => <div className="text-gray-500">Loading logs...</div>)
+          .onSuccess(value => {
+            const logs = value as readonly LogEntry[]
+            if (logs.length === 0) {
+              return <div className="text-gray-500">No logs yet</div>
+            }
+            return (
+              <div className="space-y-1">
+                {logs.map((log, idx) => (
+                  <div
+                    className={`${
+                      log.level === 'stdout'
+                        ? 'text-green-400'
+                        : log.level === 'stderr'
+                          ? 'text-red-400'
+                          : log.level === 'error'
+                            ? 'text-red-300'
+                            : log.level === 'info'
+                              ? 'text-blue-400'
+                              : 'text-gray-400'
+                    }`}
+                    key={idx}
+                  >
+                    <span className="text-gray-600">
+                      [{new Date(log.timestamp).toLocaleTimeString()}]
+                    </span>{' '}
+                    <span className="text-gray-500">[{log.level}]</span>{' '}
+                    {log.message}
+                  </div>
+                ))}
+                <div ref={logsEndRef} />
+              </div>
+            )
+          })
+          .onDefect(defect => (
+            <div className="text-red-400">
+              Error loading logs: {String(defect)}
+            </div>
+          ))
+          .render()}
+      </div>
+    </div>
+  )
 }
 
 export function AiWatcherDevPanel() {
@@ -39,6 +134,10 @@ export function AiWatcherDevPanel() {
   const { sessionsResult, attachToSession, refreshSessions } = useTmuxSessions()
 
   const [showPanel, setShowPanel] = useState(true)
+  const [expandedWatcherId, setExpandedWatcherId] = useState<string | null>(
+    null
+  )
+  const [autoRefreshLogs, setAutoRefreshLogs] = useState(false)
   const hasLoggedRef = useRef(false)
 
   // Log welcome message only once on mount
@@ -87,10 +186,13 @@ export function AiWatcherDevPanel() {
         listWatchers: () => {
           console.log('[AI Watcher] Listing watchers...')
           refreshWatchers()
-          const watchers = Result.getOrElse(watchersResult, () => []) as readonly AiWatcher[]
+          const watchers = Result.getOrElse(
+            watchersResult,
+            () => []
+          ) as readonly AiWatcher[]
           if (watchers && watchers.length > 0) {
             console.table(
-              watchers.map((w) => ({
+              watchers.map(w => ({
                 id: w.id,
                 name: w.name,
                 type: w.type,
@@ -105,10 +207,13 @@ export function AiWatcherDevPanel() {
         listTmuxSessions: () => {
           console.log('[AI Watcher] Listing tmux sessions...')
           refreshSessions()
-          const sessions = Result.getOrElse(sessionsResult, () => []) as readonly TmuxSession[]
+          const sessions = Result.getOrElse(
+            sessionsResult,
+            () => []
+          ) as readonly TmuxSession[]
           if (sessions && sessions.length > 0) {
             console.table(
-              sessions.map((s) => ({
+              sessions.map(s => ({
                 name: s.name,
                 attached: s.attached,
                 created: s.created.toISOString(),
@@ -133,14 +238,18 @@ export function AiWatcherDevPanel() {
 
           createWatcher(fullConfig as AiWatcherConfig)
           setTimeout(() => refreshWatchers(), 500)
-          console.log('[AI Watcher] Create request sent. Watchers will refresh.')
+          console.log(
+            '[AI Watcher] Create request sent. Watchers will refresh.'
+          )
         },
 
         attachToTmux: (sessionName: string) => {
           console.log('[AI Watcher] Attaching to tmux session:', sessionName)
           attachToSession(sessionName)
           setTimeout(() => refreshWatchers(), 500)
-          console.log('[AI Watcher] Attach request sent. Watchers will refresh.')
+          console.log(
+            '[AI Watcher] Attach request sent. Watchers will refresh.'
+          )
         },
 
         // Control operations
@@ -159,7 +268,7 @@ export function AiWatcherDevPanel() {
         // UI toggle
         showPanel: () => setShowPanel(true),
         hidePanel: () => setShowPanel(false),
-        togglePanel: () => setShowPanel((prev) => !prev),
+        togglePanel: () => setShowPanel(prev => !prev),
 
         // Results
         getResults: () => ({
@@ -196,8 +305,8 @@ export function AiWatcherDevPanel() {
       <div className="flex items-center justify-between p-4 border-b border-gray-700">
         <h3 className="text-purple-400 font-bold">AI Watcher Dev Panel</h3>
         <button
-          onClick={() => setShowPanel(false)}
           className="text-gray-400 hover:text-white"
+          onClick={() => setShowPanel(false)}
         >
           ✕
         </button>
@@ -210,8 +319,10 @@ export function AiWatcherDevPanel() {
             Tmux Sessions
           </h4>
           <button
-            onClick={() => (window as any).__DEV_AI_WATCHERS__.listTmuxSessions()}
             className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded"
+            onClick={() =>
+              (window as any).__DEV_AI_WATCHERS__.listTmuxSessions()
+            }
           >
             List Tmux Sessions
           </button>
@@ -223,24 +334,24 @@ export function AiWatcherDevPanel() {
                   Click button to load sessions...
                 </div>
               ))
-              .onSuccess((value) => {
+              .onSuccess(value => {
                 const sessions = value as readonly TmuxSession[]
                 if (sessions.length > 0) {
                   return (
                     <div className="space-y-1">
-                      {sessions.map((session) => (
+                      {sessions.map(session => (
                         <div
-                          key={session.name}
                           className="text-xs p-2 bg-gray-700 rounded flex justify-between items-center"
+                          key={session.name}
                         >
                           <span className="text-gray-300">{session.name}</span>
                           <button
+                            className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
                             onClick={() => {
                               attachToSession(session.name)
                               // Refresh watchers list after a short delay to show the new watcher
                               setTimeout(() => refreshWatchers(), 500)
                             }}
-                            className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
                           >
                             Attach
                           </button>
@@ -253,12 +364,9 @@ export function AiWatcherDevPanel() {
                   <div className="text-xs text-gray-500">No tmux sessions</div>
                 )
               })
-              .onErrorTag('TmuxError', (error) => (
-                <div className="text-xs text-red-400">Error: {error.message}</div>
-              ))
-              .onDefect((defect) => (
+              .onDefect(defect => (
                 <div className="text-xs text-red-400">
-                  Defect: {String(defect)}
+                  Error: {String(defect)}
                 </div>
               ))
               .render()}
@@ -267,17 +375,27 @@ export function AiWatcherDevPanel() {
 
         {/* AI Watchers Section */}
         <div>
-          <h4 className="text-sm font-semibold text-gray-300 mb-2">
-            AI Watchers
-          </h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold text-gray-300">AI Watchers</h4>
+            <label className="flex items-center gap-2 text-xs text-gray-400">
+              <input
+                checked={autoRefreshLogs}
+                className="rounded"
+                onChange={e => setAutoRefreshLogs(e.target.checked)}
+                type="checkbox"
+              />
+              Auto-refresh logs
+            </label>
+          </div>
           <div className="flex gap-2 mb-2">
             <button
-              onClick={() => (window as any).__DEV_AI_WATCHERS__.listWatchers()}
               className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded"
+              onClick={() => (window as any).__DEV_AI_WATCHERS__.listWatchers()}
             >
               List Watchers
             </button>
             <button
+              className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
               onClick={() => {
                 // Only include fields with actual values - no undefined
                 const config = {
@@ -285,12 +403,14 @@ export function AiWatcherDevPanel() {
                   name: `Test-${Date.now()}`,
                   workingDirectory: '/tmp',
                   command: 'bash',
-                  args: ['-c', 'for i in {1..10}; do echo "Test output $i"; sleep 2; done'],
+                  args: [
+                    '-c',
+                    'for i in {1..100}; do echo "Test output $i"; sleep 2; done',
+                  ],
                 }
                 createWatcher(config)
                 setTimeout(() => refreshWatchers(), 500)
               }}
-              className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
               title="Create a test watcher that outputs every 2 seconds"
             >
               Create Test
@@ -304,20 +424,22 @@ export function AiWatcherDevPanel() {
                   Click button to load watchers...
                 </div>
               ))
-              .onSuccess((value) => {
+              .onSuccess(value => {
                 const watchers = value as readonly AiWatcher[]
                 if (watchers.length > 0) {
                   return (
                     <div className="space-y-1">
-                      {watchers.map((watcher) => (
+                      {watchers.map(watcher => (
                         <div
-                          key={watcher.id}
                           className="text-xs p-2 bg-gray-700 rounded"
+                          key={watcher.id}
                         >
                           <div className="flex justify-between items-center">
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-gray-300">{watcher.name}</span>
+                                <span className="text-gray-300">
+                                  {watcher.name}
+                                </span>
                                 <span
                                   className={`px-2 py-0.5 rounded text-xs ${
                                     watcher.status === 'running'
@@ -333,28 +455,46 @@ export function AiWatcherDevPanel() {
                                 </span>
                               </div>
                               <div className="text-gray-500 mt-1">
-                                PID: {watcher.processHandle.pid} | Type: {watcher.type}
+                                PID: {watcher.processHandle.pid} | Type:{' '}
+                                {watcher.type}
                               </div>
                             </div>
                             <div className="flex gap-1">
+                              <button
+                                className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs"
+                                onClick={() => {
+                                  setExpandedWatcherId(
+                                    expandedWatcherId === watcher.id
+                                      ? null
+                                      : watcher.id
+                                  )
+                                }}
+                                title={
+                                  expandedWatcherId === watcher.id
+                                    ? 'Hide logs'
+                                    : 'View logs'
+                                }
+                              >
+                                {expandedWatcherId === watcher.id ? '▼' : '▶'}
+                              </button>
                               {watcher.status === 'stopped' ? (
                                 <button
+                                  className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
                                   onClick={() => {
                                     startWatcher(watcher.id)
                                     setTimeout(() => refreshWatchers(), 500)
                                   }}
-                                  className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
                                   title="Start watcher"
                                 >
                                   ▶
                                 </button>
                               ) : (
                                 <button
+                                  className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs"
                                   onClick={() => {
                                     stopWatcher(watcher.id)
                                     setTimeout(() => refreshWatchers(), 500)
                                   }}
-                                  className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs"
                                   title="Stop watcher"
                                 >
                                   ■
@@ -362,6 +502,12 @@ export function AiWatcherDevPanel() {
                               )}
                             </div>
                           </div>
+                          {expandedWatcherId === watcher.id && (
+                            <WatcherLogsDisplay
+                              autoRefresh={autoRefreshLogs}
+                              watcherId={watcher.id}
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -369,7 +515,7 @@ export function AiWatcherDevPanel() {
                 }
                 return <div className="text-xs text-gray-500">No watchers</div>
               })
-              .onDefect((defect) => (
+              .onDefect(defect => (
                 <div className="text-xs text-red-400">
                   Defect: {String(defect)}
                 </div>
