@@ -3,6 +3,7 @@ import * as Stream from 'effect/Stream'
 import * as Fiber from 'effect/Fiber'
 import * as Ref from 'effect/Ref'
 import * as Queue from 'effect/Queue'
+import * as Scope from 'effect/Scope'
 import { pipe } from 'effect/Function'
 import { ulid } from 'ulid'
 import type { AiWatcherPort, LogEntry } from './ports'
@@ -21,7 +22,8 @@ import { TmuxSessionManager } from './tmux-session-manager'
  */
 interface WatcherState {
   watcher: AiWatcher
-  fiber: Fiber.RuntimeFiber<void, never> // Monitoring fiber
+  scope: Scope.CloseableScope // Scope for the watcher's lifecycle
+  fiber: Fiber.RuntimeFiber<void, never> // Monitoring fiber (scoped to the watcher's scope)
   logs: LogEntry[]
   logQueue: Queue.Queue<LogEntry>
   statusRef: Ref.Ref<AiWatcherStatus>
@@ -213,17 +215,20 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
         })
 
       /**
-       * Start monitoring a process for a watcher
+       * Start monitoring a process for a watcher within the watcher's scope
+       * This ensures the monitoring fiber is properly cleaned up when the watcher stops
        */
       const startMonitoring = (
         watcherId: string,
-        watcher: AiWatcher
+        watcher: AiWatcher,
+        scope: Scope.Scope
       ): Effect.Effect<Fiber.RuntimeFiber<void, never>, never, never> =>
         pipe(
           processMonitor.monitor(watcher.processHandle),
           Stream.tap((event) => handleProcessEvent(watcherId, event)),
           Stream.runDrain,
-          Effect.forkDaemon // Use forkDaemon for long-running monitoring
+          Stream.runScoped, // Run the stream in a scope
+          Effect.forkIn(scope) // Fork into the watcher's specific scope
         )
 
       const implementation: AiWatcherPort = {
@@ -262,12 +267,17 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
               const statusRef = yield* Ref.make<AiWatcherStatus>('starting')
               const lastActivityRef = yield* Ref.make(new Date())
 
-              // Start monitoring in background
-              const fiber = yield* startMonitoring(watcherId, watcher)
+              // Create a dedicated scope for this watcher's lifecycle
+              // This scope will live until the watcher is explicitly stopped
+              const watcherScope = yield* Scope.make()
+
+              // Start monitoring in the watcher's scope
+              const fiber = yield* startMonitoring(watcherId, watcher, watcherScope)
 
               // Store watcher state
               const state: WatcherState = {
                 watcher,
+                scope: watcherScope,
                 fiber,
                 logs: [],
                 logQueue,
@@ -276,15 +286,16 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
               }
               watchers.set(watcherId, state)
 
-              // Transition to running after a short delay
-              yield* Effect.forkDaemon(
+              // Transition to running after a short delay (using forkIn to scope to watcher)
+              yield* Effect.forkIn(
                 Effect.gen(function* () {
                   yield* Effect.sleep(1000) // 1 second
                   const currentStatus = yield* Ref.get(statusRef)
                   if (currentStatus === 'starting') {
                     yield* updateWatcherStatus(watcherId, 'running')
                   }
-                })
+                }),
+                watcherScope
               )
 
               return watcher
@@ -320,8 +331,8 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
               return
             }
 
-            // Restart monitoring
-            const fiber = yield* startMonitoring(watcher.id, watcher)
+            // Restart monitoring in the watcher's scope
+            const fiber = yield* startMonitoring(watcher.id, watcher, state.scope)
             state.fiber = fiber
 
             yield* updateWatcherStatus(watcher.id, 'running')
@@ -339,8 +350,9 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
               )
             }
 
-            // Interrupt monitoring fiber
-            yield* Fiber.interrupt(state.fiber)
+            // Close the watcher's scope - this will interrupt all fibers in that scope
+            // including the monitoring fiber and any other background tasks
+            yield* Scope.close(state.scope, Effect.void)
 
             // Kill the process
             yield* processMonitor.kill(watcher.processHandle).pipe(
@@ -352,6 +364,9 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
 
             // Clean up queue
             yield* Queue.shutdown(state.logQueue)
+
+            // Remove from watchers map
+            watchers.delete(watcher.id)
           }),
 
         getStatus: (watcher: AiWatcher) =>

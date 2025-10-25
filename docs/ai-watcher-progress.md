@@ -58,9 +58,16 @@ This document tracks the implementation progress of the AI Watcher Tmux Integrat
 
 ## Phase 2: Service Implementation ✅ COMPLETED
 
+**UPDATED:** Refactored to use proper structured concurrency (2025-10-25)
+- Replaced all `forkDaemon` with `forkScoped` and `forkIn`
+- Each watcher has dedicated `Scope.CloseableScope` for lifecycle management
+- Silence detection properly scoped to monitoring stream
+- Automatic cleanup via `Scope.close()` - no resource leaks
+
 ### 2.1 Process Monitor Service ✅
 **Status:** Completed
 **Date Completed:** 2025-10-25
+**Refactored:** Structured concurrency (2025-10-25)
 
 **Files Created:**
 - ✅ `src/main/ai-watchers/process-monitor-service.ts`
@@ -79,11 +86,15 @@ This document tracks the implementation progress of the AI Watcher Tmux Integrat
   - **silence events** - automatic detection after 30 seconds of inactivity
 - Silence detection mechanism:
   - Uses Ref for mutable activity tracking
-  - Background fiber with Schedule.fixed(5s) interval checking
+  - **Background fiber with Schedule.fixed(5s) interval checking (scoped via forkScoped)**
   - Emits 'silence' event when threshold exceeded
   - Resets timer to prevent repeated events
+  - **Properly scoped:** Silence detection fiber is created when `monitor()` is called
 - Activity tracking with Ref API
-- Structured concurrency with Effect.forkDaemon for monitoring
+- **Structured concurrency:**
+  - `Stream.unwrapScoped` for scoped stream creation
+  - `Effect.forkScoped` for silence detection
+  - Automatic cleanup when monitoring stream closes
 - Proper cleanup on process exit with queue shutdown
 
 **Key Features:**
@@ -132,10 +143,22 @@ This document tracks the implementation progress of the AI Watcher Tmux Integrat
   - Status and activity refs
 
 **Key Patterns Used:**
-- Effect.forkDaemon for long-running monitoring
+- **Structured Concurrency:** Each watcher has its own Scope.CloseableScope
+- **Effect.forkScoped** for silence detection (scoped to monitoring stream)
+- **Effect.forkIn(scope)** for monitoring fibers (scoped to watcher lifetime)
+- **Stream.unwrapScoped** for scoped stream creation
+- **Scope.close()** for automatic cleanup of all watcher resources
 - Stream.concat for combining existing + live logs
-- Fiber.interrupt for graceful monitoring shutdown
 - Map-based watcher registry
+
+**Structured Concurrency Architecture:**
+```
+Watcher Scope (managed per-watcher)
+  ├─ Monitoring Fiber (process events → logs)
+  │   └─ Silence Detection Fiber (30s idle checks)
+  └─ Status Transition Fiber (starting → running)
+```
+When a watcher stops, `Scope.close()` automatically interrupts all fibers and cleans up resources.
 
 ---
 
@@ -276,8 +299,11 @@ This document tracks the implementation progress of the AI Watcher Tmux Integrat
 
 **Current Metrics:**
 - Type Safety: ✅ 100% (no `any` types)
-- Effect Patterns: ✅ Proper Service pattern, dependency injection, forkDaemon, Ref, Queue, Stream
+- Effect Patterns: ✅ Proper Service pattern, dependency injection, **structured concurrency**
+- **Structured Concurrency:** ✅ Using forkScoped, forkIn, Stream.unwrapScoped, Scope management
+- **No forkDaemon:** ✅ All background fibers properly scoped for automatic cleanup
 - Error Handling: ✅ All errors typed with Data.TaggedError
 - Silence Detection: ✅ 30-second threshold with 5-second check interval
 - Log Buffering: ✅ 1000 entry max per watcher
 - Process Management: ✅ Spawn, attach, monitor, kill all implemented
+- Resource Cleanup: ✅ Automatic via Scope.close() - interrupts all fibers, closes queues

@@ -88,38 +88,41 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
         })
 
       /**
-       * Setup silence detection for a process
+       * Setup silence detection for a process within a scope
+       * This creates a scoped fiber that will be cleaned up when the scope closes
        */
       const setupSilenceDetection = (
         processId: string
       ): Effect.Effect<void, never, never> =>
         Effect.gen(function* () {
-          yield* Effect.repeat(
-            Effect.gen(function* () {
-              const info = processes.get(processId)
-              if (!info) {
-                return // Process was removed, stop checking
-              }
+          yield* Effect.forkScoped(
+            Effect.repeat(
+              Effect.gen(function* () {
+                const info = processes.get(processId)
+                if (!info) {
+                  return // Process was removed, stop checking
+                }
 
-              const lastActivity = yield* Ref.get(info.lastActivityRef)
-              const now = Date.now()
-              const timeSinceActivity = now - lastActivity
+                const lastActivity = yield* Ref.get(info.lastActivityRef)
+                const now = Date.now()
+                const timeSinceActivity = now - lastActivity
 
-              if (timeSinceActivity > SILENCE_THRESHOLD_MS) {
-                // Emit silence event
-                const silenceEvent = new ProcessEvent({
-                  type: 'silence',
-                  timestamp: new Date(),
-                  processId,
-                })
+                if (timeSinceActivity > SILENCE_THRESHOLD_MS) {
+                  // Emit silence event
+                  const silenceEvent = new ProcessEvent({
+                    type: 'silence',
+                    timestamp: new Date(),
+                    processId,
+                  })
 
-                yield* emitEvent(processId, silenceEvent)
+                  yield* emitEvent(processId, silenceEvent)
 
-                // Reset activity time to prevent repeated silence events
-                yield* Ref.set(info.lastActivityRef, now)
-              }
-            }),
-            Schedule.fixed(ACTIVITY_CHECK_INTERVAL)
+                  // Reset activity time to prevent repeated silence events
+                  yield* Ref.set(info.lastActivityRef, now)
+                }
+              }),
+              Schedule.fixed(ACTIVITY_CHECK_INTERVAL)
+            )
           )
         })
 
@@ -248,8 +251,8 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
                 )
               })
 
-              // Start silence detection in background
-              Effect.runFork(setupSilenceDetection(processId))
+              // Silence detection will be started when monitor() is called
+              // It will be scoped to the monitoring stream
 
               return handle
             } catch (error) {
@@ -291,14 +294,12 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
             }
             processes.set(processId, processInfo)
 
-            // Start silence detection
-            Effect.runFork(setupSilenceDetection(processId))
-
+            // Silence detection will be started when monitor() is called
             return handle
           }),
 
         monitor: (handle: ProcessHandle) =>
-          Stream.fromEffect(
+          Stream.unwrapScoped(
             Effect.gen(function* () {
               const info = processes.get(handle.id)
               if (!info) {
@@ -310,9 +311,13 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
                 )
               }
 
+              // Start silence detection as a scoped fiber
+              // It will be automatically interrupted when the stream scope closes
+              yield* setupSilenceDetection(handle.id)
+
               return Stream.fromQueue(info.queue)
             })
-          ).pipe(Stream.flatten),
+          ),
 
         kill: (handle: ProcessHandle) =>
           Effect.gen(function* () {
