@@ -157,7 +157,7 @@ function ToolUsageBar({
           {/* Usage fill */}
           <motion.div
             animate={{ width: `${clampedPercentage}%` }}
-            className="relative h-full rounded"
+            className="relative h-full rounded overflow-hidden"
             initial={{ width: 0 }}
             style={{
               background: `linear-gradient(90deg, ${color}40 0%, ${color}80 100%)`,
@@ -165,7 +165,7 @@ function ToolUsageBar({
             }}
             transition={animationConfig}
           >
-            {/* Animated shimmer effect */}
+            {/* Animated shimmer effect - only visible within filled area */}
             <motion.div
               animate={{
                 x: ['-100%', '100%'],
