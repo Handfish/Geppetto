@@ -35,12 +35,12 @@ import { WorkspaceSelector } from '../components/WorkspaceSelector'
 import { toast } from 'sonner'
 
 export function MainScreen() {
-  const { accountsResult, activeAccount, refreshProviderRepos } =
+  const { accountsResult, activeAccount } =
     useProviderAuth('github')
 
   // Get first account from accountsResult if activeAccount is null
   const firstAccountId = Result.match(accountsResult, {
-    onSuccess: accounts => accounts[0]?.id ?? null,
+    onSuccess: (data) => data.value[0]?.id ?? null,
     onFailure: () => null,
     onInitial: () => null,
   })
@@ -233,8 +233,8 @@ export function MainScreen() {
                     account={
                       activeAccount ??
                       Result.match(accountsResult, {
-                        onSuccess: accounts =>
-                          accounts.find(acc => acc.id === activeAccountId) ??
+                        onSuccess: (data) =>
+                          data.value.find((acc) => acc.id === activeAccountId) ??
                           null,
                         onFailure: () => null,
                         onInitial: () => null,

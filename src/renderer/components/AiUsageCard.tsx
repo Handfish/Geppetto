@@ -91,6 +91,20 @@ const PROVIDER_COPY: Record<AiProviderType, ProviderCopy> = {
     usageConsoleLabel: 'Claude Usage',
     providerDisplayName: 'Claude',
   },
+  cursor: {
+    title: 'Cursor CLI Usage',
+    description:
+      'Track how the pro-tier CLI tools are consuming your Cursor quota.',
+    connectDescription:
+      'Connect Cursor to start monitoring usage. Pro tier is required.',
+    connectCta: 'Connect Cursor',
+    noAccountsMessage: 'No Cursor accounts connected yet.',
+    authenticationFallback: 'Authentication required to fetch Cursor usage.',
+    providerUnavailableFallback: 'Cursor provider is currently unavailable.',
+    usageUnavailableFallback: 'Unable to fetch Cursor usage right now.',
+    usageConsoleLabel: 'Cursor Usage',
+    providerDisplayName: 'Cursor',
+  },
 }
 
 type ProviderUsageSectionProps = {
@@ -139,13 +153,18 @@ function ProviderUsageSection({
       return
     }
 
-    if (
-      Result.isFailure(signInResult) &&
-      signInResult.error._tag === 'AiFeatureUnavailableError'
-    ) {
-      const message = signInResult.error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
-      setFeatureLockMessage(message)
-      signInFeatureToastShownRef.current = true
+    if (Result.isFailure(signInResult)) {
+      const error = Result.match(signInResult, {
+        onSuccess: () => null,
+        onFailure: (data) => (data as unknown as { error: any }).error,
+        onInitial: () => null,
+      })
+
+      if (error?._tag === 'AiFeatureUnavailableError') {
+        const message = error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
+        setFeatureLockMessage(message)
+        signInFeatureToastShownRef.current = true
+      }
     }
   }, [signInResult])
 
@@ -155,19 +174,24 @@ function ProviderUsageSection({
       return
     }
 
-    if (
-      usageResult._tag === 'Failure' &&
-      usageResult.error._tag === 'AiFeatureUnavailableError'
-    ) {
-      const message = usageResult.error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
-      setFeatureLockMessage(message)
+    if (Result.isFailure(usageResult)) {
+      const error = Result.match(usageResult, {
+        onSuccess: () => null,
+        onFailure: (data) => (data as unknown as { error: any }).error,
+        onInitial: () => null,
+      })
 
-      if (
-        !signInFeatureToastShownRef.current &&
-        !usageFeatureToastShownRef.current
-      ) {
-        showProFeatureLockedToast(message)
-        usageFeatureToastShownRef.current = true
+      if (error?._tag === 'AiFeatureUnavailableError') {
+        const message = error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
+        setFeatureLockMessage(message)
+
+        if (
+          !signInFeatureToastShownRef.current &&
+          !usageFeatureToastShownRef.current
+        ) {
+          showProFeatureLockedToast(message)
+          usageFeatureToastShownRef.current = true
+        }
       }
     }
   }, [usageResult])
@@ -228,32 +252,35 @@ function ProviderUsageSection({
     )
     .onErrorTag('AiAuthenticationError', error => (
       <ErrorAlert
-        error={error}
         message={error.message ?? copy.authenticationFallback}
+        error={error}
       />
     ))
     .onErrorTag('AiProviderUnavailableError', error => (
       <ErrorAlert
-        error={error}
         message={error.message ?? copy.providerUnavailableFallback}
+        error={error}
       />
     ))
     .onErrorTag('AiUsageUnavailableError', error => (
       <ErrorAlert
-        error={error}
         message={error.message ?? copy.usageUnavailableFallback}
+        error={error}
       />
     ))
     .onErrorTag('NetworkError', error => (
-      <ErrorAlert error={error} action={
-        <button
-          className="mt-2 px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500"
-          onClick={() => refreshUsage()}
-          type="button"
-        >
-          Retry
-        </button>
-      } />
+      <ErrorAlert
+        action={
+          <button
+            className="mt-2 px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500"
+            onClick={() => refreshUsage()}
+            type="button"
+          >
+            Retry
+          </button>
+        }
+        error={error}
+      />
     ))
     .onDefect(defect => (
       <ErrorAlert message={String(defect)} />
@@ -296,10 +323,10 @@ function ProviderUsageSection({
                     </div>
                     <div className="h-2 bg-gray-700 rounded">
                       <div
-                        className="h-2 bg-indigo-500 rounded"
                         style={{
                           width: `${Math.min(metric.usagePercentage, 100)}%`,
                         }}
+                        className="h-2 bg-indigo-500 rounded"
                       />
                     </div>
                   </div>
@@ -319,20 +346,23 @@ function ProviderUsageSection({
     .onSuccess(() => null)
     .onErrorTag('AuthenticationError', error => (
       <ErrorAlert
-        error={error}
         message={error.message ?? `Unable to connect to ${copy.providerDisplayName}.`}
+        error={error}
       />
     ))
     .onErrorTag('NetworkError', error => (
-      <ErrorAlert error={error} action={
-        <button
-          className="mt-2 px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500"
-          onClick={() => signIn()}
-          type="button"
-        >
-          Retry
-        </button>
-      } />
+      <ErrorAlert
+        action={
+          <button
+            className="mt-2 px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500"
+            onClick={() => signIn()}
+            type="button"
+          >
+            Retry
+          </button>
+        }
+        error={error}
+      />
     ))
     .onErrorTag('AiAuthenticationError', error => (
       <ErrorAlert error={error} />
