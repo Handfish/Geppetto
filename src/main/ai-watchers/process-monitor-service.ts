@@ -4,8 +4,9 @@ import * as Queue from 'effect/Queue'
 import * as Ref from 'effect/Ref'
 import * as Schedule from 'effect/Schedule'
 import * as Duration from 'effect/Duration'
+import * as Scope from 'effect/Scope'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { ulid } from 'ulid'
+import { randomUUID } from 'node:crypto'
 import type { ProcessMonitorPort, ProcessConfig } from './ports'
 import { ProcessHandle, ProcessEvent } from './schemas'
 import {
@@ -60,9 +61,10 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
       const markActivity = (processId: string): Effect.Effect<void> =>
         Effect.gen(function* () {
           const info = processes.get(processId)
-          if (info) {
-            yield* Ref.set(info.lastActivityRef, Date.now())
+          if (!info) {
+            return yield* Effect.void
           }
+          yield* Ref.set(info.lastActivityRef, Date.now())
         })
 
       /**
@@ -75,7 +77,7 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
         Effect.gen(function* () {
           const info = processes.get(processId)
           if (!info) {
-            return
+            return yield* Effect.void
           }
 
           yield* Queue.offer(info.queue, event).pipe(
@@ -93,14 +95,14 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
        */
       const setupSilenceDetection = (
         processId: string
-      ): Effect.Effect<void, never, never> =>
+      ): Effect.Effect<void, never, Scope.Scope> =>
         Effect.gen(function* () {
           yield* Effect.forkScoped(
             Effect.repeat(
               Effect.gen(function* () {
                 const info = processes.get(processId)
                 if (!info) {
-                  return // Process was removed, stop checking
+                  return yield* Effect.void // Process was removed, stop checking
                 }
 
                 const lastActivity = yield* Ref.get(info.lastActivityRef)
@@ -132,16 +134,18 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
       const cleanupProcess = (processId: string): Effect.Effect<void> =>
         Effect.gen(function* () {
           const info = processes.get(processId)
-          if (info) {
-            yield* Queue.shutdown(info.queue)
-            processes.delete(processId)
+          if (!info) {
+            return yield* Effect.void
           }
+          yield* Queue.shutdown(info.queue)
+          processes.delete(processId)
         })
 
       const implementation: ProcessMonitorPort = {
         spawn: (config: ProcessConfig) =>
           Effect.gen(function* () {
-            const processId = ulid()
+            // Generate a cryptographically secure random ID
+            const processId = yield* Effect.sync(() => randomUUID())
 
             try {
               const child = spawn(config.command, config.args, {
@@ -269,7 +273,8 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
 
         attach: (pid: number) =>
           Effect.gen(function* () {
-            const processId = ulid()
+            // Generate a cryptographically secure random ID
+            const processId = yield* Effect.sync(() => randomUUID())
 
             // Note: We can't truly "attach" to an existing process's stdout/stderr
             // This creates a handle for tracking, but won't receive live output
@@ -304,9 +309,13 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
               const info = processes.get(handle.id)
               if (!info) {
                 return yield* Effect.fail(
-                  new ProcessNotFoundError({
+                  new ProcessMonitorError({
                     message: `Process ${handle.id} not found`,
                     processId: handle.id,
+                    cause: new ProcessNotFoundError({
+                      message: `Process ${handle.id} not found`,
+                      processId: handle.id,
+                    }),
                   })
                 )
               }
@@ -324,9 +333,14 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
             const info = processes.get(handle.id)
             if (!info) {
               return yield* Effect.fail(
-                new ProcessNotFoundError({
+                new ProcessKillError({
                   message: `Process ${handle.id} not found`,
                   processId: handle.id,
+                  pid: handle.pid,
+                  cause: new ProcessNotFoundError({
+                    message: `Process ${handle.id} not found`,
+                    processId: handle.id,
+                  }),
                 })
               )
             }

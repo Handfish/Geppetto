@@ -34,6 +34,18 @@ import {
   ProviderType,
 } from './schemas/account-context'
 import { WorkspaceConfig } from './schemas/workspace'
+import {
+  AiWatcher,
+  AiWatcherConfig,
+  LogEntry,
+  TmuxSession,
+} from './schemas/ai-watchers'
+import {
+  ProcessError,
+  WatcherNotFoundError,
+  WatcherOperationError,
+  TmuxError,
+} from './schemas/ai-watchers/errors'
 
 /**
  * Account Management IPC Contracts
@@ -266,6 +278,70 @@ export const WorkspaceIpcContracts = {
 } as const
 
 /**
+ * AI Watcher IPC Contracts
+ */
+export const AiWatcherIpcContracts = {
+  createWatcher: {
+    channel: 'ai-watcher:create' as const,
+    input: AiWatcherConfig,
+    output: AiWatcher,
+    errors: S.Union(ProcessError, WatcherOperationError),
+  },
+
+  attachToTmuxSession: {
+    channel: 'ai-watcher:attach-tmux' as const,
+    input: S.Struct({ sessionName: S.String }),
+    output: AiWatcher,
+    errors: S.Union(TmuxError, ProcessError, WatcherOperationError),
+  },
+
+  listWatchers: {
+    channel: 'ai-watcher:list' as const,
+    input: S.Void,
+    output: S.Array(AiWatcher),
+    errors: S.Never,
+  },
+
+  getWatcher: {
+    channel: 'ai-watcher:get' as const,
+    input: S.Struct({ watcherId: S.String }),
+    output: AiWatcher,
+    errors: S.Union(WatcherNotFoundError),
+  },
+
+  stopWatcher: {
+    channel: 'ai-watcher:stop' as const,
+    input: S.Struct({ watcherId: S.String }),
+    output: S.Void,
+    errors: S.Union(WatcherNotFoundError, ProcessError),
+  },
+
+  startWatcher: {
+    channel: 'ai-watcher:start' as const,
+    input: S.Struct({ watcherId: S.String }),
+    output: S.Void,
+    errors: S.Union(WatcherNotFoundError, WatcherOperationError),
+  },
+
+  getWatcherLogs: {
+    channel: 'ai-watcher:get-logs' as const,
+    input: S.Struct({
+      watcherId: S.String,
+      limit: S.optional(S.Number),
+    }),
+    output: S.Array(LogEntry),
+    errors: S.Union(WatcherNotFoundError),
+  },
+
+  listTmuxSessions: {
+    channel: 'ai-watcher:list-tmux' as const,
+    input: S.Void,
+    output: S.Array(TmuxSession),
+    errors: S.Union(TmuxError),
+  },
+} as const
+
+/**
  * Combined IPC Contracts
  */
 export const IpcContracts = {
@@ -273,6 +349,7 @@ export const IpcContracts = {
   ...ProviderIpcContracts,
   ...AiProviderIpcContracts,
   ...WorkspaceIpcContracts,
+  ...AiWatcherIpcContracts,
 } as const
 
 export type IpcContracts = typeof IpcContracts

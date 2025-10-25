@@ -48,6 +48,25 @@ import {
   AiProviderUsageError,
   AiAccountNotFoundError,
 } from '../ai/errors'
+import {
+  ProcessSpawnError,
+  ProcessAttachError,
+  ProcessMonitorError,
+  ProcessKillError,
+  ProcessNotFoundError,
+  AiWatcherCreateError,
+  AiWatcherStartError,
+  AiWatcherStopError,
+  WatcherNotFoundError as DomainWatcherNotFoundError,
+  TmuxSessionNotFoundError,
+  TmuxCommandError,
+} from '../ai-watchers/errors'
+import {
+  ProcessError,
+  WatcherNotFoundError as IpcWatcherNotFoundError,
+  WatcherOperationError,
+  TmuxError,
+} from '../../shared/schemas/ai-watchers/errors'
 
 /**
  * Result type for IPC error responses
@@ -69,6 +88,10 @@ export type IpcErrorResult = {
     | SharedAiProviderUnavailableError
     | SharedAiFeatureUnavailableError
     | SharedAiUsageUnavailableError
+    | ProcessError
+    | IpcWatcherNotFoundError
+    | WatcherOperationError
+    | TmuxError
 }
 
 /**
@@ -98,6 +121,22 @@ type AiDomainError =
   | AiProviderNotRegisteredError
   | AiProviderUsageError
   | AiAccountNotFoundError
+
+/**
+ * Union of all AI Watcher domain errors
+ */
+type AiWatcherDomainError =
+  | ProcessSpawnError
+  | ProcessAttachError
+  | ProcessMonitorError
+  | ProcessKillError
+  | ProcessNotFoundError
+  | AiWatcherCreateError
+  | AiWatcherStartError
+  | AiWatcherStopError
+  | DomainWatcherNotFoundError
+  | TmuxSessionNotFoundError
+  | TmuxCommandError
 
 /**
  * Union of all Git command domain errors
@@ -161,11 +200,94 @@ const isAiDomainError = (error: unknown): error is AiDomainError => {
 }
 
 /**
+ * Type guard to check if an error is an AI Watcher domain error
+ */
+const isAiWatcherDomainError = (error: unknown): error is AiWatcherDomainError => {
+  return (
+    error instanceof ProcessSpawnError ||
+    error instanceof ProcessAttachError ||
+    error instanceof ProcessMonitorError ||
+    error instanceof ProcessKillError ||
+    error instanceof ProcessNotFoundError ||
+    error instanceof AiWatcherCreateError ||
+    error instanceof AiWatcherStartError ||
+    error instanceof AiWatcherStopError ||
+    error instanceof DomainWatcherNotFoundError ||
+    error instanceof TmuxSessionNotFoundError ||
+    error instanceof TmuxCommandError
+  )
+}
+
+/**
  * Maps domain errors to shared IPC error types that can be sent across process boundaries
  */
 export const mapDomainErrorToIpcError = (
   error: unknown
 ): Effect.Effect<IpcErrorResult> => {
+  // Handle AI Watcher errors
+  if (isAiWatcherDomainError(error)) {
+    // Process errors
+    if (
+      error instanceof ProcessSpawnError ||
+      error instanceof ProcessAttachError ||
+      error instanceof ProcessMonitorError ||
+      error instanceof ProcessKillError ||
+      error instanceof ProcessNotFoundError
+    ) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new ProcessError({
+          message: error.message,
+          processId: 'processId' in error ? error.processId : undefined,
+          pid: 'pid' in error ? error.pid : undefined,
+        }),
+      })
+    }
+
+    // Watcher not found
+    if (error instanceof DomainWatcherNotFoundError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new IpcWatcherNotFoundError({
+          message: error.message,
+          watcherId: error.watcherId,
+        }),
+      })
+    }
+
+    // Watcher operation errors
+    if (
+      error instanceof AiWatcherCreateError ||
+      error instanceof AiWatcherStartError ||
+      error instanceof AiWatcherStopError
+    ) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new WatcherOperationError({
+          message: error.message,
+          watcherId: 'watcherId' in error ? error.watcherId : undefined,
+          operation:
+            error instanceof AiWatcherCreateError
+              ? 'create'
+              : error instanceof AiWatcherStartError
+                ? 'start'
+                : 'stop',
+        }),
+      })
+    }
+
+    // Tmux errors
+    if (error instanceof TmuxSessionNotFoundError || error instanceof TmuxCommandError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new TmuxError({
+          message: error.message,
+          sessionName: 'sessionName' in error ? error.sessionName : undefined,
+        }),
+      })
+    }
+  }
+
   // Handle Git command errors - preserve command context
   if (isGitDomainError(error)) {
     if (error instanceof GitExecutableUnavailableError) {

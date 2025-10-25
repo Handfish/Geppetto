@@ -1,13 +1,15 @@
 import * as Effect from 'effect/Effect'
 import * as Stream from 'effect/Stream'
-import * as Fiber from 'effect/Fiber'
+import type * as Fiber from 'effect/Fiber'
 import * as Ref from 'effect/Ref'
 import * as Queue from 'effect/Queue'
 import * as Scope from 'effect/Scope'
+import * as Exit from 'effect/Exit'
 import { pipe } from 'effect/Function'
-import { ulid } from 'ulid'
-import type { AiWatcherPort, LogEntry } from './ports'
-import { AiWatcher, AiWatcherConfig, ProcessEvent, type AiWatcherStatus } from './schemas'
+import { randomUUID } from 'node:crypto'
+import type { AiWatcherPort } from './ports'
+import type { AiWatcherStatus } from './schemas'
+import { AiWatcher, AiWatcherConfig, ProcessEvent, ProcessHandle, LogEntry } from './schemas'
 import {
   AiWatcherCreateError,
   AiWatcherStartError,
@@ -114,6 +116,7 @@ const processEventToLogEntry = (
 export class AiWatcherService extends Effect.Service<AiWatcherService>()(
   'AiWatcherService',
   {
+    dependencies: [TmuxSessionManager.Default, ProcessMonitorService.Default],
     effect: Effect.gen(function* () {
       const tmuxManager = yield* TmuxSessionManager
       const processMonitor = yield* ProcessMonitorService
@@ -130,13 +133,14 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
       ): Effect.Effect<void> =>
         Effect.gen(function* () {
           const state = watchers.get(watcherId)
-          if (state) {
-            yield* Ref.set(state.statusRef, status)
-            state.watcher = new AiWatcher({
-              ...state.watcher,
-              status,
-            })
+          if (!state) {
+            return yield* Effect.void
           }
+          yield* Ref.set(state.statusRef, status)
+          state.watcher = new AiWatcher({
+            ...state.watcher,
+            status,
+          })
         })
 
       /**
@@ -145,14 +149,15 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
       const updateLastActivity = (watcherId: string): Effect.Effect<void> =>
         Effect.gen(function* () {
           const state = watchers.get(watcherId)
-          if (state) {
-            const now = new Date()
-            yield* Ref.set(state.lastActivityRef, now)
-            state.watcher = new AiWatcher({
-              ...state.watcher,
-              lastActivityAt: now,
-            })
+          if (!state) {
+            return yield* Effect.void
           }
+          const now = new Date()
+          yield* Ref.set(state.lastActivityRef, now)
+          state.watcher = new AiWatcher({
+            ...state.watcher,
+            lastActivityAt: now,
+          })
         })
 
       /**
@@ -165,7 +170,7 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
         Effect.gen(function* () {
           const state = watchers.get(watcherId)
           if (!state) {
-            return
+            return yield* Effect.void
           }
 
           // Add to log buffer (with max size limit)
@@ -222,95 +227,107 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
         watcherId: string,
         watcher: AiWatcher,
         scope: Scope.Scope
-      ): Effect.Effect<Fiber.RuntimeFiber<void, never>, never, never> =>
+      ): Effect.Effect<Fiber.RuntimeFiber<void, never>> =>
         pipe(
           processMonitor.monitor(watcher.processHandle),
           Stream.tap((event) => handleProcessEvent(watcherId, event)),
           Stream.runDrain,
-          Stream.runScoped, // Run the stream in a scope
+          Effect.catchAll(() => Effect.void), // Catch and ignore all errors from monitoring
           Effect.forkIn(scope) // Fork into the watcher's specific scope
         )
 
       const implementation: AiWatcherPort = {
         create: (config: AiWatcherConfig) =>
           Effect.gen(function* () {
-            const watcherId = ulid()
+            const watcherId = yield* Effect.sync(() => randomUUID())
 
-            try {
-              let processHandle = config.processHandle
+            let processHandle: ProcessHandle | undefined = config.processHandle
 
-              // If no process handle provided, create a new tmux session
-              if (!processHandle) {
-                const sessionName = `ai-${config.type}-${watcherId.slice(0, 8)}`
-                const command = getAiAgentCommand(config)
+            // If no process handle provided, create a new tmux session
+            if (!processHandle) {
+              const sessionName = `ai-${config.type}-${watcherId.slice(0, 8)}`
+              const command = getAiAgentCommand(config)
 
-                processHandle = yield* tmuxManager.createSession(
-                  sessionName,
-                  command,
-                  config.workingDirectory
+              processHandle = yield* tmuxManager.createSession(
+                sessionName,
+                command,
+                config.workingDirectory
+              ).pipe(
+                Effect.mapError((error: unknown) =>
+                  new AiWatcherCreateError({
+                    message: `Failed to create tmux session: ${error instanceof Error ? error.message : String(error)}`,
+                    config: {
+                      type: config.type,
+                      name: config.name,
+                    },
+                    cause: error,
+                  })
                 )
-              }
-
-              const watcher = new AiWatcher({
-                id: watcherId,
-                name: config.name ?? `${config.type}-watcher`,
-                type: config.type,
-                processHandle,
-                status: 'starting',
-                config,
-                createdAt: new Date(),
-                lastActivityAt: new Date(),
-              })
-
-              // Create log queue and refs
-              const logQueue = yield* Queue.unbounded<LogEntry>()
-              const statusRef = yield* Ref.make<AiWatcherStatus>('starting')
-              const lastActivityRef = yield* Ref.make(new Date())
-
-              // Create a dedicated scope for this watcher's lifecycle
-              // This scope will live until the watcher is explicitly stopped
-              const watcherScope = yield* Scope.make()
-
-              // Start monitoring in the watcher's scope
-              const fiber = yield* startMonitoring(watcherId, watcher, watcherScope)
-
-              // Store watcher state
-              const state: WatcherState = {
-                watcher,
-                scope: watcherScope,
-                fiber,
-                logs: [],
-                logQueue,
-                statusRef,
-                lastActivityRef,
-              }
-              watchers.set(watcherId, state)
-
-              // Transition to running after a short delay (using forkIn to scope to watcher)
-              yield* Effect.forkIn(
-                Effect.gen(function* () {
-                  yield* Effect.sleep(1000) // 1 second
-                  const currentStatus = yield* Ref.get(statusRef)
-                  if (currentStatus === 'starting') {
-                    yield* updateWatcherStatus(watcherId, 'running')
-                  }
-                }),
-                watcherScope
               )
+            }
 
-              return watcher
-            } catch (error) {
+            // At this point, processHandle must be defined
+            if (!processHandle) {
               return yield* Effect.fail(
                 new AiWatcherCreateError({
-                  message: `Failed to create watcher: ${error instanceof Error ? error.message : String(error)}`,
+                  message: 'Failed to create or obtain process handle',
                   config: {
                     type: config.type,
                     name: config.name,
                   },
-                  cause: error,
+                  cause: new Error('processHandle is undefined'),
                 })
               )
             }
+
+            const watcher = new AiWatcher({
+              id: watcherId,
+              name: config.name ?? `${config.type}-watcher`,
+              type: config.type,
+              processHandle,
+              status: 'starting',
+              config,
+              createdAt: new Date(),
+              lastActivityAt: new Date(),
+            })
+
+            // Create log queue and refs
+            const logQueue = yield* Queue.unbounded<LogEntry>()
+            const statusRef = yield* Ref.make<AiWatcherStatus>('starting')
+            const lastActivityRef = yield* Ref.make(new Date())
+
+            // Create a dedicated scope for this watcher's lifecycle
+            // This scope will live until the watcher is explicitly stopped
+            const watcherScope = yield* Scope.make()
+
+            // Start monitoring in the watcher's scope
+            const fiber = yield* startMonitoring(watcherId, watcher, watcherScope)
+
+            // Store watcher state
+            const state: WatcherState = {
+              watcher,
+              scope: watcherScope,
+              fiber,
+              logs: [],
+              logQueue,
+              statusRef,
+              lastActivityRef,
+            }
+            watchers.set(watcherId, state)
+
+            // Transition to running after a short delay (using forkIn to scope to watcher)
+            yield* Effect.forkIn(
+              Effect.gen(function* () {
+                yield* Effect.sleep(1000) // 1 second
+                const currentStatus = yield* Ref.get(statusRef)
+                if (currentStatus === 'starting') {
+                  yield* updateWatcherStatus(watcherId, 'running')
+                }
+              }),
+              watcherScope
+            )
+
+            return watcher
           }),
 
         start: (watcher: AiWatcher) =>
@@ -318,9 +335,13 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
             const state = watchers.get(watcher.id)
             if (!state) {
               return yield* Effect.fail(
-                new WatcherNotFoundError({
+                new AiWatcherStartError({
                   message: `Watcher ${watcher.id} not found`,
                   watcherId: watcher.id,
+                  cause: new WatcherNotFoundError({
+                    message: `Watcher ${watcher.id} not found`,
+                    watcherId: watcher.id,
+                  }),
                 })
               )
             }
@@ -343,16 +364,20 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
             const state = watchers.get(watcher.id)
             if (!state) {
               return yield* Effect.fail(
-                new WatcherNotFoundError({
+                new AiWatcherStopError({
                   message: `Watcher ${watcher.id} not found`,
                   watcherId: watcher.id,
+                  cause: new WatcherNotFoundError({
+                    message: `Watcher ${watcher.id} not found`,
+                    watcherId: watcher.id,
+                  }),
                 })
               )
             }
 
             // Close the watcher's scope - this will interrupt all fibers in that scope
             // including the monitoring fiber and any other background tasks
-            yield* Scope.close(state.scope, Effect.void)
+            yield* Scope.close(state.scope, Exit.void)
 
             // Kill the process
             yield* processMonitor.kill(watcher.processHandle).pipe(
@@ -379,13 +404,54 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
             return yield* Ref.get(state.statusRef)
           }),
 
+        get: (watcherId: string) =>
+          Effect.gen(function* () {
+            const state = watchers.get(watcherId)
+            if (!state) {
+              return yield* Effect.fail(
+                new WatcherNotFoundError({
+                  message: `Watcher ${watcherId} not found`,
+                  watcherId,
+                })
+              )
+            }
+
+            return state.watcher
+          }),
+
+        listAll: () =>
+          Effect.gen(function* () {
+            return Array.from(watchers.values()).map((state) => state.watcher)
+          }),
+
+        getLogs: (watcherId: string, limit?: number) =>
+          Effect.gen(function* () {
+            const state = watchers.get(watcherId)
+            if (!state) {
+              return yield* Effect.fail(
+                new WatcherNotFoundError({
+                  message: `Watcher ${watcherId} not found`,
+                  watcherId,
+                })
+              )
+            }
+
+            const logs = state.logs
+            if (limit && limit > 0) {
+              // Return last N logs
+              return logs.slice(-limit)
+            }
+
+            return logs
+          }),
+
         streamLogs: (watcher: AiWatcher) =>
-          Stream.fromEffect(
-            Effect.gen(function* () {
+          Stream.unwrap(
+            Effect.sync(() => {
               const state = watchers.get(watcher.id)
               if (!state) {
                 // Return empty stream if watcher not found
-                return Stream.empty
+                return Stream.empty as Stream.Stream<LogEntry, never, never>
               }
 
               // Create a stream that emits existing logs, then new logs from the queue
@@ -394,11 +460,10 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
 
               return Stream.concat(existingLogs, newLogs)
             })
-          ).pipe(Stream.flatten),
+          ),
       }
 
       return implementation
     }),
-    dependencies: [TmuxSessionManager, ProcessMonitorService],
   }
 ) {}

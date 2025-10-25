@@ -63,6 +63,7 @@ This document tracks the implementation progress of the AI Watcher Tmux Integrat
 - Each watcher has dedicated `Scope.CloseableScope` for lifecycle management
 - Silence detection properly scoped to monitoring stream
 - Automatic cleanup via `Scope.close()` - no resource leaks
+- **ID Generation:** Migrated to Node's `crypto.randomUUID()` for build compatibility (Effect's `Random.nextString` doesn't exist in current version)
 
 ### 2.1 Process Monitor Service ✅
 **Status:** Completed
@@ -162,23 +163,78 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
 
 ---
 
-## Phase 3: IPC Integration ⏳ NOT STARTED
+## Phase 3: IPC Integration ✅ COMPLETED
 
-### 3.1 Define IPC Contracts ⏳
-**Status:** Not Started
+### 3.1 Define IPC Contracts ✅
+**Status:** Completed
+**Date Completed:** 2025-10-25
 
-**Files to Update:**
-- `src/shared/ipc-contracts.ts` - Add AiWatcherIpcContracts
+**Files Created:**
+- ✅ `src/shared/schemas/ai-watchers/index.ts` - Shared AI watcher schemas
+- ✅ `src/shared/schemas/ai-watchers/errors.ts` - IPC-safe error schemas
 
-### 3.2 IPC Handlers ⏳
-**Status:** Not Started
+**Files Updated:**
+- ✅ `src/shared/ipc-contracts.ts` - Added AiWatcherIpcContracts
 
-**Planned Files:**
-- `src/main/ipc/ai-watcher-handlers.ts`
+**Implementation Details:**
+- Created shared schema directory for IPC-compatible types:
+  - `AiWatcher` - Main watcher entity (without internal config)
+  - `AiWatcherConfig` - Configuration for creating watchers
+  - `ProcessHandle` - Process metadata
+  - `LogEntry` - Log entry structure
+  - `TmuxSession` - Tmux session info
+- Created IPC-safe error schemas:
+  - `ProcessError` - General process errors
+  - `WatcherNotFoundError` - Watcher lookup failures
+  - `WatcherOperationError` - Watcher lifecycle errors
+  - `TmuxError` - Tmux-related errors
+- Defined 8 IPC contracts:
+  - `createWatcher` - Create new AI watcher
+  - `attachToTmuxSession` - Attach to existing tmux session
+  - `listWatchers` - List all watchers
+  - `getWatcher` - Get specific watcher by ID
+  - `stopWatcher` - Stop a running watcher
+  - `startWatcher` - Start/restart a watcher
+  - `getWatcherLogs` - Retrieve logs (existing only)
+  - `listTmuxSessions` - List tmux sessions
+- All contracts use proper Effect Schema validation
+- Integrated into combined IpcContracts export
 
-**Files to Update:**
-- `src/main/ipc/error-mapper.ts` - Add AI watcher error mapping
-- `src/main/index.ts` - Register AI watcher handlers
+### 3.2 IPC Handlers ✅
+**Status:** Completed
+**Date Completed:** 2025-10-25
+
+**Files Created:**
+- ✅ `src/main/ipc/ai-watcher-handlers.ts` - Type-safe IPC handlers
+
+**Files Updated:**
+- ✅ `src/main/ipc/error-mapper.ts` - AI watcher error mapping
+- ✅ `src/main/index.ts` - Registered AI watcher handlers
+- ✅ `src/main/ai-watchers/ports.ts` - Added new port methods
+- ✅ `src/main/ai-watchers/ai-watcher-service.ts` - Implemented new methods
+
+**Implementation Details:**
+- **Type-Safe Handler Pattern (from CLAUDE.md):**
+  - Dual-type schemas: `S.Schema<Decoded, Encoded>`
+  - Proper type assertions: `as unknown as InputSchema`
+  - No `unknown` or `any` escape hatches
+  - Full end-to-end type safety
+- **Error Mapping:**
+  - Added `isAiWatcherDomainError` type guard
+  - Maps all AI watcher domain errors to IPC errors:
+    - Process errors → `ProcessError`
+    - Watcher not found → `WatcherNotFoundError`
+    - Operation errors → `WatcherOperationError`
+    - Tmux errors → `TmuxError`
+  - Updated `IpcErrorResult` type union
+- **New Service Methods:**
+  - `get(watcherId)` - Get watcher by ID
+  - `listAll()` - List all watchers
+  - `getLogs(watcherId, limit?)` - Get existing logs
+- **Handler Registration:**
+  - Added `AiWatchersLayer` to `MainLayer`
+  - Registered `setupAiWatcherIpcHandlers` in app setup
+  - Handlers run before window creation (proper initialization)
 
 ---
 
@@ -246,25 +302,40 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
 
 ## Current Status Summary
 
-**Overall Progress:** ~28% (Phases 1-2 of 7 completed)
+**Overall Progress:** ~43% (Phases 1-3 of 7 completed)
 
 **Completed:**
 - ✅ Phase 1.1: Core Ports and Domain Types
 - ✅ Phase 1.2: Tmux Session Manager
 - ✅ Phase 2.1: Process Monitor Service
 - ✅ Phase 2.2: AI Watcher Service
+- ✅ Phase 3.1: IPC Contracts
+- ✅ Phase 3.2: IPC Handlers
 
 **In Progress:**
-- 🔄 Phase 3: IPC Integration (next up)
+- 🔄 Phase 4: Renderer Integration (next up)
 
 **Blocked:** None
 
 **Notes:**
 - Foundation architecture is solid and follows Effect-TS patterns from CLAUDE.md
 - Service layer complete with full silence detection and log streaming
+- IPC layer complete with type-safe handlers and error mapping
 - Type safety maintained throughout - no `any` types used
-- All services use proper Effect patterns (Service, forkDaemon, Ref, Queue, Stream)
-- Ready for IPC contracts and handler implementation
+- All services use proper Effect patterns (Service, forkScoped, forkIn, Ref, Queue, Stream, Scope)
+- **Build Status:** ✅ Compiles successfully (`pnpm compile:app` passes)
+- **TypeScript Status:** ✅ Zero errors in AI watcher files
+- **Critical Fixes Applied (2025-10-25):**
+  - Fixed `Random.nextString` → `crypto.randomUUID()` in both services
+  - Added missing imports: `ProcessHandle`, `Scope`, `Exit`, `WatcherNotFoundError`, `LogEntry`
+  - Fixed `Scope.close()` API: uses `Exit.void` instead of `Effect.void`
+  - Resolved duplicate `LogEntry` export (removed from ports.ts, kept in schemas.ts)
+  - Fixed error type mappings for proper IPC error propagation
+  - **Fixed Effect.Service dependencies:** Moved `dependencies` before `effect` and used `.Default` layers
+  - **Fixed error handling:** Replaced try-catch with Effect.mapError for type safety
+  - **Fixed import types:** Separated type-only imports for better tree-shaking
+  - Removed unnecessary `yield* Effect.void` in early returns
+- Ready for renderer integration (atoms and UI components)
 
 ---
 

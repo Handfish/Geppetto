@@ -37,6 +37,7 @@ const executeTmuxCommand = (command: string): Effect.Effect<string, TmuxCommandE
 export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
   'TmuxSessionManager',
   {
+    dependencies: [ProcessMonitorService.Default],
     effect: Effect.gen(function* () {
       const processMonitor = yield* ProcessMonitorService
 
@@ -200,6 +201,5 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
           }),
       }
     }),
-    dependencies: [ProcessMonitorService],
   }
 ) {}

@@ -24,6 +24,7 @@ import { ClaudeBrowserProviderAdapter } from './ai/claude/browser-provider-adapt
 import { AiProviderRegistryService } from './ai/registry'
 import { AiProviderService } from './ai/ai-provider-service'
 import { setupAiProviderIpcHandlers } from './ipc/ai-provider-handlers'
+import { setupAiWatcherIpcHandlers } from './ipc/ai-watcher-handlers'
 import { ElectronSessionService } from './ai/browser/electron-session-service'
 import { BrowserAuthService } from './ai/browser/browser-auth-service'
 import { CookieUsagePageAdapter } from './ai/browser/cookie-usage-page-adapter'
@@ -33,6 +34,7 @@ import {
 } from './source-control'
 import { WorkspaceService } from './workspace/workspace-service'
 import { setupWorkspaceIpcHandlers } from './ipc/workspace-handlers'
+import { AiWatchersLayer } from './ai-watchers'
 
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
@@ -60,7 +62,8 @@ const MainLayer = Layer.mergeAll(
   AiProviderService.Default,
   NodeGitCommandRunner.Default,
   GitCommandService.Default,
-  WorkspaceService.Default
+  WorkspaceService.Default,
+  AiWatchersLayer
 )
 
 function createMainWindow() {
@@ -161,6 +164,7 @@ app.whenReady().then(async () => {
       yield* setupAccountIpcHandlers
       yield* setupProviderIpcHandlers
       yield* setupAiProviderIpcHandlers
+      yield* setupAiWatcherIpcHandlers
       yield* setupWorkspaceIpcHandlers
     }).pipe(Effect.provide(MainLayer))
   )

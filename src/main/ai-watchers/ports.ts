@@ -1,6 +1,6 @@
 import * as Effect from 'effect/Effect'
 import * as Stream from 'effect/Stream'
-import type { ProcessHandle, ProcessEvent, AiWatcher, AiWatcherConfig, AiWatcherStatus } from './schemas'
+import type { ProcessHandle, ProcessEvent, AiWatcher, AiWatcherConfig, AiWatcherStatus, LogEntry } from './schemas'
 import type {
   ProcessSpawnError,
   ProcessAttachError,
@@ -9,6 +9,7 @@ import type {
   AiWatcherCreateError,
   AiWatcherStartError,
   AiWatcherStopError,
+  WatcherNotFoundError,
 } from './errors'
 
 /**
@@ -19,16 +20,6 @@ export interface ProcessConfig {
   args: string[]
   env?: Record<string, string>
   cwd?: string
-}
-
-/**
- * Log entry structure for AI watcher logs
- */
-export interface LogEntry {
-  timestamp: Date
-  level: 'info' | 'error' | 'debug' | 'stdout' | 'stderr'
-  message: string
-  watcherId: string
 }
 
 /**
@@ -70,7 +61,8 @@ export interface ProcessMonitorPort {
  * - Creating and configuring AI watchers
  * - Starting and stopping watchers
  * - Retrieving watcher status
- * - Streaming logs from watchers
+ * - Listing and querying watchers
+ * - Streaming and retrieving logs from watchers
  */
 export interface AiWatcherPort {
   /**
@@ -94,7 +86,22 @@ export interface AiWatcherPort {
   getStatus(watcher: AiWatcher): Effect.Effect<AiWatcherStatus, never>
 
   /**
-   * Stream logs from a watcher
+   * Get a watcher by ID
+   */
+  get(watcherId: string): Effect.Effect<AiWatcher, WatcherNotFoundError>
+
+  /**
+   * List all watchers
+   */
+  listAll(): Effect.Effect<AiWatcher[], never>
+
+  /**
+   * Get logs from a watcher (existing logs only)
+   */
+  getLogs(watcherId: string, limit?: number): Effect.Effect<LogEntry[], WatcherNotFoundError>
+
+  /**
+   * Stream logs from a watcher (existing + live)
    */
   streamLogs(watcher: AiWatcher): Stream.Stream<LogEntry, never>
 }

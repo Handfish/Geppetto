@@ -1,26 +1,6 @@
 import * as S from '@effect/schema/Schema'
 
 /**
- * Process handle - represents a process being monitored
- */
-export class ProcessHandle extends S.Class<ProcessHandle>('ProcessHandle')({
-  id: S.String,
-  pid: S.Number,
-  type: S.Literal('spawned', 'attached'),
-  startedAt: S.Date,
-}) {}
-
-/**
- * Process event types - events emitted during process monitoring
- */
-export class ProcessEvent extends S.Class<ProcessEvent>('ProcessEvent')({
-  type: S.Literal('stdout', 'stderr', 'exit', 'error', 'silence'),
-  data: S.optional(S.String),
-  timestamp: S.Date,
-  processId: S.optional(S.String),
-}) {}
-
-/**
  * AI agent types supported by the system
  */
 export const AiAgentType = S.Literal('claude-code', 'codex', 'cursor', 'custom')
@@ -33,7 +13,17 @@ export const AiWatcherStatus = S.Literal('starting', 'running', 'idle', 'stopped
 export type AiWatcherStatus = S.Schema.Type<typeof AiWatcherStatus>
 
 /**
- * AI watcher configuration
+ * Process handle - represents a process being monitored
+ */
+export class ProcessHandle extends S.Class<ProcessHandle>('ProcessHandle')({
+  id: S.String,
+  pid: S.Number,
+  type: S.Literal('spawned', 'attached'),
+  startedAt: S.Date,
+}) {}
+
+/**
+ * AI watcher configuration (for IPC input)
  */
 export class AiWatcherConfig extends S.Class<AiWatcherConfig>('AiWatcherConfig')({
   type: AiAgentType,
@@ -42,7 +32,6 @@ export class AiWatcherConfig extends S.Class<AiWatcherConfig>('AiWatcherConfig')
   env: S.optional(S.Record({ key: S.String, value: S.String })),
   command: S.optional(S.String), // Custom command for 'custom' type
   args: S.optional(S.Array(S.String)), // Custom args for 'custom' type
-  processHandle: S.optional(ProcessHandle), // For attaching to existing processes
 }) {}
 
 /**
@@ -54,19 +43,8 @@ export class AiWatcher extends S.Class<AiWatcher>('AiWatcher')({
   type: AiAgentType,
   processHandle: ProcessHandle,
   status: AiWatcherStatus,
-  config: AiWatcherConfig,
   createdAt: S.Date,
   lastActivityAt: S.Date,
-}) {}
-
-/**
- * Tmux session information
- */
-export class TmuxSession extends S.Class<TmuxSession>('TmuxSession')({
-  name: S.String,
-  attached: S.Boolean,
-  created: S.Date,
-  sessionId: S.optional(S.String),
 }) {}
 
 /**
@@ -80,12 +58,11 @@ export class LogEntry extends S.Class<LogEntry>('LogEntry')({
 }) {}
 
 /**
- * Watcher statistics
+ * Tmux session information
  */
-export class WatcherStats extends S.Class<WatcherStats>('WatcherStats')({
-  watcherId: S.String,
-  totalEvents: S.Number,
-  lastEventAt: S.optional(S.Date),
-  uptime: S.Number, // seconds
-  idleTime: S.Number, // seconds since last activity
+export class TmuxSession extends S.Class<TmuxSession>('TmuxSession')({
+  name: S.String,
+  attached: S.Boolean,
+  created: S.Date,
+  sessionId: S.optional(S.String),
 }) {}
