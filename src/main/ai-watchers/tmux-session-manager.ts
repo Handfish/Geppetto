@@ -1,9 +1,10 @@
 import * as Effect from 'effect/Effect'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { ProcessMonitorPort, ProcessConfig } from './ports'
+import type { ProcessConfig } from './ports'
 import type { ProcessHandle, TmuxSession } from './schemas'
 import { TmuxSessionNotFoundError, TmuxCommandError } from './errors'
+import { ProcessMonitorService } from './process-monitor-service'
 
 const execAsync = promisify(exec)
 
@@ -37,7 +38,7 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
   'TmuxSessionManager',
   {
     effect: Effect.gen(function* () {
-      const processMonitor = yield* ProcessMonitorPort
+      const processMonitor = yield* ProcessMonitorService
 
       return {
         /**
@@ -199,6 +200,6 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
           }),
       }
     }),
-    dependencies: [ProcessMonitorPort],
+    dependencies: [ProcessMonitorService],
   }
 ) {}
