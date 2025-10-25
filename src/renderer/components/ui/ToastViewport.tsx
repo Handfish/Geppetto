@@ -20,11 +20,11 @@ export function ToastViewport() {
 
   return (
     <Toaster
-      offset={{ top: 32, left: 500 }}
       position="top-left"
+      offset={{ top: 32, left: 500 }}
+      richColors
       toastOptions={{
         duration: 6000,
-        unstyled: true,
       }}
     />
   )

@@ -37,8 +37,6 @@ const signIn = (provider: AiProviderType) =>
       onSuccess: result =>
         Effect.sync(() => {
           toast.success(`${formatProviderLabel(provider)} connected.`, {
-            id: `ai-provider:${provider}:sign-in`,
-            position: 'top-left',
             duration: 6000,
           })
         }),

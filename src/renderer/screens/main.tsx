@@ -32,7 +32,7 @@ import {
   clearConsoleError,
 } from '../lib/console-error-channel'
 import { WorkspaceSelector } from '../components/WorkspaceSelector'
-import { showCustomToast } from '../lib/toast'
+import { toast } from 'sonner'
 
 export function MainScreen() {
   const { accountsResult, activeAccount, refreshProviderRepos } =
@@ -55,19 +55,12 @@ export function MainScreen() {
     const error = readConsoleError()
     if (error && error.timestamp !== displayedErrorTimestamp.current) {
       displayedErrorTimestamp.current = error.timestamp
-      showCustomToast(
-        {
-          title: 'Developer Console Message',
-          message: error.message,
-          onDismiss: clearConsoleError,
-        },
-        {
-          id: 'console-error',
-          duration: 6000,
-          onDismiss: clearConsoleError,
-          onAutoClose: clearConsoleError,
-        }
-      )
+      toast.error(`Console: ${error.message}`, {
+        id: 'console-error',
+        duration: 6000,
+        onDismiss: clearConsoleError,
+        onAutoClose: clearConsoleError,
+      })
     }
   }, [])
 

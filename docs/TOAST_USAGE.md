@@ -4,36 +4,34 @@ This document tracks all places where Sonner toast notifications are used in the
 
 ## Overview
 
-The application uses [Sonner](https://sonner.emilkowal.ski/) for toast notifications with a unified custom design system.
+The application uses [Sonner](https://sonner.emilkowal.ski/) for toast notifications with stock Sonner styles and stacking.
 
 ## Core Toast Infrastructure
 
-### 1. Toast Component & Utilities (`src/renderer/lib/toast.tsx`)
+### 1. Toast Utilities (`src/renderer/lib/toast.tsx`)
 
 **Main exports:**
-- `showCustomToast(props, options?)` - Unified custom toast with yellow glowing card design
+- `showErrorToast(message, options?)` - Show error toast (stock Sonner error)
+- `showSuccessToast(message, options?)` - Show success toast (stock Sonner success)
+- `showWarningToast(message, options?)` - Show warning toast (stock Sonner warning)
 - `showProFeatureLockedToast(message?)` - Convenience function for tier-locked features
 - `withToast()` - Legacy Effect wrapper for loading/success/error toasts (deprecated, use `withErrorHandling` instead)
 
-**Custom Toast Component:**
+**Direct Usage:**
 ```typescript
-showCustomToast(
-  {
-    title: string,           // Main heading (required)
-    message: string,         // Main content (required)
-    description?: string,    // Optional additional text
-    onDismiss?: () => void, // Optional callback when dismissed
-  },
-  options?: ExternalToast   // Sonner options (id, duration, position, etc.)
-)
+import { toast } from 'sonner'
+
+toast.success('Operation successful')
+toast.error('Operation failed')
+toast.warning('Warning message')
+toast.info('Info message')
 ```
 
-**Design:**
-- Yellow glowing card with glassmorphic background
-- Consistent styling across all custom toasts
-- `unstyled: true` to prevent Sonner wrapper elements
-- Position: `top-left` (offset by 32px top, 500px left)
+**Configuration:**
+- Position: `top-left` with offset `{ top: 32, left: 500 }`
+- Rich colors enabled for better visual distinction
 - Default duration: 6 seconds
+- Automatic stacking of multiple toasts
 
 ### 2. Toast Viewport (`src/renderer/components/ui/ToastViewport.tsx`)
 
@@ -43,7 +41,9 @@ showCustomToast(
 - Only renders in main window (not in child windows)
 - Position: `top-left`
 - Offset: `{ top: 32, left: 500 }`
-- All toasts are unstyled by default
+- Rich colors enabled
+- Default duration: 6000ms (6 seconds)
+- Uses stock Sonner styles with automatic stacking
 
 **Usage:** Imported once in `src/renderer/screens/main.tsx`
 
@@ -56,7 +56,7 @@ showCustomToast(
 - Formats error title based on error type and context
 - Adds provider prefix if context includes provider
 - Shows tier limit count for `TierLimitError`
-- Uses `showCustomToast()` for all error presentation
+- Uses `toast.error()` or `toast.warning()` based on severity
 
 **Features:**
 - Context-aware titles (`"Authentication Error"`, `"Network Error"`, etc.)
@@ -66,18 +66,15 @@ showCustomToast(
 
 ## Usage Locations
 
-### Custom Toasts (Unified Design)
+### Stock Sonner Toasts
 
 #### 1. Error Presentation (via Error Handling System)
 **File:** `src/renderer/lib/error-handling/adapters/toast-error-presenter.tsx`
 ```typescript
 // Automatically called by withErrorHandling()
-showCustomToast({
-  title: formatErrorTitle(error, context),
-  message: formatErrorMessage(error, context),
-  description: tierLimitDescription,
-  variant: 'warning', // default
-}, { id, duration })
+toast.error(`${title}: ${message}`, { id, duration })
+// or
+toast.warning(`${title}: ${message}`, { id, duration })
 ```
 
 **Used by:**
@@ -88,14 +85,9 @@ showCustomToast({
 - Account management
 
 #### 2. Console Error Messages
-**File:** `src/renderer/screens/main.tsx:58-70`
+**File:** `src/renderer/screens/main.tsx`
 ```typescript
-showCustomToast({
-  title: 'Developer Console Message',
-  message: error.message,
-  variant: 'warning', // default
-  onDismiss: clearConsoleError,
-}, {
+toast.error(`Console: ${error.message}`, {
   id: 'console-error',
   duration: 6000,
   onDismiss: clearConsoleError,
@@ -106,37 +98,28 @@ showCustomToast({
 **Trigger:** When `console.error()` is called, captured via `console-error-channel`
 
 #### 3. Pro Feature Locked
-**File:** `src/renderer/components/AiUsageCard.tsx:169`
+**File:** Via `showProFeatureLockedToast()` utility
 ```typescript
 showProFeatureLockedToast(message)
-// Equivalent to:
-// showCustomToast({ title: 'Pro feature locked', message, variant: 'warning' })
+// Uses toast.warning() internally
 ```
 
 **Trigger:** When user tries to access AI features in free tier
 
 #### 4. Repository Clone Success/Error
-**File:** `src/renderer/components/ui/RepositoryDropdown.tsx:127-151`
+**File:** `src/renderer/components/ui/RepositoryDropdown.tsx`
 
-**Success Toast (Teal variant):**
+**Success Toast:**
 ```typescript
-showCustomToast({
-  title: 'Repository Cloned',
-  message: `${repo.owner}/${repo.name} has been cloned to your workspace`,
-  variant: 'success',
-}, {
+toast.success(`${repo.owner}/${repo.name} cloned to workspace`, {
   duration: 6000,
   id: 'repo-clone-success',
 })
 ```
 
-**Error Toast (Yellow variant):**
+**Error Toast:**
 ```typescript
-showCustomToast({
-  title: 'Clone Failed',
-  message: error.message || 'Failed to clone repository to workspace',
-  variant: 'warning',
-}, {
+toast.error(`Clone failed: ${errorMessage}`, {
   duration: 6000,
   id: 'repo-clone-error',
 })
@@ -144,14 +127,11 @@ showCustomToast({
 
 **Trigger:** After repository clone operation completes
 
-### Standard Sonner Toasts
-
-#### 1. AI Provider Sign-In Success
-**File:** `src/renderer/atoms/ai-provider-atoms.ts:39-42`
+#### 5. AI Provider Sign-In Success
+**File:** `src/renderer/atoms/ai-provider-atoms.ts`
 ```typescript
 toast.success(`${formatProviderLabel(provider)} connected.`, {
   id: `ai-provider:${provider}:sign-in`,
-  position: 'top-left',
   duration: 6000,
 })
 ```
@@ -190,90 +170,82 @@ withToast(
 
 ## Toast Design System
 
-### Custom Toast Variants
+The application uses stock Sonner toast types with `richColors` enabled for better visual distinction:
 
-The unified `showCustomToast()` function supports two variants via the `variant` prop:
+### Available Toast Types
 
-#### Warning Variant (Default)
-**Used for:** Errors, warnings, tier limits, console messages
+#### `toast.success(message, options)`
+**Used for:** Successful operations, authentication success, repository clone success
+- Green background with success icon
+- Automatically styled by Sonner with rich colors
 
-**Usage:**
-```typescript
-showCustomToast({ title, message, variant: 'warning' }) // or omit variant
-```
+#### `toast.error(message, options)`
+**Used for:** Error messages, failed operations, console errors
+- Red background with error icon
+- Automatically styled by Sonner with rich colors
 
-**Colors:**
-- Border: `border-yellow-400/30`
-- Background: `bg-gradient-to-br from-gray-900/60 via-gray-950/70 to-gray-950/80`
-- Text: `text-yellow-100`
-- Title: `text-yellow-300` with glow shadow `drop-shadow-[0_2px_8px_rgba(251,191,36,0.3)]`
-- Message: `text-yellow-100/90`
-- Description: `text-yellow-100/70`
-- Button: `text-yellow-100/80 hover:bg-yellow-500/15 hover:text-yellow-50`
+#### `toast.warning(message, options)`
+**Used for:** Warnings, tier limits, pro feature locks
+- Yellow/amber background with warning icon
+- Automatically styled by Sonner with rich colors
 
-#### Success Variant
-**Used for:** Successful operations, repository clone success
+#### `toast.info(message, options)`
+**Used for:** Informational messages
+- Blue background with info icon
+- Automatically styled by Sonner with rich colors
 
-**Usage:**
-```typescript
-showCustomToast({ title, message, variant: 'success' })
-```
+### Toast Features
 
-**Colors:**
-- Border: `border-teal-400/30`
-- Background: `bg-gradient-to-br from-gray-900/60 via-gray-950/70 to-gray-950/80`
-- Text: `text-teal-100`
-- Title: `text-teal-300` with glow shadow `drop-shadow-[0_2px_8px_rgba(45,212,191,0.3)]`
-- Message: `text-teal-100/90`
-- Description: `text-teal-100/70`
-- Button: `text-teal-100/80 hover:bg-teal-500/15 hover:text-teal-50`
+- **Stacking**: Multiple toasts automatically stack (don't set `id` unless preventing duplicates)
+- **Dismissible**: All toasts can be dismissed by clicking
+- **Duration**: Default 6 seconds (configurable per toast)
+- **Position**: Top-left with offset (32px top, 500px left)
+- **Rich Colors**: Enhanced color schemes for better UX
 
-### Standard Sonner Toasts
-**Used for:** AI provider sign-in success
+## Migration History
 
-**Uses Sonner's default success styling**
-
-## Migration Plan
-
-### Phase 1: ✅ Completed
+### Phase 1: ✅ Completed (Initial Custom Implementation)
 - [x] Unified custom toast component (`showCustomToast()`)
 - [x] Integrated with error handling system
 - [x] Migrated console error toasts
 - [x] Migrated pro feature locked toasts
 - [x] Migrated error presenter to use unified component
 
-### Phase 2: ✅ Completed
+### Phase 2: ✅ Completed (Extended Custom Implementation)
 - [x] Extended `showCustomToast()` with `variant` prop (`'warning' | 'success'`)
 - [x] Migrated `RepositoryDropdown.tsx` clone toasts to `showCustomToast()`
 - [x] All custom toasts now use unified component
 
-### Phase 3: Optional Future Work
-- [ ] Migrate AI provider sign-in success to custom toast (currently uses standard Sonner toast)
+### Phase 3: ✅ Completed (Migration to Stock Sonner)
+- [x] Removed custom toast component
+- [x] Updated ToastViewport to use stock Sonner with richColors
+- [x] Migrated all toast calls to use stock Sonner types (success/error/warning)
+- [x] Simplified codebase by removing custom styling
+- [x] Enabled automatic toast stacking
+
+### Future Enhancements
 - [ ] Remove `withToast()` if no longer used (check all usage first)
-- [ ] Add additional toast variants (info, error with different styling)
 - [ ] Add toast actions (retry button, undo, etc.)
 - [ ] Add toast progress bars for long operations
-- [ ] Add toast stacking/grouping for multiple errors
 
 ## Best Practices
 
 ### ✅ DO:
-- Use `showCustomToast()` for all custom toasts
-- Use `variant: 'success'` for successful operations
-- Use `variant: 'warning'` (or omit) for errors/warnings
+- Use stock Sonner toast types: `toast.success()`, `toast.error()`, `toast.warning()`, `toast.info()`
 - Use `withErrorHandling()` for automatic error presentation
 - Include operation context in error handling (`{ operation: 'sign-in', provider: 'github' }`)
-- Set unique toast IDs to prevent duplicates
+- Let toasts stack naturally by omitting `id` in most cases
+- Only set `id` when you need to prevent duplicate toasts (e.g., recurring warnings)
 - Use `onDismiss` callback for cleanup when needed
-- Use `description` prop for additional context (e.g., tier limits)
+- Keep messages concise and actionable
 
 ### ❌ DON'T:
-- Don't use `toast.custom()` directly (use `showCustomToast()` instead)
-- Don't duplicate toast JSX across files
-- Don't forget `unstyled: true` if manually using `toast.custom()`
+- Don't create custom toast components (use stock Sonner types)
 - Don't use `withToast()` for new code (deprecated)
 - Don't show toasts for every error (some errors should be inline only)
-- Don't hardcode variant-specific colors (use the `variant` prop instead)
+- Don't set `unstyled: true` (we want stock Sonner styling)
+- Don't override position per toast (use global Toaster config)
+- Don't set `id` on all toasts (prevents stacking - only use when you need to deduplicate)
 
 ## Files Reference
 

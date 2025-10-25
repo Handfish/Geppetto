@@ -16,43 +16,34 @@ import {
   isGitError,
   isValidationError,
 } from '../../../../shared/schemas/errors'
-import { showCustomToast } from '../../toast'
 
 const DEFAULT_TOAST_DURATION = 6000
 
 /**
  * Toast Error Presenter Implementation
  *
- * Features:
- * - Tier errors get special yellow styling
- * - Context-aware titles and messages
- * - Provider prefixes for multi-provider errors
- * - Automatic duration based on severity
+ * Uses stock Sonner toast types for error presentation.
+ * Builds descriptive messages with context.
  */
 export class ToastErrorPresenter implements ErrorPresenter {
   present = (error: IpcError, context?: ErrorContext): Effect.Effect<void> =>
     Effect.sync(() => {
       const title = this.formatErrorTitle(error, context)
       const message = this.formatErrorMessage(error, context)
-      const id = context?.operation ? `error:${context.operation}` : undefined
       const duration = context?.severity === 'warning' ? 8000 : DEFAULT_TOAST_DURATION
 
-      // Build description for tier errors
-      const description = isTierError(error) && error._tag === 'TierLimitError'
-        ? `${error.currentCount} / ${error.maxAllowed} accounts used`
-        : undefined
+      // Build full message with description for tier errors
+      const fullMessage = isTierError(error) && error._tag === 'TierLimitError'
+        ? `${message}\n${error.currentCount} / ${error.maxAllowed} accounts used`
+        : message
 
-      showCustomToast(
-        {
-          title,
-          message,
-          description,
-        },
-        {
-          id,
-          duration,
-        }
-      )
+      // Use appropriate toast type based on severity
+      // Don't set id - let toasts stack naturally
+      if (context?.severity === 'warning') {
+        toast.warning(`${title}: ${fullMessage}`, { duration })
+      } else {
+        toast.error(`${title}: ${fullMessage}`, { duration })
+      }
     })
 
   dismiss = (id?: string): Effect.Effect<void> =>

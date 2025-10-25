@@ -31,7 +31,7 @@ import { useAtom, Result } from '@effect-atom/atom-react'
 import { cloneToWorkspaceAtom } from '../../atoms/workspace-atoms'
 import { WorkspaceClient } from '../../lib/ipc-client'
 import { Effect } from 'effect'
-import { showCustomToast } from '../../lib/toast'
+import { toast } from 'sonner'
 
 interface RepositoryDropdownProps {
   repo: ProviderRepository
@@ -124,17 +124,9 @@ export function RepositoryDropdown({
     // Only show toast when transitioning from waiting to not waiting (operation just completed)
     if (wasWaiting && !isWaiting) {
       if (Result.isSuccess(cloneResult)) {
-        showCustomToast(
-          {
-            title: 'Repository Cloned',
-            message: `${repo.owner}/${repo.name} has been cloned to your workspace`,
-            variant: 'success',
-          },
-          {
-            duration: 6000,
-            id: 'repo-clone-success',
-          }
-        )
+        toast.success(`${repo.owner}/${repo.name} cloned to workspace`, {
+          duration: 6000,
+        })
       } else if (Result.isFailure(cloneResult)) {
         // Extract error message using Result.match
         const errorMessage = Result.match(cloneResult, {
@@ -159,17 +151,9 @@ export function RepositoryDropdown({
           onInitial: () => '',
         })
 
-        showCustomToast(
-          {
-            title: 'Clone Failed',
-            message: errorMessage,
-            variant: 'warning',
-          },
-          {
-            duration: 6000,
-            id: 'repo-clone-error',
-          }
-        )
+        toast.error(`Clone failed: ${errorMessage}`, {
+          duration: 6000,
+        })
       }
     }
 
