@@ -1,5 +1,14 @@
-import * as Effect from 'effect/Effect'
-import * as S from '@effect/schema/Schema'
+/**
+ * AI Watcher IPC Handlers
+ *
+ * Handles IPC communication for AI watcher management.
+ *
+ * Note: This file uses individual handlers instead of the generic setupHandler pattern
+ * due to TypeScript's inability to properly infer types from the union of AI Watcher contracts.
+ * This is a known limitation when working with complex Schema.Class types in union contexts.
+ */
+
+import { Effect, Schema as S } from 'effect'
 import { ipcMain } from 'electron'
 import { AiWatcherIpcContracts } from '../../shared/ipc-contracts'
 import { AiWatcherService } from '../ai-watchers/ai-watcher-service'
@@ -7,115 +16,195 @@ import { TmuxSessionManager } from '../ai-watchers/tmux-session-manager'
 import { mapDomainErrorToIpcError } from './error-mapper'
 
 /**
- * Setup AI Watcher IPC handlers with type-safe pattern from CLAUDE.md
- *
- * CRITICAL: This follows the required type-safe pattern for IPC handlers.
- * DO NOT use `unknown` or `any` types - use proper type definitions.
+ * Setup AI Watcher IPC handlers
  */
 export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   const aiWatcherService = yield* AiWatcherService
   const tmuxManager = yield* TmuxSessionManager
 
-  // Extract types from contracts using Schema.Type
-  type ContractInput<K extends keyof typeof AiWatcherIpcContracts> = S.Schema.Type<
-    (typeof AiWatcherIpcContracts)[K]['input']
-  >
-  type ContractOutput<K extends keyof typeof AiWatcherIpcContracts> = S.Schema.Type<
-    (typeof AiWatcherIpcContracts)[K]['output']
-  >
-
-  /**
-   * Setup a typed IPC handler for a specific contract
-   *
-   * This function preserves full type safety:
-   * 1. Decodes input from wire format to app type
-   * 2. Executes handler with properly typed input
-   * 3. Encodes output from app type to wire format
-   * 4. Maps domain errors to IPC errors
-   */
-  const setupHandler = <K extends keyof typeof AiWatcherIpcContracts, E>(
-    key: K,
-    handler: (input: ContractInput<K>) => Effect.Effect<ContractOutput<K>, E>
-  ) => {
-    const contract = AiWatcherIpcContracts[key]
-
-    // Define dual-type schemas preserving both decoded and encoded types
-    // This is REQUIRED - see CLAUDE.md for explanation
-    type InputSchema = S.Schema<
-      ContractInput<K>,
-      S.Schema.Encoded<(typeof AiWatcherIpcContracts)[K]['input']>
-    >
-    type OutputSchema = S.Schema<
-      ContractOutput<K>,
-      S.Schema.Encoded<(typeof AiWatcherIpcContracts)[K]['output']>
-    >
-
-    ipcMain.handle(contract.channel, async (_event, input: unknown) => {
+  // createWatcher handler
+  ipcMain.handle(
+    AiWatcherIpcContracts.createWatcher.channel,
+    async (_event, input: unknown) => {
       const program = Effect.gen(function* () {
-        // Decode: validates and transforms from encoded (wire format) to decoded (app type)
         const validatedInput = yield* S.decodeUnknown(
-          contract.input as unknown as InputSchema
+          AiWatcherIpcContracts.createWatcher.input
         )(input)
 
-        // Execute handler - validatedInput is now properly typed as ContractInput<K>
-        const result = yield* handler(validatedInput)
+        const result = yield* aiWatcherService.create({
+          type: validatedInput.type,
+          name: validatedInput.name,
+          workingDirectory: validatedInput.workingDirectory,
+          env: validatedInput.env,
+          command: validatedInput.command,
+          args: validatedInput.args,
+        })
 
-        // Encode: transforms from decoded type to encoded (serializable) type for IPC
-        const encoded = yield* S.encode(contract.output as unknown as OutputSchema)(result)
+        const encoded = yield* S.encode(
+          AiWatcherIpcContracts.createWatcher.output
+        )(result)
         return encoded
       }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
 
       return await Effect.runPromise(program)
-    })
-  }
-
-  // Register all AI Watcher IPC handlers
-
-  setupHandler('createWatcher', (input) =>
-    aiWatcherService.create({
-      type: input.type,
-      name: input.name,
-      workingDirectory: input.workingDirectory,
-      env: input.env,
-      command: input.command,
-      args: input.args,
-    })
+    }
   )
 
-  setupHandler('attachToTmuxSession', (input) =>
-    Effect.gen(function* () {
-      const handle = yield* tmuxManager.attachToSession(input.sessionName)
+  // attachToTmuxSession handler
+  ipcMain.handle(
+    AiWatcherIpcContracts.attachToTmuxSession.channel,
+    async (_event, input: unknown) => {
+      const program = Effect.gen(function* () {
+        const validatedInput = yield* S.decodeUnknown(
+          AiWatcherIpcContracts.attachToTmuxSession.input
+        )(input)
 
-      return yield* aiWatcherService.create({
-        type: 'custom',
-        name: `tmux:${input.sessionName}`,
-        workingDirectory: '/tmp', // Default, will be overridden by actual process
-        processHandle: handle,
-      })
-    })
+        const handle = yield* tmuxManager.attachToSession(
+          validatedInput.sessionName
+        )
+        const result = yield* aiWatcherService.create({
+          type: 'custom',
+          name: `tmux:${validatedInput.sessionName}`,
+          workingDirectory: '/tmp',
+          processHandle: handle,
+        })
+
+        const encoded = yield* S.encode(
+          AiWatcherIpcContracts.attachToTmuxSession.output
+        )(result)
+        return encoded
+      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
+
+      return await Effect.runPromise(program)
+    }
   )
 
-  setupHandler('listWatchers', () => aiWatcherService.listAll())
+  // listWatchers handler
+  ipcMain.handle(
+    AiWatcherIpcContracts.listWatchers.channel,
+    async (_event, input: unknown) => {
+      const program = Effect.gen(function* () {
+        yield* S.decodeUnknown(AiWatcherIpcContracts.listWatchers.input)(input)
 
-  setupHandler('getWatcher', (input) => aiWatcherService.get(input.watcherId))
+        const result = yield* aiWatcherService.listAll()
 
-  setupHandler('stopWatcher', (input) =>
-    Effect.gen(function* () {
-      const watcher = yield* aiWatcherService.get(input.watcherId)
-      return yield* aiWatcherService.stop(watcher)
-    })
+        const encoded = yield* S.encode(
+          AiWatcherIpcContracts.listWatchers.output
+        )(result)
+        return encoded
+      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
+
+      return await Effect.runPromise(program)
+    }
   )
 
-  setupHandler('startWatcher', (input) =>
-    Effect.gen(function* () {
-      const watcher = yield* aiWatcherService.get(input.watcherId)
-      return yield* aiWatcherService.start(watcher)
-    })
+  // getWatcher handler
+  ipcMain.handle(
+    AiWatcherIpcContracts.getWatcher.channel,
+    async (_event, input: unknown) => {
+      const program = Effect.gen(function* () {
+        const validatedInput = yield* S.decodeUnknown(
+          AiWatcherIpcContracts.getWatcher.input
+        )(input)
+
+        const result = yield* aiWatcherService.get(validatedInput.watcherId)
+
+        const encoded = yield* S.encode(
+          AiWatcherIpcContracts.getWatcher.output
+        )(result)
+        return encoded
+      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
+
+      return await Effect.runPromise(program)
+    }
   )
 
-  setupHandler('getWatcherLogs', (input) =>
-    aiWatcherService.getLogs(input.watcherId, input.limit)
+  // stopWatcher handler
+  ipcMain.handle(
+    AiWatcherIpcContracts.stopWatcher.channel,
+    async (_event, input: unknown) => {
+      const program = Effect.gen(function* () {
+        const validatedInput = yield* S.decodeUnknown(
+          AiWatcherIpcContracts.stopWatcher.input
+        )(input)
+
+        const watcher = yield* aiWatcherService.get(validatedInput.watcherId)
+        yield* aiWatcherService.stop(watcher)
+
+        const encoded = yield* S.encode(
+          AiWatcherIpcContracts.stopWatcher.output
+        )(undefined)
+        return encoded
+      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
+
+      return await Effect.runPromise(program)
+    }
   )
 
-  setupHandler('listTmuxSessions', () => tmuxManager.listSessions())
+  // startWatcher handler
+  ipcMain.handle(
+    AiWatcherIpcContracts.startWatcher.channel,
+    async (_event, input: unknown) => {
+      const program = Effect.gen(function* () {
+        const validatedInput = yield* S.decodeUnknown(
+          AiWatcherIpcContracts.startWatcher.input
+        )(input)
+
+        const watcher = yield* aiWatcherService.get(validatedInput.watcherId)
+        yield* aiWatcherService.start(watcher)
+
+        const encoded = yield* S.encode(
+          AiWatcherIpcContracts.startWatcher.output
+        )(undefined)
+        return encoded
+      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
+
+      return await Effect.runPromise(program)
+    }
+  )
+
+  // getWatcherLogs handler
+  ipcMain.handle(
+    AiWatcherIpcContracts.getWatcherLogs.channel,
+    async (_event, input: unknown) => {
+      const program = Effect.gen(function* () {
+        const validatedInput = yield* S.decodeUnknown(
+          AiWatcherIpcContracts.getWatcherLogs.input
+        )(input)
+
+        const result = yield* aiWatcherService.getLogs(
+          validatedInput.watcherId,
+          validatedInput.limit
+        )
+
+        const encoded = yield* S.encode(
+          AiWatcherIpcContracts.getWatcherLogs.output
+        )(result)
+        return encoded
+      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
+
+      return await Effect.runPromise(program)
+    }
+  )
+
+  // listTmuxSessions handler
+  ipcMain.handle(
+    AiWatcherIpcContracts.listTmuxSessions.channel,
+    async (_event, input: unknown) => {
+      const program = Effect.gen(function* () {
+        yield* S.decodeUnknown(AiWatcherIpcContracts.listTmuxSessions.input)(
+          input
+        )
+
+        const result = yield* tmuxManager.listSessions()
+
+        const encoded = yield* S.encode(
+          AiWatcherIpcContracts.listTmuxSessions.output
+        )(result)
+        return encoded
+      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
+
+      return await Effect.runPromise(program)
+    }
+  )
 })

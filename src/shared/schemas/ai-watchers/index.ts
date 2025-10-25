@@ -1,4 +1,4 @@
-import * as S from '@effect/schema/Schema'
+import { Schema as S } from 'effect'
 
 /**
  * AI agent types supported by the system
