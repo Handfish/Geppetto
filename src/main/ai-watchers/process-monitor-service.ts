@@ -6,6 +6,7 @@ import * as Ref from 'effect/Ref'
 import * as Schedule from 'effect/Schedule'
 import * as Duration from 'effect/Duration'
 import * as Scope from 'effect/Scope'
+import * as Exit from 'effect/Exit'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { promises as FsPromises } from 'node:fs'
@@ -37,6 +38,7 @@ interface ProcessInfo {
   isAttached: boolean
   tmuxPipeRef: Ref.Ref<TmuxPipeConfig | null>
   tmuxPipeFiberRef: Ref.Ref<Fiber.RuntimeFiber<void, never> | null>
+  tmuxPipeScopeRef: Ref.Ref<Scope.CloseableScope | null>
 }
 
 /**
@@ -376,13 +378,13 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
             return yield* Effect.void
           }
 
-          // Interrupt tmux pipe fiber if running
-          const tmuxPipeFiber = yield* Ref.get(info.tmuxPipeFiberRef)
-          if (tmuxPipeFiber) {
-            yield* Fiber.interrupt(tmuxPipeFiber).pipe(
+          // Close tmux pipe scope if active (this interrupts all scoped fibers)
+          const tmuxPipeScope = yield* Ref.get(info.tmuxPipeScopeRef)
+          if (tmuxPipeScope) {
+            yield* Scope.close(tmuxPipeScope, Exit.void).pipe(
               Effect.catchAll(() => Effect.void)
             )
-            yield* Ref.set(info.tmuxPipeFiberRef, null)
+            yield* Ref.set(info.tmuxPipeScopeRef, null)
           }
 
           // Cleanup tmux pipe if active
@@ -435,6 +437,7 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
               // Create tmux pipe refs
               const tmuxPipeRef = yield* Ref.make<TmuxPipeConfig | null>(null)
               const tmuxPipeFiberRef = yield* Ref.make<Fiber.RuntimeFiber<void, never> | null>(null)
+              const tmuxPipeScopeRef = yield* Ref.make<Scope.CloseableScope | null>(null)
 
               // Store process info
               const processInfo: ProcessInfo = {
@@ -445,6 +448,7 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
                 isAttached: false,
                 tmuxPipeRef,
                 tmuxPipeFiberRef,
+                tmuxPipeScopeRef,
               }
               processes.set(processId, processInfo)
 
@@ -553,6 +557,7 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
             const lastActivityRef = yield* Ref.make(Date.now())
             const tmuxPipeRef = yield* Ref.make<TmuxPipeConfig | null>(null)
             const tmuxPipeFiberRef = yield* Ref.make<Fiber.RuntimeFiber<void, never> | null>(null)
+            const tmuxPipeScopeRef = yield* Ref.make<Scope.CloseableScope | null>(null)
 
             const processInfo: ProcessInfo = {
               handle,
@@ -561,6 +566,7 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
               isAttached: true,
               tmuxPipeRef,
               tmuxPipeFiberRef,
+              tmuxPipeScopeRef,
             }
             processes.set(processId, processInfo)
 
@@ -752,19 +758,18 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
               }
             }
 
-            // Fork a fiber to manage the streaming lifecycle
-            // The fiber will be explicitly interrupted during cleanup
-            const fiber = yield* Effect.scoped(
-              Effect.gen(function* () {
-                yield* setupTmuxPipeStream(handle, pipeConfig)
+            // Create a dedicated scope for the tmux pipe stream
+            // This scope will be closed during cleanup to properly interrupt all streaming fibers
+            const pipeScope = yield* Scope.make()
+            yield* Ref.set(info.tmuxPipeScopeRef, pipeScope)
 
-                // Keep the scope alive until interrupted
-                yield* Effect.never
-              })
-            ).pipe(Effect.fork)
+            // Setup the tmux pipe stream in the dedicated scope
+            // This forks a scoped fiber to process the FIFO stream
+            yield* Scope.extend(setupTmuxPipeStream(handle, pipeConfig), pipeScope)
 
-            // Store the fiber for lifecycle management
-            yield* Ref.set(info.tmuxPipeFiberRef, fiber)
+            // The stream fiber is now running in the dedicated scope
+            // We don't need to fork Effect.never because the scope keeps the fiber alive
+            // The fiber will be interrupted when we close the scope in cleanup
           }),
       }
 
