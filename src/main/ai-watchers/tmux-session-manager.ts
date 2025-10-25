@@ -11,13 +11,15 @@ const execAsync = promisify(exec)
 /**
  * Execute a tmux command and return the output
  */
-const executeTmuxCommand = (command: string): Effect.Effect<string, TmuxCommandError> =>
+const executeTmuxCommand = (
+  command: string
+): Effect.Effect<string, TmuxCommandError> =>
   Effect.tryPromise({
     try: async () => {
       const { stdout } = await execAsync(command)
       return stdout.trim()
     },
-    catch: (error) =>
+    catch: error =>
       new TmuxCommandError({
         message: `Failed to execute tmux command: ${command}`,
         command,
@@ -45,6 +47,8 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
         /**
          * Create a new tmux session and spawn a command in it
          *
+      <WorkspaceSelector />
+      <AiWatcherDevPanel />
          * @param name - Session name
          * @param command - Command to run in the session
          * @param cwd - Working directory for the command
@@ -89,7 +93,7 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
             const sessionInfo = yield* executeTmuxCommand(
               `tmux list-sessions -F "#{session_name}:#{session_id}" | grep "^${sessionName}:"`
             ).pipe(
-              Effect.catchAll((error) =>
+              Effect.catchAll(error =>
                 Effect.fail(
                   new TmuxSessionNotFoundError({
                     message: `Tmux session "${sessionName}" not found`,
@@ -159,7 +163,7 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
 
             const lines = output.split('\n').filter(Boolean)
 
-            return lines.map((line) => {
+            return lines.map(line => {
               const [name, attachedStr, createdStr, sessionId] = line.split(':')
               return {
                 name,

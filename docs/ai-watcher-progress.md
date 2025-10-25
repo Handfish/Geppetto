@@ -238,20 +238,133 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
 
 ---
 
-## Phase 4: Renderer Integration ⏳ NOT STARTED
+## Phase 4: Renderer Integration 🔄 IN PROGRESS
 
-### 4.1 Create Atoms ⏳
-**Status:** Not Started
+### 4.1 Create Atoms ✅
+**Status:** Completed
+**Date Completed:** 2025-10-25
 
-**Planned Files:**
-- `src/renderer/atoms/ai-watcher-atoms.ts`
+**Files Created:**
+- ✅ `src/renderer/lib/ipc-client.ts` - Added `AiWatcherClient` service
+- ✅ `src/renderer/atoms/ai-watcher-atoms.ts` - AI watcher reactive atoms
+- ✅ `src/renderer/hooks/useAiWatchers.ts` - Custom React hooks
 
-### 4.2 Create UI Components ⏳
-**Status:** Not Started
+**Implementation Details:**
 
-**Planned Files:**
-- `src/renderer/components/AiWatcherMonitor.tsx`
-- `src/renderer/hooks/useAiWatchers.ts`
+**AiWatcherClient Service:**
+- Extends Effect.Service pattern following existing ProviderClient/AiProviderClient
+- Depends on ElectronIpcClient for IPC communication
+- Type-safe wrapper for all AI watcher IPC operations:
+  - `createWatcher` - Create new AI watchers
+  - `attachToTmuxSession` - Attach to existing tmux sessions
+  - `listWatchers` - List all watchers
+  - `getWatcher` - Get specific watcher details
+  - `stopWatcher` / `startWatcher` - Control watcher lifecycle
+  - `getWatcherLogs` - Fetch watcher logs
+  - `listTmuxSessions` - List available tmux sessions
+
+**Atoms Created:**
+- **Data Atoms:**
+  - `aiWatchersAtom` - List of all watchers (5s TTL)
+  - `aiWatcherAtom` - Individual watcher by ID (2s TTL, family)
+  - `aiWatcherLogsAtom` - Watcher logs with optional limit (3s TTL, family)
+  - `tmuxSessionsAtom` - List of tmux sessions (10s TTL)
+- **Action Atoms:**
+  - `createWatcherAtom` - Create watcher mutation
+  - `attachToTmuxSessionAtom` - Attach to tmux mutation
+  - `stopWatcherAtom` - Stop watcher mutation
+  - `startWatcherAtom` - Start watcher mutation
+- **Features:**
+  - Proper reactivity keys for cache invalidation
+  - TTL-based cache expiration
+  - Atom families for parameterized queries
+  - Runtime with AiWatcherClient.Default layer
+
+**Custom Hooks:**
+- `useAiWatchers()` - Watcher list management with create/stop/start actions
+- `useWatcher(id)` - Individual watcher details
+- `useWatcherLogs(id, limit?)` - Watcher logs with refresh
+- `useTmuxSessions()` - Tmux session list with attach action
+- All hooks return full Results for exhaustive error handling
+- Computed convenience properties (isLoading, etc.)
+- Follow existing hook patterns from CLAUDE.md
+
+**Patterns Applied:**
+- ✅ Atom.runtime() for service injection
+- ✅ Atom.family() for parameterized atoms
+- ✅ Atom.withReactivity() for cache invalidation
+- ✅ Atom.setIdleTTL() for automatic cache expiration
+- ✅ Result.builder pattern ready for components
+- ✅ No `any` types - full type safety
+
+### 4.2 Create UI Components ✅
+**Status:** Completed
+**Date Completed:** 2025-10-25
+
+**Files Created:**
+- ✅ `src/renderer/components/dev/AiWatcherDevPanel.tsx` - Development panel for testing
+- ✅ `src/renderer/App.tsx` - Integrated dev panel in development mode
+- ✅ `docs/ai-watcher-dev-panel-usage.md` - Complete usage documentation
+
+**Implementation Details:**
+
+**AiWatcherDevPanel Component:**
+- Development-only component (only loads when `NODE_ENV=development`)
+- Provides both visual UI and console API for testing
+- **Visual Panel Features:**
+  - Toggleable floating panel in bottom-right corner
+  - "List Tmux Sessions" button with real-time display
+  - "List Watchers" button with status indicators
+  - Attach buttons for tmux sessions
+  - Color-coded watcher status (green=running, yellow=idle, gray=stopped, red=errored)
+  - Proper error handling with Result.builder pattern
+- **Console API Features:**
+  - Exposed via `window.__DEV_AI_WATCHERS__`
+  - All CRUD operations: create, list, get, start, stop
+  - Tmux operations: list sessions, attach
+  - UI control: showPanel(), hidePanel(), togglePanel()
+  - Result inspection: getResults()
+- **Integration:**
+  - Added to App.tsx wrapped in development-mode check
+  - Co-exists with ErrorTester component
+  - Automatically loads and logs available API to console
+
+**Console API:**
+```javascript
+// List operations
+window.__DEV_AI_WATCHERS__.listWatchers()
+window.__DEV_AI_WATCHERS__.listTmuxSessions()
+
+// Create operations
+window.__DEV_AI_WATCHERS__.createWatcher({ type, name, ... })
+window.__DEV_AI_WATCHERS__.attachToTmux(sessionName)
+
+// Control operations
+window.__DEV_AI_WATCHERS__.stopWatcher(id)
+window.__DEV_AI_WATCHERS__.startWatcher(id)
+
+// UI control
+window.__DEV_AI_WATCHERS__.showPanel()
+window.__DEV_AI_WATCHERS__.togglePanel()
+
+// Inspection
+window.__DEV_AI_WATCHERS__.getResults()
+```
+
+**Patterns Applied:**
+- ✅ Result.builder for exhaustive error handling
+- ✅ useEffect for console API setup/cleanup
+- ✅ Custom hooks (useAiWatchers, useTmuxSessions)
+- ✅ Conditional rendering based on Result states
+- ✅ Tailwind CSS for styling (matches app design)
+- ✅ Development-only code (no production bloat)
+
+**Testing Ready:**
+- Run `pnpm dev` to start development server
+- Open browser DevTools console
+- Execute `window.__DEV_AI_WATCHERS__.listTmuxSessions()` as hello world
+- Visual panel provides UI buttons for easy testing
+- Full documentation in `docs/ai-watcher-dev-panel-usage.md`
 
 ---
 
@@ -302,7 +415,7 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
 
 ## Current Status Summary
 
-**Overall Progress:** ~43% (Phases 1-3 of 7 completed)
+**Overall Progress:** ~57% (Phases 1-4 completed)
 
 **Completed:**
 - ✅ Phase 1.1: Core Ports and Domain Types
@@ -311,9 +424,13 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
 - ✅ Phase 2.2: AI Watcher Service
 - ✅ Phase 3.1: IPC Contracts
 - ✅ Phase 3.2: IPC Handlers
+- ✅ Phase 4.1: Atoms and Hooks
+- ✅ Phase 4.2: UI Components (Dev Panel)
 
 **In Progress:**
-- 🔄 Phase 4: Renderer Integration (next up)
+- ⏸️ Phase 5: CLI Integration (optional)
+- ⏸️ Phase 6: Multi-Provider Refactor (optional)
+- ⏸️ Phase 7: Testing (optional)
 
 **Blocked:** None
 
@@ -325,17 +442,19 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
 - All services use proper Effect patterns (Service, forkScoped, forkIn, Ref, Queue, Stream, Scope)
 - **Build Status:** ✅ Compiles successfully (`pnpm compile:app` passes)
 - **TypeScript Status:** ✅ Zero errors in AI watcher files
+- **Renderer Integration:** ✅ Complete with atoms, hooks, and dev panel
+- **Testing:** ✅ Dev panel ready for manual testing via console API and visual UI
 - **Critical Fixes Applied (2025-10-25):**
   - Fixed `Random.nextString` → `crypto.randomUUID()` in both services
   - Added missing imports: `ProcessHandle`, `Scope`, `Exit`, `WatcherNotFoundError`, `LogEntry`
   - Fixed `Scope.close()` API: uses `Exit.void` instead of `Effect.void`
   - Resolved duplicate `LogEntry` export (removed from ports.ts, kept in schemas.ts)
   - Fixed error type mappings for proper IPC error propagation
-  - **Fixed Effect.Service dependencies:** Moved `dependencies` before `effect` and used `.Default` layers
-  - **Fixed error handling:** Replaced try-catch with Effect.mapError for type safety
-  - **Fixed import types:** Separated type-only imports for better tree-shaking
+  - Fixed Effect.Service dependencies: Moved `dependencies` before `effect` and used `.Default` layers
+  - Fixed error handling: Replaced try-catch with Effect.mapError for type safety
+  - Fixed import types: Separated type-only imports for better tree-shaking
   - Removed unnecessary `yield* Effect.void` in early returns
-- Ready for renderer integration (atoms and UI components)
+  - Fixed Result.builder JSX syntax: Converted ternaries to if-statements
 
 ---
 

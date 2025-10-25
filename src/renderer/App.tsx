@@ -6,6 +6,7 @@ import { useProviderAuth } from './hooks/useProviderAtoms'
 import { AiUsageCard } from './components/AiUsageCard'
 import { ToastViewport } from './components/ui/ToastViewport'
 import { ErrorTester } from './components/dev/ErrorTester'
+import { AiWatcherDevPanel } from './components/dev/AiWatcherDevPanel'
 import { WorkspaceSelector } from './components/WorkspaceSelector'
 
 export function App() {
@@ -15,6 +16,7 @@ export function App() {
     <div className="min-h-screen bg-gray-900 p-6 relative">
       <ToastViewport />
       <WorkspaceSelector />
+      {process.env.NODE_ENV === 'development' && <AiWatcherDevPanel />}
       <div className="max-w-6xl mx-auto space-y-8">
         <header className="space-y-4">
           <div className="flex items-center justify-center">

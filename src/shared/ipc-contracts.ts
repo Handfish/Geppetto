@@ -281,49 +281,49 @@ export const WorkspaceIpcContracts = {
  * AI Watcher IPC Contracts
  */
 export const AiWatcherIpcContracts = {
-  createWatcher: {
+  'ai-watcher:create': {
     channel: 'ai-watcher:create' as const,
     input: AiWatcherConfig,
     output: AiWatcher,
     errors: S.Union(ProcessError, WatcherOperationError),
   },
 
-  attachToTmuxSession: {
+  'ai-watcher:attach-tmux': {
     channel: 'ai-watcher:attach-tmux' as const,
     input: S.Struct({ sessionName: S.String }),
     output: AiWatcher,
     errors: S.Union(TmuxError, ProcessError, WatcherOperationError),
   },
 
-  listWatchers: {
+  'ai-watcher:list': {
     channel: 'ai-watcher:list' as const,
     input: S.Void,
     output: S.Array(AiWatcher),
     errors: S.Never,
   },
 
-  getWatcher: {
+  'ai-watcher:get': {
     channel: 'ai-watcher:get' as const,
     input: S.Struct({ watcherId: S.String }),
     output: AiWatcher,
     errors: S.Union(WatcherNotFoundError),
   },
 
-  stopWatcher: {
+  'ai-watcher:stop': {
     channel: 'ai-watcher:stop' as const,
     input: S.Struct({ watcherId: S.String }),
     output: S.Void,
     errors: S.Union(WatcherNotFoundError, ProcessError),
   },
 
-  startWatcher: {
+  'ai-watcher:start': {
     channel: 'ai-watcher:start' as const,
     input: S.Struct({ watcherId: S.String }),
     output: S.Void,
     errors: S.Union(WatcherNotFoundError, WatcherOperationError),
   },
 
-  getWatcherLogs: {
+  'ai-watcher:get-logs': {
     channel: 'ai-watcher:get-logs' as const,
     input: S.Struct({
       watcherId: S.String,
@@ -333,7 +333,7 @@ export const AiWatcherIpcContracts = {
     errors: S.Union(WatcherNotFoundError),
   },
 
-  listTmuxSessions: {
+  'ai-watcher:list-tmux': {
     channel: 'ai-watcher:list-tmux' as const,
     input: S.Void,
     output: S.Array(TmuxSession),

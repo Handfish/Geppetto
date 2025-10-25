@@ -218,3 +218,50 @@ export class WorkspaceClient extends Effect.Service<WorkspaceClient>()(
     }),
   }
 ) {}
+
+export class AiWatcherClient extends Effect.Service<AiWatcherClient>()(
+  'AiWatcherClient',
+  {
+    dependencies: [ElectronIpcClient.Default],
+    effect: Effect.gen(function* () {
+      const ipc = yield* ElectronIpcClient
+      type CreateWatcherInput = S.Schema.Type<
+        (typeof IpcContracts)['ai-watcher:create']['input']
+      >
+      type AttachTmuxInput = S.Schema.Type<
+        (typeof IpcContracts)['ai-watcher:attach-tmux']['input']
+      >
+      type GetWatcherInput = S.Schema.Type<
+        (typeof IpcContracts)['ai-watcher:get']['input']
+      >
+      type StopWatcherInput = S.Schema.Type<
+        (typeof IpcContracts)['ai-watcher:stop']['input']
+      >
+      type StartWatcherInput = S.Schema.Type<
+        (typeof IpcContracts)['ai-watcher:start']['input']
+      >
+      type GetLogsInput = S.Schema.Type<
+        (typeof IpcContracts)['ai-watcher:get-logs']['input']
+      >
+
+      return {
+        createWatcher: (config: CreateWatcherInput) =>
+          ipc.invoke('ai-watcher:create', config),
+        attachToTmuxSession: (sessionName: AttachTmuxInput['sessionName']) =>
+          ipc.invoke('ai-watcher:attach-tmux', { sessionName }),
+        listWatchers: () => ipc.invoke('ai-watcher:list', undefined),
+        getWatcher: (watcherId: GetWatcherInput['watcherId']) =>
+          ipc.invoke('ai-watcher:get', { watcherId }),
+        stopWatcher: (watcherId: StopWatcherInput['watcherId']) =>
+          ipc.invoke('ai-watcher:stop', { watcherId }),
+        startWatcher: (watcherId: StartWatcherInput['watcherId']) =>
+          ipc.invoke('ai-watcher:start', { watcherId }),
+        getWatcherLogs: (
+          watcherId: GetLogsInput['watcherId'],
+          limit?: GetLogsInput['limit']
+        ) => ipc.invoke('ai-watcher:get-logs', { watcherId, limit }),
+        listTmuxSessions: () => ipc.invoke('ai-watcher:list-tmux', undefined),
+      } as const
+    }),
+  }
+) {}

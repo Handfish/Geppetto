@@ -19,7 +19,7 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   const tmuxManager = yield* TmuxSessionManager
 
   // Create watcher
-  registerIpcHandler(AiWatcherIpcContracts.createWatcher, (input) =>
+  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:create'], (input) =>
     aiWatcherService.create({
       type: input.type,
       name: input.name,
@@ -31,7 +31,7 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   )
 
   // Attach to tmux session
-  registerIpcHandler(AiWatcherIpcContracts.attachToTmuxSession, (input) =>
+  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:attach-tmux'], (input) =>
     Effect.gen(function* () {
       const handle = yield* tmuxManager.attachToSession(input.sessionName)
       return yield* aiWatcherService.create({
@@ -44,17 +44,17 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   )
 
   // List all watchers
-  registerIpcHandler(AiWatcherIpcContracts.listWatchers, () =>
+  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:list'], () =>
     aiWatcherService.listAll()
   )
 
   // Get watcher by ID
-  registerIpcHandler(AiWatcherIpcContracts.getWatcher, (input) =>
+  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:get'], (input) =>
     aiWatcherService.get(input.watcherId)
   )
 
   // Stop watcher
-  registerIpcHandler(AiWatcherIpcContracts.stopWatcher, (input) =>
+  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:stop'], (input) =>
     Effect.gen(function* () {
       const watcher = yield* aiWatcherService.get(input.watcherId)
       return yield* aiWatcherService.stop(watcher)
@@ -62,7 +62,7 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   )
 
   // Start watcher
-  registerIpcHandler(AiWatcherIpcContracts.startWatcher, (input) =>
+  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:start'], (input) =>
     Effect.gen(function* () {
       const watcher = yield* aiWatcherService.get(input.watcherId)
       return yield* aiWatcherService.start(watcher)
@@ -70,12 +70,12 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   )
 
   // Get watcher logs
-  registerIpcHandler(AiWatcherIpcContracts.getWatcherLogs, (input) =>
+  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:get-logs'], (input) =>
     aiWatcherService.getLogs(input.watcherId, input.limit)
   )
 
   // List tmux sessions
-  registerIpcHandler(AiWatcherIpcContracts.listTmuxSessions, () =>
+  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:list-tmux'], () =>
     tmuxManager.listSessions()
   )
 })
