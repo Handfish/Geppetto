@@ -1,6 +1,6 @@
 import * as Effect from 'effect/Effect'
 import * as Duration from 'effect/Duration'
-import { exec } from 'node:child_process'
+import { exec, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { ProcessConfig } from './ports'
 import type { ProcessHandle, TmuxSession } from './schemas'
@@ -173,13 +173,19 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
          * Create a new tmux session and spawn a command in it
          *
          * @param name - Session name
-         * @param command - Command to run in the session
+         * @param command - Command to run in the session (e.g., 'bash')
+         * @param args - Arguments for the command (e.g., ['-c', 'echo hello'])
          * @param cwd - Working directory for the command
          * @returns ProcessHandle for the spawned session
          */
-        createSession: (name: string, command: string, cwd?: string) =>
+        createSession: (
+          name: string,
+          command: string,
+          args?: string[],
+          cwd?: string
+        ) =>
           Effect.gen(function* () {
-            // Build tmux command
+            // Build tmux arguments array (NO shell parsing!)
             const tmuxArgs = ['new-session', '-d', '-s', name]
 
             // Add working directory if specified
@@ -190,51 +196,75 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
             // Add the command to run
             tmuxArgs.push(command)
 
-            // Create the tmux session using executeTmuxCommand
-            // This waits for the tmux client to complete and checks for errors
-            const fullCommand = `tmux ${tmuxArgs.map((arg) => {
-              // Quote args that contain spaces or special characters
-              if (arg.includes(' ') || arg.includes('$') || arg.includes('(')) {
-                return `'${arg.replace(/'/g, `'\\''`)}'`
-              }
-              return arg
-            }).join(' ')}`
+            // Add command arguments if provided
+            if (args && args.length > 0) {
+              tmuxArgs.push(...args)
+            }
 
             yield* Effect.logInfo(
-              `Creating tmux session "${name}" with command: ${fullCommand}`
+              `Creating tmux session "${name}" with command: "${command}"${args ? ` args: ${JSON.stringify(args)}` : ''}`
+            )
+            yield* Effect.logInfo(
+              `Full tmux args: ${JSON.stringify(tmuxArgs)}`
             )
 
-            const createResult = yield* executeTmuxCommand(fullCommand).pipe(
-              Effect.tap((output) =>
-                Effect.logInfo(
-                  `Tmux session creation output: "${output}" (empty is normal for successful creation)`
-                )
-              ),
-              Effect.catchTag('TmuxCommandError', (error) =>
-                Effect.gen(function* () {
-                  yield* Effect.logError(
-                    `Failed to create tmux session: ${error.message}, cause: ${String(error.cause)}`
-                  )
-                  return yield* Effect.fail(
+            // Use spawn (not exec!) to avoid shell parsing issues
+            const createResult = yield* Effect.async<
+              void,
+              TmuxSessionNotFoundError
+            >((resume) => {
+              const child = spawn('tmux', tmuxArgs, {
+                stdio: ['ignore', 'pipe', 'pipe'],
+              })
+
+              let stderr = ''
+              child.stderr?.on('data', (chunk) => {
+                stderr += chunk.toString()
+              })
+
+              child.on('error', (error) => {
+                resume(
+                  Effect.fail(
                     new TmuxSessionNotFoundError({
-                      message: `Failed to create tmux session: ${error.message}`,
+                      message: `Failed to spawn tmux: ${error.message}`,
                       sessionName: name,
                     })
                   )
-                })
-              )
-            )
+                )
+              })
+
+              child.on('exit', (code) => {
+                if (code === 0) {
+                  resume(Effect.void)
+                } else {
+                  resume(
+                    Effect.fail(
+                      new TmuxSessionNotFoundError({
+                        message: `Tmux exited with code ${code}. stderr: ${stderr}`,
+                        sessionName: name,
+                      })
+                    )
+                  )
+                }
+              })
+
+              return Effect.sync(() => {
+                if (child.exitCode === null && !child.killed) {
+                  child.kill()
+                }
+              })
+            })
 
             yield* Effect.logInfo(
-              `Tmux session "${name}" created successfully, waiting 100ms for initialization`
+              `Tmux session "${name}" created successfully, waiting 200ms for initialization`
             )
 
-            // Give the session a moment to fully initialize
-            yield* Effect.sleep(Duration.millis(100))
+            // Give the session more time to fully initialize
+            yield* Effect.sleep(Duration.millis(200))
 
             // Verify the session exists before attempting attach
             const sessionExists = yield* executeTmuxCommand(
-              `tmux has-session -t '${name}'`
+              `tmux has-session -t '${name}' 2>&1`
             ).pipe(
               Effect.map(() => true),
               Effect.catchAll(() => Effect.succeed(false))
@@ -254,9 +284,14 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
                 `Session "${name}" not found after creation! All sessions: ${allSessions}`
               )
 
+              // Try to see if the command failed by checking tmux logs
+              yield* Effect.logWarning(
+                `Command that was supposed to run: "${command}"${args ? ` with args: ${JSON.stringify(args)}` : ''}`
+              )
+
               return yield* Effect.fail(
                 new TmuxSessionNotFoundError({
-                  message: `Session "${name}" was created but immediately disappeared. All sessions: ${allSessions}`,
+                  message: `Session "${name}" was created but immediately disappeared. All sessions: ${allSessions}. The command might have exited immediately: "${command}"`,
                   sessionName: name,
                 })
               )

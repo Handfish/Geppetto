@@ -38,27 +38,31 @@ interface WatcherState {
 const MAX_LOG_ENTRIES = 1000
 
 /**
- * Get the command to run for a specific AI agent type
+ * Get the command and args to run for a specific AI agent type
  */
-const getAiAgentCommand = (config: AiWatcherConfig): string => {
+const getAiAgentCommand = (
+  config: AiWatcherConfig
+): { command: string; args?: string[] } => {
   // If custom command provided, use it
   if (config.command) {
-    const args = config.args?.join(' ') ?? ''
-    return args ? `${config.command} ${args}` : config.command
+    return {
+      command: config.command,
+      args: config.args,
+    }
   }
 
   // Default commands for known AI agent types
   switch (config.type) {
     case 'claude-code':
-      return 'claude-code'
+      return { command: 'claude-code' }
     case 'codex':
-      return 'codex'
+      return { command: 'codex' }
     case 'cursor':
-      return 'cursor'
+      return { command: 'cursor' }
     case 'custom':
-      return config.command ?? 'bash'
+      return { command: 'bash' }
     default:
-      return 'bash'
+      return { command: 'bash' }
   }
 }
 
@@ -250,11 +254,12 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
             // If no process handle provided, create a new tmux session
             if (!processHandle) {
               const sessionName = `ai-${baseConfig.type}-${watcherId.slice(0, 8)}`
-              const command = getAiAgentCommand(baseConfig)
+              const { command, args } = getAiAgentCommand(baseConfig)
 
               processHandle = yield* tmuxManager.createSession(
                 sessionName,
                 command,
+                args,
                 baseConfig.workingDirectory
               ).pipe(
                 Effect.mapError((error: unknown) =>
