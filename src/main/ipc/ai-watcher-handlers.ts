@@ -19,16 +19,20 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   const tmuxManager = yield* TmuxSessionManager
 
   // Create watcher
-  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:create'], (input) =>
-    aiWatcherService.create({
+  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:create'], (input) => {
+    // Build config only with defined fields to work with Effect Schema optional fields
+    type ConfigInput = Parameters<typeof aiWatcherService.create>[0]
+    const config: ConfigInput = {
       type: input.type,
-      name: input.name,
       workingDirectory: input.workingDirectory,
-      env: input.env,
-      command: input.command,
-      args: input.args,
-    })
-  )
+      ...(input.name !== undefined && { name: input.name }),
+      ...(input.command !== undefined && { command: input.command }),
+      ...(input.args !== undefined && { args: input.args }),
+      ...(input.env !== undefined && { env: input.env }),
+    } as ConfigInput
+
+    return aiWatcherService.create(config)
+  })
 
   // Attach to tmux session
   registerIpcHandler(AiWatcherIpcContracts['ai-watcher:attach-tmux'], (input) =>

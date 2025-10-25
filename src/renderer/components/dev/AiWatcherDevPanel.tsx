@@ -14,6 +14,18 @@ import type {
   TmuxSession,
 } from '../../../shared/schemas/ai-watchers'
 
+// Helper to clean object by removing undefined properties
+// This ensures optional schema fields work correctly over IPC
+function cleanConfig<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const result: Partial<T> = {}
+  for (const key in obj) {
+    if (obj[key] !== undefined) {
+      result[key] = obj[key]
+    }
+  }
+  return result
+}
+
 export function AiWatcherDevPanel() {
   const {
     watchersResult,
@@ -45,7 +57,7 @@ export function AiWatcherDevPanel() {
       console.log('  • listWatchers()          - List all AI watchers')
       console.log('  • listTmuxSessions()      - List all tmux sessions')
       console.log(
-        '  • createWatcher(config)   - Create new watcher (see docs for config)'
+        '  • createWatcher(config)   - Create new watcher (config: {type, name, workingDirectory, command, args})'
       )
       console.log('  • attachToTmux(name)      - Attach to tmux session')
       console.log('  • stopWatcher(id)         - Stop a watcher')
@@ -54,9 +66,15 @@ export function AiWatcherDevPanel() {
       console.log('  • hidePanel()             - Hide visual panel')
       console.log('  • getResults()            - Get current Results')
       console.log('')
-      console.log(
-        'Example: window.__DEV_AI_WATCHERS__.listTmuxSessions()'
-      )
+      console.log('Examples:')
+      console.log('  window.__DEV_AI_WATCHERS__.listTmuxSessions()')
+      console.log('  window.__DEV_AI_WATCHERS__.createWatcher({')
+      console.log('    type: "custom",')
+      console.log('    name: "MyWatcher",')
+      console.log('    workingDirectory: "/tmp",')
+      console.log('    command: "bash",')
+      console.log('    args: ["-c", "echo test"]')
+      console.log('  })')
     }
   }, [])
 
@@ -103,33 +121,39 @@ export function AiWatcherDevPanel() {
         // Create operations
         createWatcher: (config: Partial<AiWatcherConfig>) => {
           console.log('[AI Watcher] Creating watcher...', config)
-          const fullConfig: AiWatcherConfig = {
+          // Build config with defaults and remove undefined fields for Effect Schema
+          const fullConfig = cleanConfig({
             type: config.type || 'custom',
-            workingDirectory: config.workingDirectory || process.cwd(),
+            workingDirectory: config.workingDirectory || '/tmp',
             name: config.name,
             command: config.command,
             args: config.args,
             env: config.env,
-          }
-          createWatcher(fullConfig)
-          console.log('[AI Watcher] Create request sent. Check createResult.')
+          })
+
+          createWatcher(fullConfig as AiWatcherConfig)
+          setTimeout(() => refreshWatchers(), 500)
+          console.log('[AI Watcher] Create request sent. Watchers will refresh.')
         },
 
         attachToTmux: (sessionName: string) => {
           console.log('[AI Watcher] Attaching to tmux session:', sessionName)
           attachToSession(sessionName)
-          console.log('[AI Watcher] Attach request sent.')
+          setTimeout(() => refreshWatchers(), 500)
+          console.log('[AI Watcher] Attach request sent. Watchers will refresh.')
         },
 
         // Control operations
         stopWatcher: (watcherId: string) => {
           console.log('[AI Watcher] Stopping watcher:', watcherId)
           stopWatcher(watcherId)
+          setTimeout(() => refreshWatchers(), 500)
         },
 
         startWatcher: (watcherId: string) => {
           console.log('[AI Watcher] Starting watcher:', watcherId)
           startWatcher(watcherId)
+          setTimeout(() => refreshWatchers(), 500)
         },
 
         // UI toggle
@@ -211,11 +235,11 @@ export function AiWatcherDevPanel() {
                         >
                           <span className="text-gray-300">{session.name}</span>
                           <button
-                            onClick={() =>
-                              (window as any).__DEV_AI_WATCHERS__.attachToTmux(
-                                session.name
-                              )
-                            }
+                            onClick={() => {
+                              attachToSession(session.name)
+                              // Refresh watchers list after a short delay to show the new watcher
+                              setTimeout(() => refreshWatchers(), 500)
+                            }}
                             className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
                           >
                             Attach
@@ -246,12 +270,32 @@ export function AiWatcherDevPanel() {
           <h4 className="text-sm font-semibold text-gray-300 mb-2">
             AI Watchers
           </h4>
-          <button
-            onClick={() => (window as any).__DEV_AI_WATCHERS__.listWatchers()}
-            className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded"
-          >
-            List Watchers
-          </button>
+          <div className="flex gap-2 mb-2">
+            <button
+              onClick={() => (window as any).__DEV_AI_WATCHERS__.listWatchers()}
+              className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded"
+            >
+              List Watchers
+            </button>
+            <button
+              onClick={() => {
+                // Only include fields with actual values - no undefined
+                const config = {
+                  type: 'custom' as const,
+                  name: `Test-${Date.now()}`,
+                  workingDirectory: '/tmp',
+                  command: 'bash',
+                  args: ['-c', 'for i in {1..10}; do echo "Test output $i"; sleep 2; done'],
+                }
+                createWatcher(config)
+                setTimeout(() => refreshWatchers(), 500)
+              }}
+              className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
+              title="Create a test watcher that outputs every 2 seconds"
+            >
+              Create Test
+            </button>
+          </div>
 
           <div className="mt-2">
             {Result.builder(watchersResult)
@@ -271,23 +315,52 @@ export function AiWatcherDevPanel() {
                           className="text-xs p-2 bg-gray-700 rounded"
                         >
                           <div className="flex justify-between items-center">
-                            <span className="text-gray-300">{watcher.name}</span>
-                            <span
-                              className={`px-2 py-0.5 rounded ${
-                                watcher.status === 'running'
-                                  ? 'bg-green-600'
-                                  : watcher.status === 'idle'
-                                    ? 'bg-yellow-600'
-                                    : watcher.status === 'stopped'
-                                      ? 'bg-gray-600'
-                                      : 'bg-red-600'
-                              } text-white`}
-                            >
-                              {watcher.status}
-                            </span>
-                          </div>
-                          <div className="text-gray-500 mt-1">
-                            PID: {watcher.processHandle.pid} | Type: {watcher.type}
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-300">{watcher.name}</span>
+                                <span
+                                  className={`px-2 py-0.5 rounded text-xs ${
+                                    watcher.status === 'running'
+                                      ? 'bg-green-600'
+                                      : watcher.status === 'idle'
+                                        ? 'bg-yellow-600'
+                                        : watcher.status === 'stopped'
+                                          ? 'bg-gray-600'
+                                          : 'bg-red-600'
+                                  } text-white`}
+                                >
+                                  {watcher.status}
+                                </span>
+                              </div>
+                              <div className="text-gray-500 mt-1">
+                                PID: {watcher.processHandle.pid} | Type: {watcher.type}
+                              </div>
+                            </div>
+                            <div className="flex gap-1">
+                              {watcher.status === 'stopped' ? (
+                                <button
+                                  onClick={() => {
+                                    startWatcher(watcher.id)
+                                    setTimeout(() => refreshWatchers(), 500)
+                                  }}
+                                  className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
+                                  title="Start watcher"
+                                >
+                                  ▶
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    stopWatcher(watcher.id)
+                                    setTimeout(() => refreshWatchers(), 500)
+                                  }}
+                                  className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs"
+                                  title="Stop watcher"
+                                >
+                                  ■
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}

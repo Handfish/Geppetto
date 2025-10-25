@@ -43,6 +43,7 @@ export class AiWatcher extends S.Class<AiWatcher>('AiWatcher')({
   type: AiAgentType,
   processHandle: ProcessHandle,
   status: AiWatcherStatus,
+  config: AiWatcherConfig,
   createdAt: S.Date,
   lastActivityAt: S.Date,
 }) {}

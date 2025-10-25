@@ -239,26 +239,30 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
       const implementation: AiWatcherPort = {
         create: (config: AiWatcherConfig) =>
           Effect.gen(function* () {
+            // Normalize config into the local schema to avoid constructor parse errors
+            const baseConfig =
+              config instanceof AiWatcherConfig ? config : new AiWatcherConfig(config)
+
             const watcherId = yield* Effect.sync(() => randomUUID())
 
-            let processHandle: ProcessHandle | undefined = config.processHandle
+            let processHandle: ProcessHandle | undefined = baseConfig.processHandle
 
             // If no process handle provided, create a new tmux session
             if (!processHandle) {
-              const sessionName = `ai-${config.type}-${watcherId.slice(0, 8)}`
-              const command = getAiAgentCommand(config)
+              const sessionName = `ai-${baseConfig.type}-${watcherId.slice(0, 8)}`
+              const command = getAiAgentCommand(baseConfig)
 
               processHandle = yield* tmuxManager.createSession(
                 sessionName,
                 command,
-                config.workingDirectory
+                baseConfig.workingDirectory
               ).pipe(
                 Effect.mapError((error: unknown) =>
                   new AiWatcherCreateError({
                     message: `Failed to create tmux session: ${error instanceof Error ? error.message : String(error)}`,
                     config: {
-                      type: config.type,
-                      name: config.name,
+                      type: baseConfig.type,
+                      name: baseConfig.name,
                     },
                     cause: error,
                   })
@@ -272,21 +276,29 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
                 new AiWatcherCreateError({
                   message: 'Failed to create or obtain process handle',
                   config: {
-                    type: config.type,
-                    name: config.name,
+                    type: baseConfig.type,
+                    name: baseConfig.name,
                   },
                   cause: new Error('processHandle is undefined'),
                 })
               )
             }
 
+            const watcherConfig =
+              baseConfig.processHandle === processHandle
+                ? baseConfig
+                : new AiWatcherConfig({
+                    ...baseConfig,
+                    processHandle,
+                  })
+
             const watcher = new AiWatcher({
               id: watcherId,
-              name: config.name ?? `${config.type}-watcher`,
-              type: config.type,
+              name: watcherConfig.name ?? `${watcherConfig.type}-watcher`,
+              type: watcherConfig.type,
               processHandle,
               status: 'starting',
-              config,
+              config: watcherConfig,
               createdAt: new Date(),
               lastActivityAt: new Date(),
             })

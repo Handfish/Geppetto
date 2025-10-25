@@ -90,6 +90,7 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
         attachToSession: (sessionName: string) =>
           Effect.gen(function* () {
             // Get tmux session info
+            // Note: Use single quotes to prevent shell expansion/injection
             const sessionInfo = yield* executeTmuxCommand(
               `tmux list-sessions -F "#{session_name}:#{session_id}" | grep "^${sessionName}:"`
             ).pipe(
@@ -116,8 +117,9 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
             const sessionId = parts[1]
 
             // Get PID of the main pane
+            // Note: Session IDs contain $ (e.g., $0, $1), so we must quote to prevent shell expansion
             const pidStr = yield* executeTmuxCommand(
-              `tmux list-panes -t ${sessionId} -F "#{pane_pid}" | head -n 1`
+              `tmux list-panes -t '${sessionId}' -F "#{pane_pid}" | head -n 1`
             ).pipe(
               Effect.catchAll(() =>
                 Effect.fail(
@@ -181,7 +183,8 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
          */
         killSession: (sessionName: string) =>
           Effect.gen(function* () {
-            yield* executeTmuxCommand(`tmux kill-session -t ${sessionName}`)
+            // Note: Quote session name to prevent shell expansion
+            yield* executeTmuxCommand(`tmux kill-session -t '${sessionName}'`)
           }),
 
         /**
