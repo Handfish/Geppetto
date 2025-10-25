@@ -52,6 +52,16 @@ export interface ProcessMonitorPort {
    * Kill a running process
    */
   kill(handle: ProcessHandle): Effect.Effect<void, ProcessKillError>
+
+  /**
+   * Enable tmux pipe streaming for a monitored process
+   *
+   * Streams the output of the tmux pane identified by targetPane into the process event queue.
+   */
+  pipeTmuxSession(
+    handle: ProcessHandle,
+    targetPane: string
+  ): Effect.Effect<void, ProcessMonitorError>
 }
 
 /**

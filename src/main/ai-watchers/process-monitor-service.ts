@@ -5,8 +5,13 @@ import * as Ref from 'effect/Ref'
 import * as Schedule from 'effect/Schedule'
 import * as Duration from 'effect/Duration'
 import * as Scope from 'effect/Scope'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, exec, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import * as Path from 'node:path'
+import * as Fs from 'node:fs'
+import { promises as FsPromises } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { promisify } from 'node:util'
 import type { ProcessMonitorPort, ProcessConfig } from './ports'
 import { ProcessHandle, ProcessEvent } from './schemas'
 import {
@@ -26,7 +31,16 @@ interface ProcessInfo {
   queue: Queue.Queue<ProcessEvent>
   lastActivityRef: Ref.Ref<number>
   isAttached: boolean
+  cleanupEffects: Array<Effect.Effect<void>>
+  tmuxPipe?: {
+    targetPane: string
+    fifoPath: string
+    tempDir: string
+    readStream: Fs.ReadStream
+  }
 }
+
+const execAsync = promisify(exec)
 
 /**
  * Silence detection threshold - 30 seconds of no activity
@@ -54,6 +68,113 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
     effect: Effect.gen(function* () {
       // Map of process ID to process information
       const processes = new Map<string, ProcessInfo>()
+
+      const quoteForShell = (value: string): string =>
+        `'${value.replace(/'/g, `'\\''`)}'`
+
+      const runTmuxCommandVoid = (
+        args: string[],
+        processId: string,
+        description: string
+      ): Effect.Effect<void, ProcessMonitorError> =>
+        Effect.async<ProcessMonitorError, void>((resume) => {
+          const child = spawn('tmux', args, {
+            stdio: ['ignore', 'ignore', 'pipe'],
+          })
+
+          let stderr = ''
+          child.stderr?.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString()
+          })
+
+          child.on('error', (error: Error) => {
+            resume(
+              Effect.fail(
+                new ProcessMonitorError({
+                  message: `${description}: ${error.message}`,
+                  processId,
+                  cause: error,
+                })
+              )
+            )
+          })
+
+          child.on('exit', (code: number | null) => {
+            if (code === 0 || code === null) {
+              resume(Effect.succeed(undefined))
+            } else {
+              const details = stderr.trim()
+              resume(
+                Effect.fail(
+                  new ProcessMonitorError({
+                    message: `${description}: exited with code ${code}${details ? ` (${details})` : ''}`,
+                    processId,
+                  })
+                )
+              )
+            }
+          })
+
+          return Effect.sync(() => {
+            if (child.exitCode === null && !child.killed) {
+              child.kill('SIGKILL')
+            }
+          })
+        })
+
+      const runTmuxCommandCapture = (
+        args: string[],
+        processId: string,
+        description: string
+      ): Effect.Effect<string, ProcessMonitorError> =>
+        Effect.async<ProcessMonitorError, string>((resume) => {
+          const child = spawn('tmux', args, {
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+
+          let stdout = ''
+          let stderr = ''
+          child.stdout?.on('data', (chunk: Buffer) => {
+            stdout += chunk.toString()
+          })
+          child.stderr?.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString()
+          })
+
+          child.on('error', (error: Error) => {
+            resume(
+              Effect.fail(
+                new ProcessMonitorError({
+                  message: `${description}: ${error.message}`,
+                  processId,
+                  cause: error,
+                })
+              )
+            )
+          })
+
+          child.on('exit', (code: number | null) => {
+            if (code === 0 || code === null) {
+              resume(Effect.succeed(stdout))
+            } else {
+              const details = stderr.trim()
+              resume(
+                Effect.fail(
+                  new ProcessMonitorError({
+                    message: `${description}: exited with code ${code}${details ? ` (${details})` : ''}`,
+                    processId,
+                  })
+                )
+              )
+            }
+          })
+
+          return Effect.sync(() => {
+            if (child.exitCode === null && !child.killed) {
+              child.kill('SIGKILL')
+            }
+          })
+        })
 
       /**
        * Mark activity for a process
@@ -137,8 +258,193 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
           if (!info) {
             return yield* Effect.void
           }
+
+          if (info.cleanupEffects.length > 0) {
+            yield* Effect.forEach(
+              info.cleanupEffects,
+              cleanup =>
+                cleanup.pipe(
+                  Effect.catchAll((error) =>
+                    Effect.logWarning(
+                      `Cleanup error for process ${processId}: ${String(error)}`
+                    )
+                  )
+                ),
+              { discard: true }
+            )
+          }
+
+          if (info.tmuxPipe) {
+            info.tmuxPipe.readStream.removeAllListeners()
+          }
+
           yield* Queue.shutdown(info.queue)
           processes.delete(processId)
+        })
+
+      const pipeTmuxSession = (
+        handle: ProcessHandle,
+        targetPane: string
+      ): Effect.Effect<void, ProcessMonitorError> =>
+        Effect.gen(function* () {
+          const info = processes.get(handle.id)
+          if (!info) {
+            return yield* Effect.fail(
+              new ProcessMonitorError({
+                message: `Process ${handle.id} not found`,
+                processId: handle.id,
+              })
+            )
+          }
+
+          if (info.tmuxPipe && info.tmuxPipe.targetPane === targetPane) {
+            return yield* Effect.void
+          }
+
+          if (info.tmuxPipe) {
+            yield* Effect.forEach(
+              info.cleanupEffects,
+              cleanup =>
+                cleanup.pipe(
+                  Effect.catchAll(() => Effect.void)
+                ),
+              { discard: true }
+            )
+            info.cleanupEffects = []
+            info.tmuxPipe.readStream.removeAllListeners()
+            info.tmuxPipe.readStream.destroy()
+            info.tmuxPipe = undefined
+          }
+
+          const tempDir = yield* Effect.tryPromise({
+            try: () => FsPromises.mkdtemp(Path.join(tmpdir(), 'tmux-pipe-')),
+            catch: (error) =>
+              new ProcessMonitorError({
+                message: 'Failed to create temp directory for tmux pipe',
+                processId: handle.id,
+                cause: error,
+              }),
+          })
+
+          const fifoPath = Path.join(tempDir, 'pane.fifo')
+
+          yield* Effect.tryPromise({
+            try: () => execAsync(`mkfifo ${quoteForShell(fifoPath)}`),
+            catch: (error) =>
+              new ProcessMonitorError({
+                message: 'Failed to create FIFO for tmux pipe',
+                processId: handle.id,
+                cause: error,
+              }),
+          })
+
+          const readStream = yield* Effect.try({
+            try: () =>
+              Fs.createReadStream(fifoPath, {
+                encoding: 'utf8',
+                flags: 'r+',
+              }),
+            catch: (error) =>
+              new ProcessMonitorError({
+                message: 'Failed to open FIFO for tmux pipe',
+                processId: handle.id,
+                cause: error,
+              }),
+          })
+
+          readStream.on('data', (chunk: string) => {
+            Effect.runFork(
+              Effect.gen(function* () {
+                yield* markActivity(handle.id)
+                const event = new ProcessEvent({
+                  type: 'stdout',
+                  data: chunk,
+                  timestamp: new Date(),
+                  processId: handle.id,
+                })
+                yield* emitEvent(handle.id, event)
+              })
+            )
+          })
+
+          readStream.on('error', (error: Error) => {
+            Effect.runFork(
+              Effect.gen(function* () {
+                const event = new ProcessEvent({
+                  type: 'error',
+                  data: error.message,
+                  timestamp: new Date(),
+                  processId: handle.id,
+                })
+                yield* emitEvent(handle.id, event)
+              })
+            )
+          })
+
+          // Clear existing pipe configuration if any - ignore errors
+          yield* runTmuxCommandVoid(
+            ['pipe-pane', '-t', targetPane],
+            handle.id,
+            `Failed to reset tmux pipe for ${targetPane}`
+          ).pipe(Effect.catchAll(() => Effect.void))
+
+          const cleanupEffect = Effect.gen(function* () {
+            readStream.removeAllListeners()
+            readStream.destroy()
+            yield* runTmuxCommandVoid(
+              ['pipe-pane', '-t', targetPane],
+              handle.id,
+              `Failed to stop tmux pipe for ${targetPane}`
+            ).pipe(Effect.catchAll(() => Effect.void))
+            yield* Effect.tryPromise({
+              try: () =>
+                FsPromises.rm(tempDir, {
+                  recursive: true,
+                  force: true,
+                }),
+              catch: () => undefined,
+            }).pipe(Effect.catchAll(() => Effect.void))
+          })
+
+          // Capture existing pane output (best effort)
+          const captured = yield* runTmuxCommandCapture(
+            ['capture-pane', '-pt', targetPane],
+            handle.id,
+            `Failed to capture tmux pane ${targetPane}`
+          ).pipe(Effect.catchAll(() => Effect.succeed('')))
+
+          yield* runTmuxCommandVoid(
+            ['pipe-pane', '-t', targetPane, `cat > ${quoteForShell(fifoPath)}`],
+            handle.id,
+            `Failed to start tmux pipe for ${targetPane}`
+          ).pipe(
+            Effect.catchAll((error) =>
+              cleanupEffect.pipe(Effect.zipRight(Effect.fail(error)))
+            )
+          )
+
+          if (captured) {
+            const lines = captured.replace(/\r/g, '').split('\n')
+            for (const line of lines) {
+              if (!line) continue
+              yield* markActivity(handle.id)
+              const event = new ProcessEvent({
+                type: 'stdout',
+                data: line,
+                timestamp: new Date(),
+                processId: handle.id,
+              })
+              yield* emitEvent(handle.id, event)
+            }
+          }
+
+          info.tmuxPipe = {
+            targetPane,
+            fifoPath,
+            tempDir,
+            readStream,
+          }
+          info.cleanupEffects.push(cleanupEffect)
         })
 
       const implementation: ProcessMonitorPort = {
@@ -184,6 +490,7 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
                 queue,
                 lastActivityRef,
                 isAttached: false,
+                cleanupEffects: [],
               }
               processes.set(processId, processInfo)
 
@@ -296,6 +603,7 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
               queue,
               lastActivityRef,
               isAttached: true,
+              cleanupEffects: [],
             }
             processes.set(processId, processInfo)
 
@@ -328,6 +636,9 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
             })
           ),
 
+        pipeTmuxSession: (handle: ProcessHandle, targetPane: string) =>
+          pipeTmuxSession(handle, targetPane),
+
         kill: (handle: ProcessHandle) =>
           Effect.gen(function* () {
             const info = processes.get(handle.id)
@@ -358,12 +669,7 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
             } else if (info.isAttached) {
               // For attached processes, use kill command
               yield* Effect.tryPromise({
-                try: async () => {
-                  const { exec } = await import('node:child_process')
-                  const { promisify } = await import('node:util')
-                  const execAsync = promisify(exec)
-                  await execAsync(`kill -TERM ${handle.pid}`)
-                },
+                try: () => execAsync(`kill -TERM ${handle.pid}`),
                 catch: (error) =>
                   new ProcessKillError({
                     message: `Failed to kill attached process: ${error instanceof Error ? error.message : String(error)}`,
