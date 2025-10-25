@@ -187,78 +187,83 @@ export const GitHubIpcContracts = {
 
 **CRITICAL: IPC Handler Type Safety Pattern**
 
-When implementing IPC handlers in `src/main/ipc/{domain}-handlers.ts`, you MUST follow this exact pattern to preserve type safety. **DO NOT use `unknown` or `any` types** - TypeScript's inability to narrow union types from indexed access is a known limitation that we work around using proper type assertions.
+When implementing IPC handlers in `src/main/ipc/{domain}-handlers.ts`, use the centralized `registerIpcHandler` utility from `src/main/ipc/ipc-handler-setup.ts`. This utility handles all type safety concerns automatically.
+
+**Recommended Pattern (Using registerIpcHandler):**
 
 ```typescript
-const setupHandler = <K extends keyof typeof GitHubIpcContracts, E>(
-  key: K,
-  handler: (input: ContractInput<K>) => Effect.Effect<ContractOutput<K>, E>
-) => {
-  const contract = GitHubIpcContracts[key]
+// src/main/ipc/{domain}-handlers.ts
+import { registerIpcHandler } from './ipc-handler-setup'
+import { GitHubIpcContracts } from '../../shared/ipc-contracts'
 
-  // REQUIRED: Define dual-type schemas preserving both decoded and encoded types
-  // TypeScript can't track the relationship between the generic key K and the indexed
-  // contract schemas. These type aliases preserve full type information for both:
-  // 1. Decoded type (ContractInput<K>) - used in application code
-  // 2. Encoded type (S.Schema.Encoded<...>) - used for IPC serialization
-  type InputSchema = S.Schema<ContractInput<K>, S.Schema.Encoded<typeof GitHubIpcContracts[K]['input']>>
-  type OutputSchema = S.Schema<ContractOutput<K>, S.Schema.Encoded<typeof GitHubIpcContracts[K]['output']>>
+export const setupGitHubIpcHandlers = Effect.gen(function* () {
+  const apiService = yield* GitHubApiService
+  const authService = yield* GitHubAuthService
 
-  ipcMain.handle(contract.channel, async (_event, input: unknown) => {
-    const program = Effect.gen(function* () {
-      // Decode: validates and transforms from encoded (wire format) to decoded (app type)
-      // The `as unknown as InputSchema` is REQUIRED - TypeScript sees contract.input as a union
-      const validatedInput = yield* S.decodeUnknown(contract.input as unknown as InputSchema)(input)
+  // Register handlers with automatic type safety
+  registerIpcHandler(
+    GitHubIpcContracts.signIn,
+    () => authService.startAuthFlow
+  )
 
-      // Execute handler - validatedInput is now properly typed as ContractInput<K>
-      const result = yield* handler(validatedInput)
+  registerIpcHandler(
+    GitHubIpcContracts.getRepos,
+    (input) => apiService.getRepos(input.username)
+  )
 
-      // Encode: transforms from decoded type to encoded (serializable) type for IPC
-      const encoded = yield* S.encode(contract.output as unknown as OutputSchema)(result)
-      return encoded
-    }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
-
-    return await Effect.runPromise(program)
-  })
-}
+  registerIpcHandler(
+    GitHubIpcContracts.getPullRequest,
+    (input) => apiService.getPullRequest(input.owner, input.repo, input.number)
+  )
+})
 ```
 
-**Why This Pattern is Required:**
+**How registerIpcHandler Works:**
 
-1. **Preserved Type Information**: The dual-type `S.Schema<Decoded, Encoded>` preserves both the runtime (decoded) and wire (encoded) types
-2. **No `unknown` Escape Hatch**: Using `as S.Schema<unknown>` would lose all type information - this is **forbidden**
-3. **Type Assertions Are Necessary**: The `as unknown as InputSchema` is the **correct** approach because:
-   - TypeScript cannot narrow `contract.input` from a union type based on the generic key `K`
-   - Runtime safety is guaranteed by Effect Schema validation
-   - The type assertion tells TypeScript what we know to be true at runtime
-4. **Full End-to-End Safety**: This pattern ensures type safety from main process → IPC → renderer process
+The utility provides:
+- ✅ **Automatic input validation** (decode from wire format)
+- ✅ **Automatic output encoding** (encode to wire format)
+- ✅ **Automatic error mapping** (via `mapDomainErrorToIpcError`)
+- ✅ **Full type safety** (preserves both decoded and encoded types)
+- ✅ **Tracing support** (Effect spans for debugging)
 
-**Common Mistakes to Avoid:**
+**Key Benefits:**
 
-❌ **WRONG** - Loses type information:
+1. **No Boilerplate**: No need to manually create `setupHandler` functions
+2. **Centralized Type Safety**: Type handling logic is in one place (`ipc-handler-setup.ts`)
+3. **Consistent Error Handling**: All handlers use the same error mapping
+4. **Less Error-Prone**: Reduces chance of type safety mistakes
+
+**Type Safety Under the Hood:**
+
+The utility uses the dual-type schema pattern internally:
+
 ```typescript
-const validatedInput = yield* S.decodeUnknown(contract.input as S.Schema<unknown>)(input)
-const result = yield* handler(validatedInput as ContractInput<K>)  // Now needs manual assertion
+// Inside registerIpcHandler (you don't write this):
+type InputSchemaWithTypes = S.Schema<InputDecoded, InputEncoded, never>
+type OutputSchemaWithTypes = S.Schema<OutputDecoded, OutputEncoded, never>
+
+// Type assertions are handled internally:
+S.decodeUnknown(contract.input as unknown as InputSchemaWithTypes)(input)
+S.encode(contract.output as unknown as OutputSchemaWithTypes)(result)
 ```
 
-❌ **WRONG** - Omitting encoded type:
-```typescript
-type InputSchema = typeof contract.input  // Only the schema, not the types
-```
+**Why Type Assertions Are Necessary (Internal Detail):**
 
-❌ **WRONG** - Using `any`:
-```typescript
-const validatedInput = yield* S.decodeUnknown(contract.input as any)(input)
-```
+TypeScript cannot narrow `contract.input` from a union type based on the generic contract parameter. The utility uses `as unknown as InputSchemaWithTypes` internally to preserve both:
+- Decoded type: `S.Schema.Type<TInputSchema>` (application-level)
+- Encoded type: `S.Schema.Encoded<TInputSchema>` (wire-level)
 
-✅ **CORRECT** - Preserves both types:
-```typescript
-type InputSchema = S.Schema<ContractInput<K>, S.Schema.Encoded<typeof GitHubIpcContracts[K]['input']>>
-const validatedInput = yield* S.decodeUnknown(contract.input as unknown as InputSchema)(input)
-const result = yield* handler(validatedInput)  // No assertion needed!
-```
+This is NOT a loss of type safety because:
+1. Effect Schema validates at runtime (catches all invalid data)
+2. The assertion tells TypeScript what we know to be true at runtime
+3. The generic parameters ensure the handler signature matches the contract
 
-This pattern applies to ALL IPC handler files: `github-handlers.ts`, `account-handlers.ts`, and any future domain handlers.
+**When to Use Manual Pattern:**
+
+In rare cases where `registerIpcHandler` doesn't work (e.g., complex Schema.Class unions), you can fall back to individual handler registration. See `src/main/ipc/ipc-handler-setup.ts` for the implementation reference.
+
+**This pattern applies to ALL IPC handler files:** `github-handlers.ts`, `account-handlers.ts`, `ai-provider-handlers.ts`, and any future domain handlers.
 
 ### Reactive State Management with Effect Atoms
 
@@ -733,10 +738,15 @@ getPullRequest: (owner: string, repo: string, number: number) =>
 
 **4. Register IPC Handler** (`src/main/ipc/{domain}-handlers.ts`)
 ```typescript
-setupHandler('getPullRequest', (input: ContractInput<'getPullRequest'>) =>
-  apiService.getPullRequest(input.owner, input.repo, input.number))
+import { registerIpcHandler } from './ipc-handler-setup'
+
+// Inside your setupXxxIpcHandlers function:
+registerIpcHandler(
+  GitHubIpcContracts.getPullRequest,
+  (input) => apiService.getPullRequest(input.owner, input.repo, input.number)
+)
 ```
-*No error handling needed - automatically mapped by `mapDomainErrorToIpcError`*
+*No error handling needed - automatically mapped by `registerIpcHandler` via `mapDomainErrorToIpcError`*
 
 **5. Create Atom** (`src/renderer/atoms/{domain}-atoms.ts`)
 ```typescript
@@ -815,24 +825,25 @@ export const mapDomainErrorToIpcError = (error: unknown): Effect.Effect<IpcError
 
 **5. Create Handler Setup** (`src/main/ipc/gitlab-handlers.ts`)
 ```typescript
+import { registerIpcHandler } from './ipc-handler-setup'
+import { GitLabIpcContracts } from '../../shared/ipc-contracts'
+
 export const setupGitLabIpcHandlers = Effect.gen(function* () {
   const authService = yield* GitLabAuthService
   const apiService = yield* GitLabApiService
 
-  type ContractInput<K extends keyof typeof GitLabIpcContracts> =
-    S.Schema.Type<typeof GitLabIpcContracts[K]['input']>
-  type ContractOutput<K extends keyof typeof GitLabIpcContracts> =
-    S.Schema.Type<typeof GitLabIpcContracts[K]['output']>
+  // Register handlers using the centralized utility
+  registerIpcHandler(
+    GitLabIpcContracts.signIn,
+    () => authService.startAuthFlow
+  )
 
-  const setupHandler = <K extends keyof typeof GitLabIpcContracts, E>(
-    key: K,
-    handler: (input: ContractInput<K>) => Effect.Effect<ContractOutput<K>, E>
-  ) => {
-    // ... same pattern as github-handlers.ts
-  }
+  registerIpcHandler(
+    GitLabIpcContracts.getProjects,
+    (input) => apiService.getProjects(input.username)
+  )
 
-  setupHandler('signIn', () => authService.startAuthFlow)
-  // ... register all handlers
+  // ... register all other handlers
 })
 ```
 

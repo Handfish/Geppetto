@@ -19,6 +19,7 @@ When state changes, notify all windows:
 ```typescript
 // src/main/ipc/workspace-handlers.ts
 import { BrowserWindow } from 'electron'
+import { registerIpcHandler } from './ipc-handler-setup'
 
 const broadcastWorkspaceChange = () => {
   BrowserWindow.getAllWindows().forEach(window => {
@@ -26,8 +27,10 @@ const broadcastWorkspaceChange = () => {
   })
 }
 
-setupHandler('setWorkspacePath', input =>
-  Effect.gen(function* () {
+// Inside setupWorkspaceIpcHandlers:
+registerIpcHandler(
+  WorkspaceIpcContracts.setWorkspacePath,
+  (input) => Effect.gen(function* () {
     yield* workspaceService.setWorkspacePath(input.path)
     broadcastWorkspaceChange() // Notify all windows
   })

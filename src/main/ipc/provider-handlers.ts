@@ -1,55 +1,43 @@
-import { Effect, Schema as S } from 'effect'
-import { ipcMain } from 'electron'
+/**
+ * VCS Provider IPC Handlers
+ *
+ * Handles IPC communication for version control system providers (GitHub, GitLab, etc.)
+ * using the generic registerIpcHandler pattern for type-safe, boilerplate-free handler registration.
+ */
+
+import { Effect } from 'effect'
 import { ProviderIpcContracts } from '../../shared/ipc-contracts'
 import { VcsProviderService } from '../providers/vcs-provider-service'
-import { mapDomainErrorToIpcError } from './error-mapper'
+import { registerIpcHandler } from './ipc-handler-setup'
 
-type ContractInput<K extends keyof typeof ProviderIpcContracts> = S.Schema.Type<
-  (typeof ProviderIpcContracts)[K]['input']
->
-type ContractOutput<K extends keyof typeof ProviderIpcContracts> =
-  S.Schema.Type<(typeof ProviderIpcContracts)[K]['output']>
-
+/**
+ * Setup VCS provider IPC handlers
+ */
 export const setupProviderIpcHandlers = Effect.gen(function* () {
   const providerService = yield* VcsProviderService
 
-  const setupHandler = <K extends keyof typeof ProviderIpcContracts, E>(
-    key: K,
-    handler: (input: ContractInput<K>) => Effect.Effect<ContractOutput<K>, E>
-  ) => {
-    const contract = ProviderIpcContracts[key]
-    type InputSchema = S.Schema<
-      ContractInput<K>,
-      S.Schema.Encoded<(typeof ProviderIpcContracts)[K]['input']>
-    >
-    type OutputSchema = S.Schema<
-      ContractOutput<K>,
-      S.Schema.Encoded<(typeof ProviderIpcContracts)[K]['output']>
-    >
+  // Sign in to provider
+  registerIpcHandler(ProviderIpcContracts.signIn, (input) =>
+    providerService.signIn(input.provider)
+  )
 
-    ipcMain.handle(contract.channel, async (_event, input: unknown) => {
-      const program = Effect.gen(function* () {
-        const validatedInput = yield* S.decodeUnknown(
-          contract.input as unknown as InputSchema
-        )(input)
-        const result = yield* handler(validatedInput)
-        const encoded = yield* S.encode(
-          contract.output as unknown as OutputSchema
-        )(result)
-        return encoded
-      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
+  // Sign out from account
+  registerIpcHandler(ProviderIpcContracts.signOut, (input) =>
+    providerService.signOut(input.accountId)
+  )
 
-      return await Effect.runPromise(program)
-    })
-  }
+  // Check authentication status
+  registerIpcHandler(ProviderIpcContracts.checkAuth, (input) =>
+    providerService.checkAuth(input.accountId)
+  )
 
-  setupHandler('signIn', input => providerService.signIn(input.provider))
-  setupHandler('signOut', input => providerService.signOut(input.accountId))
-  setupHandler('checkAuth', input => providerService.checkAuth(input.accountId))
-  setupHandler('getAccountRepositories', input =>
+  // Get repositories for specific account
+  registerIpcHandler(ProviderIpcContracts.getAccountRepositories, (input) =>
     providerService.getRepositories(input.accountId)
   )
-  setupHandler('getProviderRepositories', input =>
+
+  // Get all repositories for a provider (all accounts)
+  registerIpcHandler(ProviderIpcContracts.getProviderRepositories, (input) =>
     providerService.getRepositoriesByProvider(input.provider)
   )
 })

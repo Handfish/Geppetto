@@ -86,26 +86,25 @@ const MainLayer = Layer.mergeAll(
 
 ## IPC Type Safety Pattern
 
+**Use the centralized `registerIpcHandler` utility:**
+
 ```typescript
-const setupHandler = <K extends keyof typeof Contracts>(
-  key: K,
-  handler: (input: ContractInput<K>) => Effect<ContractOutput<K>, Error>
-) => {
-  type InputSchema = S.Schema<
-    ContractInput<K>,
-    S.Schema.Encoded<typeof Contracts[K]['input']>
-  >
-  
-  const validatedInput = yield* S.decodeUnknown(
-    contract.input as unknown as InputSchema
-  )(input)
-  
-  const result = yield* handler(validatedInput)
-  return result
-}
+import { registerIpcHandler } from './ipc-handler-setup'
+
+// Register handlers with automatic type safety
+registerIpcHandler(
+  AiWatcherIpcContracts.getWatcher,
+  (input) => aiWatcherService.get(input.watcherId)
+)
 ```
 
-**Key:** Dual-type definition prevents type erasure across IPC boundary.
+**Benefits:**
+- ✅ Automatic input validation & output encoding
+- ✅ Automatic error mapping
+- ✅ Full type safety (dual-type schema pattern handled internally)
+- ✅ Less boilerplate, fewer errors
+
+**Key:** The utility handles dual-type schemas internally to prevent type erasure across IPC boundary.
 
 ---
 

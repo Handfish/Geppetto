@@ -1,60 +1,44 @@
-import { Effect, Schema as S } from 'effect'
-import { ipcMain } from 'electron'
+/**
+ * AI Provider IPC Handlers
+ *
+ * Handles IPC communication for AI providers (OpenAI, Claude, etc.)
+ * using the generic registerIpcHandler pattern for type-safe, boilerplate-free handler registration.
+ */
+
+import { Effect } from 'effect'
 import { AiProviderIpcContracts } from '../../shared/ipc-contracts'
 import { AiProviderService } from '../ai/ai-provider-service'
-import { mapDomainErrorToIpcError } from './error-mapper'
+import { registerIpcHandler } from './ipc-handler-setup'
 
-type ContractInput<K extends keyof typeof AiProviderIpcContracts> =
-  S.Schema.Type<(typeof AiProviderIpcContracts)[K]['input']>
-type ContractOutput<K extends keyof typeof AiProviderIpcContracts> =
-  S.Schema.Type<(typeof AiProviderIpcContracts)[K]['output']>
-
+/**
+ * Setup AI provider IPC handlers
+ */
 export const setupAiProviderIpcHandlers = Effect.gen(function* () {
   const aiProviderService = yield* AiProviderService
 
-  const setupHandler = <K extends keyof typeof AiProviderIpcContracts, E>(
-    key: K,
-    handler: (input: ContractInput<K>) => Effect.Effect<ContractOutput<K>, E>
-  ) => {
-    const contract = AiProviderIpcContracts[key]
-    type InputSchema = S.Schema<
-      ContractInput<K>,
-      S.Schema.Encoded<(typeof AiProviderIpcContracts)[K]['input']>
-    >
-    type OutputSchema = S.Schema<
-      ContractOutput<K>,
-      S.Schema.Encoded<(typeof AiProviderIpcContracts)[K]['output']>
-    >
-
-    ipcMain.handle(contract.channel, async (_event, input: unknown) => {
-      const program = Effect.gen(function* () {
-        const validatedInput = yield* S.decodeUnknown(
-          contract.input as unknown as InputSchema
-        )(input)
-        const result = yield* handler(validatedInput)
-        const encoded = yield* S.encode(
-          contract.output as unknown as OutputSchema
-        )(result)
-        return encoded
-      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
-
-      return await Effect.runPromise(program)
-    })
-  }
-
-  setupHandler('aiProvider:signIn', input =>
+  // Sign in to AI provider
+  registerIpcHandler(AiProviderIpcContracts['aiProvider:signIn'], (input) =>
     aiProviderService.signIn(input.provider)
   )
-  setupHandler('aiProvider:signOut', input =>
+
+  // Sign out from AI account
+  registerIpcHandler(AiProviderIpcContracts['aiProvider:signOut'], (input) =>
     aiProviderService.signOut(input.accountId)
   )
-  setupHandler('aiProvider:checkAuth', input =>
+
+  // Check AI authentication status
+  registerIpcHandler(AiProviderIpcContracts['aiProvider:checkAuth'], (input) =>
     aiProviderService.checkAuth(input.accountId)
   )
-  setupHandler('aiProvider:getUsage', input =>
+
+  // Get AI usage for specific account
+  registerIpcHandler(AiProviderIpcContracts['aiProvider:getUsage'], (input) =>
     aiProviderService.getUsage(input.accountId)
   )
-  setupHandler('aiProvider:getProviderUsage', input =>
-    aiProviderService.getUsageByProvider(input.provider)
+
+  // Get AI usage for all accounts of a provider
+  registerIpcHandler(
+    AiProviderIpcContracts['aiProvider:getProviderUsage'],
+    (input) => aiProviderService.getUsageByProvider(input.provider)
   )
 })

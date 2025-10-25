@@ -318,47 +318,27 @@ export const AiWatcherIpcContracts = {
 **File: src/main/ipc/ai-watcher-handlers.ts**
 
 ```typescript
+import { registerIpcHandler } from './ipc-handler-setup'
+import { AiWatcherIpcContracts } from '../../shared/ipc-contracts'
+
 export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   const aiWatcherService = yield* AiWatcherService
+  const tmuxManager = yield* TmuxSessionManager
 
-  // Use the CRITICAL type-safe pattern from CLAUDE.md
-  type ContractInput<K extends keyof typeof AiWatcherIpcContracts> =
-    S.Schema.Type<typeof AiWatcherIpcContracts[K]['input']>
-  type ContractOutput<K extends keyof typeof AiWatcherIpcContracts> =
-    S.Schema.Type<typeof AiWatcherIpcContracts[K]['output']>
-
-  const setupHandler = <K extends keyof typeof AiWatcherIpcContracts, E>(
-    key: K,
-    handler: (input: ContractInput<K>) => Effect.Effect<ContractOutput<K>, E>
-  ) => {
-    const contract = AiWatcherIpcContracts[key]
-
-    type InputSchema = S.Schema<ContractInput<K>, S.Schema.Encoded<typeof AiWatcherIpcContracts[K]['input']>>
-    type OutputSchema = S.Schema<ContractOutput<K>, S.Schema.Encoded<typeof AiWatcherIpcContracts[K]['output']>>
-
-    ipcMain.handle(contract.channel, async (_event, input: unknown) => {
-      const program = Effect.gen(function* () {
-        const validatedInput = yield* S.decodeUnknown(contract.input as unknown as InputSchema)(input)
-        const result = yield* handler(validatedInput)
-        const encoded = yield* S.encode(contract.output as unknown as OutputSchema)(result)
-        return encoded
-      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
-
-      return await Effect.runPromise(program)
-    })
-  }
-
-  setupHandler('createWatcher', (input) =>
-    aiWatcherService.create({
+  // Use the centralized registerIpcHandler utility
+  registerIpcHandler(
+    AiWatcherIpcContracts.createWatcher,
+    (input) => aiWatcherService.create({
       type: input.type,
       name: input.name,
       workingDirectory: input.workingDirectory,
       env: input.env,
-    }))
+    })
+  )
 
-  setupHandler('attachToTmuxSession', (input) =>
-    Effect.gen(function* () {
-      const tmuxManager = yield* TmuxSessionManager
+  registerIpcHandler(
+    AiWatcherIpcContracts.attachToTmuxSession,
+    (input) => Effect.gen(function* () {
       const handle = yield* tmuxManager.attachToSession(input.sessionName)
 
       return yield* aiWatcherService.create({
@@ -366,10 +346,13 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
         name: `tmux:${input.sessionName}`,
         processHandle: handle,
       })
-    }))
+    })
+  )
 
-  setupHandler('listWatchers', () =>
-    aiWatcherService.listAll())
+  registerIpcHandler(
+    AiWatcherIpcContracts.listWatchers,
+    () => aiWatcherService.listAll()
+  )
 
   // Stream handler needs special treatment for continuous updates
   ipcMain.handle(AiWatcherIpcContracts.streamWatcherLogs.channel, async (event, input: unknown) => {

@@ -398,42 +398,16 @@ export const AiWatcherIpcContracts = {
 **File:** `src/main/ipc/ai-watcher-handlers.ts`
 
 ```typescript
+import { registerIpcHandler } from './ipc-handler-setup'
+import { AiWatcherIpcContracts } from '../../shared/ipc-contracts'
+
 export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   const watcherRegistry = yield* AiWatcherRegistry
 
-  const setupHandler = <K extends keyof typeof AiWatcherIpcContracts, E>(
-    key: K,
-    handler: (input: ContractInput<K>) => Effect.Effect<ContractOutput<K>, E>
-  ) => {
-    const contract = AiWatcherIpcContracts[key]
-
-    type InputSchema = S.Schema<
-      ContractInput<K>,
-      S.Schema.Encoded<typeof AiWatcherIpcContracts[K]['input']>
-    >
-    type OutputSchema = S.Schema<
-      ContractOutput<K>,
-      S.Schema.Encoded<typeof AiWatcherIpcContracts[K]['output']>
-    >
-
-    ipcMain.handle(contract.channel, async (_event, input: unknown) => {
-      const program = Effect.gen(function* () {
-        const validatedInput = yield* S.decodeUnknown(
-          contract.input as unknown as InputSchema
-        )(input)
-        const result = yield* handler(validatedInput)
-        const encoded = yield* S.encode(
-          contract.output as unknown as OutputSchema
-        )(result)
-        return encoded
-      }).pipe(Effect.catchAll(mapDomainErrorToIpcError))
-
-      return await Effect.runPromise(program)
-    })
-  }
-
-  setupHandler('startWatcher', (input) =>
-    watcherRegistry.startWatcher({
+  // Use the centralized registerIpcHandler utility
+  registerIpcHandler(
+    AiWatcherIpcContracts.startWatcher,
+    (input) => watcherRegistry.startWatcher({
       watcherId: input.watcherId,
       provider: input.provider,
       operation: input.operation,
@@ -442,14 +416,16 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
     })
   )
 
-  setupHandler('stopWatcher', (input) =>
-    watcherRegistry.getWatcher(input.watcherId).pipe(
+  registerIpcHandler(
+    AiWatcherIpcContracts.stopWatcher,
+    (input) => watcherRegistry.getWatcher(input.watcherId).pipe(
       Effect.flatMap(watcher => watcher.terminateWatcher)
     )
   )
 
-  setupHandler('listWatchers', () =>
-    watcherRegistry.listWatchers()
+  registerIpcHandler(
+    AiWatcherIpcContracts.listWatchers,
+    () => watcherRegistry.listWatchers()
   )
 })
 ```
