@@ -3,7 +3,7 @@ import * as Duration from 'effect/Duration'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { ProcessConfig } from './ports'
-import type { ProcessHandle, TmuxSession } from './schemas'
+import type { TmuxSession } from './schemas'
 import { TmuxSessionNotFoundError, TmuxCommandError } from './errors'
 import { ProcessMonitorService } from './process-monitor-service'
 
@@ -72,32 +72,42 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
 
           const sessionId = parts[1]
 
-          // Get PID of the main pane
-          const pidStr = yield* executeTmuxCommand(
-            `tmux list-panes -t '${sessionId}' -F "#{pane_pid}" | head -n 1`
+          // Get pane info (pane id and PID)
+          const paneInfo = yield* executeTmuxCommand(
+            `tmux list-panes -t '${sessionId}' -F "#{pane_id}:#{pane_pid}" | head -n 1`
           ).pipe(
             Effect.catchAll(() =>
               Effect.fail(
                 new TmuxSessionNotFoundError({
-                  message: `Could not get PID for tmux session "${sessionName}"`,
+                  message: `Could not get pane info for tmux session "${sessionName}"`,
                   sessionName,
                 })
               )
             )
           )
 
-          const pid = parseInt(pidStr, 10)
-          if (isNaN(pid)) {
+          const [paneId, panePidStr] = paneInfo.split(':')
+          if (!paneId || !panePidStr) {
             return yield* Effect.fail(
               new TmuxSessionNotFoundError({
-                message: `Invalid PID "${pidStr}" for tmux session "${sessionName}"`,
+                message: `Invalid pane info "${paneInfo}" for tmux session "${sessionName}"`,
                 sessionName,
               })
             )
           }
 
-          const handle = yield* processMonitor.attach(pid)
-          yield* processMonitor.pipeTmuxSession(handle, sessionId)
+          const panePid = parseInt(panePidStr, 10)
+          if (isNaN(panePid)) {
+            return yield* Effect.fail(
+              new TmuxSessionNotFoundError({
+                message: `Invalid PID "${panePidStr}" for tmux session "${sessionName}"`,
+                sessionName,
+              })
+            )
+          }
+
+          const handle = yield* processMonitor.attach(panePid)
+          yield* processMonitor.pipeTmuxSession(handle, paneId)
           return handle
         })
 
@@ -142,8 +152,8 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
             const attachWithRetry = (attempt: number) =>
               attachSessionByName(name).pipe(
                 Effect.catchTag('TmuxSessionNotFoundError', (error) =>
-                  attempt < 5
-                    ? Effect.sleep(Duration.millis(100)).pipe(
+                  attempt < 12
+                    ? Effect.sleep(Duration.millis(250)).pipe(
                         Effect.flatMap(() => attachWithRetry(attempt + 1))
                       )
                     : Effect.fail(error)

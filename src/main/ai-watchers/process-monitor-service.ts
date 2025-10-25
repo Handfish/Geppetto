@@ -342,7 +342,7 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
             try: () =>
               Fs.createReadStream(fifoPath, {
                 encoding: 'utf8',
-                flags: 'r+',
+                flags: 'r',
               }),
             catch: (error) =>
               new ProcessMonitorError({
@@ -391,6 +391,7 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
           const cleanupEffect = Effect.gen(function* () {
             readStream.removeAllListeners()
             readStream.destroy()
+            info.tmuxPipe = undefined
             yield* runTmuxCommandVoid(
               ['pipe-pane', '-t', targetPane],
               handle.id,
@@ -408,7 +409,7 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
 
           // Capture existing pane output (best effort)
           const captured = yield* runTmuxCommandCapture(
-            ['capture-pane', '-pt', targetPane],
+            ['capture-pane', '-pt', targetPane, '-S', '-200'],
             handle.id,
             `Failed to capture tmux pane ${targetPane}`
           ).pipe(Effect.catchAll(() => Effect.succeed('')))
