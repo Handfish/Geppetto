@@ -18,7 +18,8 @@ const aiWatcherRuntime = Atom.runtime(AiWatcherClient.Default)
 
 /**
  * List all AI watchers
- * Refreshes every 5 seconds
+ * Refreshes every 30 seconds (reduced from 5s to minimize IPC spam)
+ * Use manual refresh via button or after actions for immediate updates
  */
 export const aiWatchersAtom = aiWatcherRuntime
   .atom(
@@ -29,12 +30,13 @@ export const aiWatchersAtom = aiWatcherRuntime
   )
   .pipe(
     Atom.withReactivity(['ai-watchers:list']),
-    Atom.setIdleTTL(Duration.seconds(5))
+    Atom.setIdleTTL(Duration.seconds(30))
   )
 
 /**
  * Get individual watcher by ID
- * Refreshes every 2 seconds
+ * Refreshes every 30 seconds (reduced from 2s to minimize IPC spam)
+ * Most watcher data is already in aiWatchersAtom - use that when possible
  */
 export const aiWatcherAtom = Atom.family((watcherId: string) =>
   aiWatcherRuntime
@@ -46,27 +48,34 @@ export const aiWatcherAtom = Atom.family((watcherId: string) =>
     )
     .pipe(
       Atom.withReactivity(['ai-watchers:watcher', watcherId]),
-      Atom.setIdleTTL(Duration.seconds(2))
+      Atom.setIdleTTL(Duration.seconds(30))
     )
 )
 
 /**
  * Get logs for a specific watcher
- * Refreshes every 3 seconds
+ * Manual refresh only - no auto-refresh TTL
+ * Components control refresh timing via useAtomRefresh
  */
 export const aiWatcherLogsAtom = Atom.family(
-  (params: { watcherId: string; limit?: number }) =>
-    aiWatcherRuntime
+  (params: { watcherId: string; limit?: number }) => {
+    console.log(`[aiWatcherLogsAtom] Creating atom for watcherId=${params.watcherId}, limit=${params.limit}`)
+
+    return aiWatcherRuntime
       .atom(
         Effect.gen(function* () {
+          console.log(`[aiWatcherLogsAtom] Effect running for watcherId=${params.watcherId}`)
           const client = yield* AiWatcherClient
-          return yield* client.getWatcherLogs(params.watcherId, params.limit)
+          const result = yield* client.getWatcherLogs(params.watcherId, params.limit)
+          console.log(`[aiWatcherLogsAtom] Got ${result.length} logs for watcherId=${params.watcherId}`)
+          return result
         })
       )
       .pipe(
-        Atom.withReactivity(['ai-watchers:logs', params.watcherId]),
-        Atom.setIdleTTL(Duration.seconds(3))
+        Atom.withReactivity(['ai-watchers:logs', params.watcherId])
+        // No TTL - manual refresh controlled by components
       )
+  }
 )
 
 /**

@@ -31,8 +31,7 @@ function cleanConfig<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return result
 }
 
-const LOG_REFRESH_SCHEDULE_MS = [2000, 5000, 15000] as const
-const LOG_REFRESH_MAX_INTERVAL_MS = 30000
+const LOG_REFRESH_INTERVAL_MS = 1000  // Simple 1-second refresh
 
 /**
  * Component to display logs for a watcher
@@ -46,44 +45,60 @@ function WatcherLogsDisplay({
 }) {
   const { logsResult, refreshLogs } = useWatcherLogs(watcherId, 50)
   const logsEndRef = useRef<HTMLDivElement>(null)
+  const renderCountRef = useRef(0)
+  const refreshCountRef = useRef(0)
 
-  // Auto-refresh logs with a backoff schedule if enabled
+  // Debug: Track renders
+  renderCountRef.current++
+  console.log(`[WatcherLogsDisplay ${watcherId}] Render #${renderCountRef.current}`, {
+    autoRefresh,
+    logsResultTag: logsResult._tag,
+    waiting: logsResult.waiting,
+  })
+
+  // Store refreshLogs in a ref to avoid recreating the effect
+  const refreshLogsRef = useRef(refreshLogs)
+  refreshLogsRef.current = refreshLogs
+
+  // Auto-refresh logs every 1 second if enabled
   useEffect(() => {
-    if (!autoRefresh) return
+    if (!autoRefresh) {
+      console.log(`[WatcherLogsDisplay ${watcherId}] Auto-refresh disabled, skipping`)
+      return
+    }
 
-    let timeoutId: number | undefined
+    console.log(`[WatcherLogsDisplay ${watcherId}] Starting auto-refresh (${LOG_REFRESH_INTERVAL_MS}ms interval)`)
+
+    let intervalId: number | undefined
     let cancelled = false
-    let scheduleIndex = 0
 
     const runRefresh = () => {
       if (cancelled) {
+        console.log(`[WatcherLogsDisplay ${watcherId}] Refresh cancelled`)
         return
       }
 
-      refreshLogs()
+      refreshCountRef.current++
+      console.log(`[WatcherLogsDisplay ${watcherId}] Calling refreshLogs #${refreshCountRef.current}`)
 
-      const delay =
-        scheduleIndex < LOG_REFRESH_SCHEDULE_MS.length
-          ? LOG_REFRESH_SCHEDULE_MS[scheduleIndex]
-          : LOG_REFRESH_MAX_INTERVAL_MS
-
-      scheduleIndex = Math.min(
-        scheduleIndex + 1,
-        LOG_REFRESH_SCHEDULE_MS.length
-      )
-
-      timeoutId = window.setTimeout(runRefresh, delay)
+      // Use the ref to call the latest refreshLogs
+      refreshLogsRef.current()
     }
 
+    // Initial refresh
     runRefresh()
 
+    // Set up interval for subsequent refreshes
+    intervalId = window.setInterval(runRefresh, LOG_REFRESH_INTERVAL_MS)
+
     return () => {
+      console.log(`[WatcherLogsDisplay ${watcherId}] Cleaning up auto-refresh effect`)
       cancelled = true
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId)
+      if (intervalId !== undefined) {
+        window.clearInterval(intervalId)
       }
     }
-  }, [autoRefresh, refreshLogs])
+  }, [autoRefresh, watcherId])  // ✅ Only depend on autoRefresh and watcherId
 
   // Auto-scroll to bottom when logs change
   useEffect(() => {
@@ -106,7 +121,24 @@ function WatcherLogsDisplay({
       </div>
       <div className="bg-gray-900 rounded p-2 max-h-64 overflow-y-auto text-xs font-mono">
         {Result.builder(logsResult)
-          .onInitial(() => <div className="text-gray-500">Loading logs...</div>)
+          .onInitial(() => (
+            <div className="text-gray-500">
+              {logsResult.waiting ? 'Loading logs...' : 'Ready to load logs'}
+            </div>
+          ))
+          .onErrorTag('AuthenticationError', error => (
+            <div className="text-red-400">
+              Authentication error: {error.message}
+            </div>
+          ))
+          .onErrorTag('NetworkError', error => (
+            <div className="text-red-400">Network error: {error.message}</div>
+          ))
+          .onErrorTag('NotFoundError', error => (
+            <div className="text-yellow-400">
+              Watcher not found: {error.message}
+            </div>
+          ))
           .onSuccess(value => {
             const logs = value as readonly LogEntry[]
             if (logs.length === 0) {
@@ -142,7 +174,7 @@ function WatcherLogsDisplay({
           })
           .onDefect(defect => (
             <div className="text-red-400">
-              Error loading logs: {String(defect)}
+              Unexpected error: {String(defect)}
             </div>
           ))
           .render()}
@@ -167,7 +199,7 @@ export function AiWatcherDevPanel() {
   const [expandedWatcherId, setExpandedWatcherId] = useState<string | null>(
     null
   )
-  const [autoRefreshLogs, setAutoRefreshLogs] = useState(false)
+  const [autoRefreshLogs, setAutoRefreshLogs] = useState(true)  // ✅ Auto-refresh ON by default
   const hasLoggedRef = useRef(false)
 
   // Log welcome message only once on mount

@@ -5,6 +5,7 @@ import {
   useAtomValue,
 } from '@effect-atom/atom-react'
 import { Result } from '@effect-atom/atom-react'
+import { useMemo, useRef, useCallback } from 'react'
 import type { AiWatcherConfig } from '../../shared/schemas/ai-watchers'
 import {
   aiWatchersAtom,
@@ -16,6 +17,12 @@ import {
   stopWatcherAtom,
   startWatcherAtom,
 } from '../atoms/ai-watcher-atoms'
+
+/**
+ * Rate limiter configuration for watcher logs
+ * Set to false to disable rate limiting (useful for debugging)
+ */
+const ENABLE_LOGS_RATE_LIMITER = false
 
 /**
  * Hook for AI watcher list management
@@ -87,10 +94,51 @@ export function useWatcher(watcherId: string) {
  *
  * Returns full Result for exhaustive error handling.
  * Use Result.builder in components to handle all states.
+ *
+ * IMPORTANT: Includes rate limiting to prevent IPC spam (max 1 request per 500ms)
  */
 export function useWatcherLogs(watcherId: string, limit?: number) {
-  const logsResult = useAtomValue(aiWatcherLogsAtom({ watcherId, limit }))
-  const refreshLogs = useAtomRefresh(aiWatcherLogsAtom({ watcherId, limit }))
+  console.log(`[useWatcherLogs] Called with watcherId=${watcherId}, limit=${limit}`)
+
+  // Memoize params to ensure stable atom identity
+  const params = useMemo(() => ({ watcherId, limit }), [watcherId, limit])
+
+  const logsResult = useAtomValue(aiWatcherLogsAtom(params))
+  const rawRefreshLogs = useAtomRefresh(aiWatcherLogsAtom(params))
+
+  // Store rawRefreshLogs in a ref to keep refreshLogs stable
+  const rawRefreshLogsRef = useRef(rawRefreshLogs)
+  rawRefreshLogsRef.current = rawRefreshLogs
+
+  // Optional rate limiting: prevent refreshLogs from being called more than once per 200ms
+  // This allows scheduled refreshes while preventing runaway spam
+  const lastRefreshTimeRef = useRef<number>(0)
+  const refreshLogs = useCallback(() => {
+    if (ENABLE_LOGS_RATE_LIMITER) {
+      const now = Date.now()
+      const timeSinceLastRefresh = now - lastRefreshTimeRef.current
+
+      if (timeSinceLastRefresh < 200) {
+        console.warn(
+          `[useWatcherLogs] RATE LIMITED - Attempted refresh only ${timeSinceLastRefresh}ms after last refresh (min 200ms). Ignoring.`
+        )
+        return
+      }
+
+      console.log(`[useWatcherLogs] Refresh allowed (${timeSinceLastRefresh}ms since last)`)
+      lastRefreshTimeRef.current = now
+    } else {
+      console.log(`[useWatcherLogs] Refresh (rate limiter disabled)`)
+    }
+
+    rawRefreshLogsRef.current()  // Use ref instead of closure
+  }, [])  // ✅ No dependencies - completely stable
+
+  console.log(`[useWatcherLogs] logsResult:`, {
+    tag: logsResult._tag,
+    waiting: logsResult.waiting,
+    dataLength: logsResult._tag === 'Success' ? (logsResult.value as any[]).length : 0,
+  })
 
   const logs = Result.getOrElse(logsResult, () => [])
 
@@ -99,7 +147,7 @@ export function useWatcherLogs(watcherId: string, limit?: number) {
     logsResult,
 
     // Actions
-    refreshLogs,
+    refreshLogs, // Rate-limited version
 
     // Computed convenience properties
     logs,

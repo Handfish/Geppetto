@@ -5,23 +5,11 @@
  * registerIpcHandler pattern for type-safe, boilerplate-free handler registration.
  */
 
-import { Effect, Duration, Request, Cache } from 'effect'
+import { Effect, Duration, Cache } from 'effect'
 import { AiWatcherIpcContracts } from '../../shared/ipc-contracts'
 import { AiWatcherService } from '../ai-watchers/ai-watcher-service'
 import { TmuxSessionManager } from '../ai-watchers/tmux-session-manager'
 import { registerIpcHandler } from './ipc-handler-setup'
-import type { LogEntry } from '../../shared/schemas/ai-watchers'
-
-/**
- * Request type for cached log fetching
- */
-interface GetLogsRequest extends Request.Request<readonly LogEntry[], never> {
-  readonly _tag: 'GetLogsRequest'
-  readonly watcherId: string
-  readonly limit?: number
-}
-
-const GetLogsRequest = Request.tagged<GetLogsRequest>('GetLogsRequest')
 
 /**
  * Setup AI Watcher IPC handlers
@@ -33,12 +21,16 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   /**
    * Create a cache for log requests with 1-second TTL
    * This throttles log fetching to at most once per second per watcher
+   * Cache key format: "watcherId:limit" (e.g., "abc123:50")
    */
   const logsCache = yield* Cache.make({
     capacity: 100,
     timeToLive: Duration.seconds(1),
-    lookup: (req: GetLogsRequest) =>
-      aiWatcherService.getLogs(req.watcherId, req.limit),
+    lookup: (key: string) => {
+      const [watcherId, limitStr] = key.split(':')
+      const limit = limitStr ? parseInt(limitStr, 10) : undefined
+      return aiWatcherService.getLogs(watcherId, limit)
+    },
   })
 
   // Create watcher
@@ -97,14 +89,10 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   )
 
   // Get watcher logs (throttled via cache - max once per second per watcher)
-  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:get-logs'], (input) =>
-    logsCache.get(
-      GetLogsRequest({
-        watcherId: input.watcherId,
-        limit: input.limit,
-      })
-    )
-  )
+  registerIpcHandler(AiWatcherIpcContracts['ai-watcher:get-logs'], (input) => {
+    const cacheKey = `${input.watcherId}:${input.limit ?? ''}`
+    return logsCache.get(cacheKey)
+  })
 
   // List tmux sessions
   registerIpcHandler(AiWatcherIpcContracts['ai-watcher:list-tmux'], () =>
