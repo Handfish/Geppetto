@@ -75,17 +75,35 @@ export class GitHubHttpService extends Effect.Service<GitHubHttpService>()(
           maxBackoffSeconds,
         } = config
 
+        console.log(`[GitHubHttpService] Creating rate limiters: ${requestsPerSecond} req/sec, ${requestsPerMinute} req/min`)
         const perSecondLimiter = yield* RateLimiter.make({
           limit: requestsPerSecond,
           interval: Duration.seconds(1),
         })
+        console.log('[GitHubHttpService] Per-second limiter created')
         const perMinuteLimiter = yield* RateLimiter.make({
           limit: requestsPerMinute,
           interval: Duration.minutes(1),
         })
+        console.log('[GitHubHttpService] Per-minute limiter created')
 
         const applyRateLimit = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-          perMinuteLimiter(perSecondLimiter(effect))
+          Effect.gen(function* () {
+            console.log('[applyRateLimit] Entering per-second limiter...')
+            const result = yield* perSecondLimiter(
+              Effect.gen(function* () {
+                console.log('[applyRateLimit] Passed per-second, entering per-minute limiter...')
+                return yield* perMinuteLimiter(
+                  Effect.gen(function* () {
+                    console.log('[applyRateLimit] Passed per-minute, executing effect...')
+                    return yield* effect
+                  })
+                )
+              })
+            )
+            console.log('[applyRateLimit] Effect completed')
+            return result
+          })
 
         const maxBackoffMillis = Duration.toMillis(
           Duration.seconds(maxBackoffSeconds)
@@ -115,16 +133,20 @@ export class GitHubHttpService extends Effect.Service<GitHubHttpService>()(
           schema: S.Schema<A, I, R>
         ): Effect.Effect<A, GitHubApiError, R> => {
           const requestEffect = Effect.gen(function* () {
+            console.log(`[makeAuthenticatedRequest] Starting request to ${endpoint}`)
+            console.log('[makeAuthenticatedRequest] Applying rate limit...')
             const response = yield* applyRateLimit(
               Effect.tryPromise({
-                try: () =>
-                  fetch(`https://api.github.com${endpoint}`, {
+                try: () => {
+                  console.log(`[makeAuthenticatedRequest] Making fetch to https://api.github.com${endpoint}`)
+                  return fetch(`https://api.github.com${endpoint}`, {
                     headers: {
                       Authorization: `Bearer ${token}`,
                       'User-Agent': 'GitHub-Desktop-Clone',
                       Accept: 'application/vnd.github.v3+json',
                     },
-                  }),
+                  })
+                },
                 catch: error =>
                   new GitHubApiError({
                     message:
@@ -133,6 +155,7 @@ export class GitHubHttpService extends Effect.Service<GitHubHttpService>()(
                   }),
               })
             )
+            console.log(`[makeAuthenticatedRequest] Received response, status: ${response.status}`)
 
             if (!response.ok) {
               const errorText = yield* Effect.tryPromise({
@@ -197,6 +220,7 @@ export class GitHubHttpService extends Effect.Service<GitHubHttpService>()(
               )
             }
 
+            console.log('[makeAuthenticatedRequest] Parsing JSON response...')
             const data = yield* Effect.tryPromise({
               try: () => response.json(),
               catch: error =>
@@ -208,8 +232,9 @@ export class GitHubHttpService extends Effect.Service<GitHubHttpService>()(
                   endpoint,
                 }),
             })
+            console.log('[makeAuthenticatedRequest] JSON parsed, validating schema...')
 
-            return yield* S.decodeUnknown(schema)(data).pipe(
+            const result = yield* S.decodeUnknown(schema)(data).pipe(
               Effect.mapError(
                 error =>
                   new GitHubApiError({
@@ -218,6 +243,8 @@ export class GitHubHttpService extends Effect.Service<GitHubHttpService>()(
                   })
               )
             )
+            console.log('[makeAuthenticatedRequest] Schema validation successful')
+            return result
           })
 
           return Effect.retry(requestEffect, apiRetrySchedule)

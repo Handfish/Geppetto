@@ -12,8 +12,12 @@ const providerRuntime = Atom.runtime(ProviderClient.Default)
 export const providerSignInAtom = Atom.family((provider: ProviderType) =>
   providerRuntime.fn(
     Effect.fnUntraced(function* () {
+      console.log(`[providerSignInAtom] Starting sign-in for ${provider}`)
       const client = yield* ProviderClient
-      return yield* client.signIn(provider)
+      console.log('[providerSignInAtom] Calling client.signIn...')
+      const result = yield* client.signIn(provider)
+      console.log('[providerSignInAtom] Sign-in completed:', result)
+      return result
     }),
     {
       reactivityKeys: [

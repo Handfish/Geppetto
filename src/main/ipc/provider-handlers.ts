@@ -18,7 +18,18 @@ export const setupProviderIpcHandlers = Effect.gen(function* () {
 
   // Sign in to provider
   registerIpcHandler(ProviderIpcContracts.signIn, (input) =>
-    providerService.signIn(input.provider)
+    Effect.gen(function* () {
+      console.log(`[IPC Handler] signIn called for provider: ${input.provider}`)
+      const result = yield* providerService.signIn(input.provider)
+      console.log(`[IPC Handler] signIn completed for provider: ${input.provider}`)
+      return result
+    }).pipe(
+      Effect.tapError((error) =>
+        Effect.sync(() => {
+          console.error(`[IPC Handler] signIn failed for provider: ${input.provider}`, error)
+        })
+      )
+    )
   )
 
   // Sign out from account

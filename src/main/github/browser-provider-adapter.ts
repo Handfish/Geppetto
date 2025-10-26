@@ -1,5 +1,6 @@
-import { Effect } from 'effect'
-import type { ProviderAdapter } from '../providers/ports'
+import { Effect, Layer } from 'effect'
+import type { VcsProviderPort } from '../providers/provider-port'
+import { VcsProviderTags } from '../providers/provider-port'
 import {
   ProviderAuthStatus,
   ProviderRepository,
@@ -23,6 +24,8 @@ import type { GitHubRepository } from '../../shared/schemas'
 import type { AccountId } from '../../shared/schemas/account-context'
 import { AccountLimitExceededError } from '../tier/tier-service'
 
+const PROVIDER: 'github' = 'github'
+
 /**
  * Map GitHub domain errors to Provider port errors
  * This preserves the hexagonal architecture by translating domain-specific
@@ -33,19 +36,19 @@ const mapGitHubAuthErrorToProviderError = (
 ): ProviderAuthenticationError | ProviderFeatureUnsupportedError => {
   if (error instanceof GitHubAuthError) {
     return new ProviderAuthenticationError({
-      provider: 'github',
+      provider: PROVIDER,
       message: error.message,
     })
   }
   if (error instanceof GitHubTokenExchangeError) {
     return new ProviderAuthenticationError({
-      provider: 'github',
+      provider: PROVIDER,
       message: `Token exchange failed: ${error.message}`,
     })
   }
   if (error instanceof GitHubApiError) {
     return new ProviderAuthenticationError({
-      provider: 'github',
+      provider: PROVIDER,
       message: error.message,
     })
   }
@@ -53,19 +56,19 @@ const mapGitHubAuthErrorToProviderError = (
     // Map tier limit errors to ProviderFeatureUnsupportedError
     // The IPC layer will handle mapping this to a tier-specific error for the UI
     return new ProviderFeatureUnsupportedError({
-      provider: 'github',
+      provider: PROVIDER,
       feature: 'multiple-accounts',
     })
   }
   if (error instanceof NotAuthenticatedError) {
     return new ProviderAuthenticationError({
-      provider: 'github',
+      provider: PROVIDER,
       message: error.message,
     })
   }
   // Fallback for unknown errors
   return new ProviderAuthenticationError({
-    provider: 'github',
+    provider: PROVIDER,
     message: error instanceof Error ? error.message : 'Unknown error',
   })
 }
@@ -75,19 +78,19 @@ const mapGitHubApiErrorToRepositoryError = (
 ): ProviderRepositoryError | ProviderAuthenticationError => {
   if (error instanceof NotAuthenticatedError) {
     return new ProviderAuthenticationError({
-      provider: 'github',
+      provider: PROVIDER,
       message: error.message,
     })
   }
   if (error instanceof GitHubApiError) {
     return new ProviderRepositoryError({
-      provider: 'github',
+      provider: PROVIDER,
       message: error.message,
     })
   }
   // Fallback for unknown errors
   return new ProviderRepositoryError({
-    provider: 'github',
+    provider: PROVIDER,
     message: error instanceof Error ? error.message : 'Unknown error',
   })
 }
@@ -96,7 +99,7 @@ const makeRepositoryMapper =
   (accountId: AccountId) =>
   (repo: GitHubRepository): ProviderRepository =>
     new ProviderRepository({
-      provider: 'github',
+      provider: PROVIDER,
       accountId,
       repositoryId: repo.id.toString(),
       owner: repo.owner.login,
@@ -117,70 +120,85 @@ const makeRepositoryMapper =
       raw: repo,
     })
 
-export class GitHubProviderAdapter extends Effect.Service<GitHubProviderAdapter>()(
-  'GitHubProviderAdapter',
-  {
-    dependencies: [GitHubAuthService.Default, GitHubApiService.Default],
-    effect: Effect.gen(function* () {
-      const authService = yield* GitHubAuthService
-      const apiService = yield* GitHubApiService
+/**
+ * GitHub provider adapter using standard OAuth flow with browser callback.
+ *
+ * HEXAGONAL ARCHITECTURE: This is an ADAPTER implementation of the VcsProviderPort.
+ * It can be hot-swapped with other implementations (mock, test, alternative auth, etc.)
+ */
 
-      const adapter: ProviderAdapter = {
-        provider: 'github',
-        supportsRepositories: true,
-        supportsIssues: true,
-        supportsPullRequests: true,
+// Register the provider tag
+const GitHubProviderTag = VcsProviderTags.register(PROVIDER)
 
-        signIn: () =>
-          Effect.gen(function* () {
-            const result = yield* authService.startAuthFlow
-            const providerUser = new ProviderUser({
-              provider: 'github',
-              providerUserId: result.user.id.toString(),
-              username: result.user.login,
-              displayName: result.user.name ?? undefined,
-              avatarUrl: result.user.avatar_url ?? undefined,
-              email: result.user.email ?? undefined,
-            })
+/**
+ * Live implementation of GitHub provider adapter as a Layer.
+ * This Layer provides the VcsProviderPort for GitHub.
+ */
+export const GitHubBrowserProviderAdapter = Layer.effect(
+  GitHubProviderTag,
+  Effect.gen(function* () {
+    const authService = yield* GitHubAuthService
+    const apiService = yield* GitHubApiService
 
-            return new ProviderSignInResult({
-              provider: 'github',
-              accountId: result.account.id,
-              user: providerUser,
-            })
-          }).pipe(
-            // Map all GitHub domain errors to Provider port errors
-            Effect.mapError(mapGitHubAuthErrorToProviderError)
-          ),
+    const adapter: VcsProviderPort = {
+      provider: PROVIDER,
+      supportsRepositories: true,
+      supportsIssues: true,
+      supportsPullRequests: true,
 
-        signOut: accountId =>
-          authService.signOutAccount(accountId).pipe(
-            Effect.mapError(mapGitHubAuthErrorToProviderError)
-          ),
+      signIn: () =>
+        Effect.gen(function* () {
+          const result = yield* authService.startAuthFlow
+          const providerUser = new ProviderUser({
+            provider: PROVIDER,
+            providerUserId: result.user.id.toString(),
+            username: result.user.login,
+            displayName: result.user.name ?? undefined,
+            avatarUrl: result.user.avatar_url ?? undefined,
+            email: result.user.email ?? undefined,
+          })
 
-        checkAuth: accountId =>
-          Effect.gen(function* () {
-            const status = yield* authService.checkAuthForAccount(accountId)
-            return new ProviderAuthStatus({
-              provider: 'github',
-              accountId,
-              authenticated: status.authenticated,
-            })
-          }).pipe(
-            Effect.mapError(mapGitHubAuthErrorToProviderError)
-          ),
+          return new ProviderSignInResult({
+            provider: PROVIDER,
+            accountId: result.account.id,
+            user: providerUser,
+          })
+        }).pipe(
+          // Map all GitHub domain errors to Provider port errors
+          Effect.mapError(mapGitHubAuthErrorToProviderError)
+        ),
 
-        getRepositories: accountId =>
-          Effect.gen(function* () {
-            const repositories = yield* apiService.getReposForAccount(accountId)
-            const mapRepo = makeRepositoryMapper(accountId)
-            return repositories.map(mapRepo)
-          }).pipe(
-            Effect.mapError(mapGitHubApiErrorToRepositoryError)
-          ),
-      }
+      signOut: accountId =>
+        authService.signOutAccount(accountId).pipe(
+          Effect.mapError(mapGitHubAuthErrorToProviderError)
+        ),
 
-      return adapter
-    }),
-  }
-) {}
+      checkAuth: accountId =>
+        Effect.gen(function* () {
+          const status = yield* authService.checkAuthForAccount(accountId)
+          return new ProviderAuthStatus({
+            provider: PROVIDER,
+            accountId,
+            authenticated: status.authenticated,
+          })
+        }).pipe(Effect.mapError(mapGitHubAuthErrorToProviderError)),
+
+      getRepositories: accountId =>
+        Effect.gen(function* () {
+          const repositories = yield* apiService.getReposForAccount(accountId)
+          const mapRepo = makeRepositoryMapper(accountId)
+          return repositories.map(mapRepo)
+        }).pipe(Effect.mapError(mapGitHubApiErrorToRepositoryError)),
+    }
+
+    return adapter
+  })
+).pipe(
+  // Dependencies are provided via Layer system
+  Layer.provide(
+    Layer.mergeAll(
+      GitHubAuthService.Default,
+      GitHubApiService.Default
+    )
+  )
+)

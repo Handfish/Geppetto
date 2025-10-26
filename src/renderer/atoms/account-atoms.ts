@@ -9,7 +9,8 @@ export const accountContextAtom = accountRuntime
   .atom(
     Effect.gen(function* () {
       const accountClient = yield* AccountClient
-      return yield* accountClient.getContext()
+      const context = yield* accountClient.getContext()
+      return context
     })
   )
   .pipe(Atom.withReactivity(['accounts:context']), Atom.keepAlive)

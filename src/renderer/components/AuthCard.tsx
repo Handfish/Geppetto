@@ -9,110 +9,66 @@ export function AuthCard() {
 
   // Show authenticated view if we have accounts
   if (isAuthenticated) {
-    return Result.builder(accountsResult)
-      .onInitial(() => (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <LoadingSpinner size="md" />
-        </div>
-      ))
-      .onErrorTag('AuthenticationError', error => (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <ErrorAlert error={error} action={
-            <button
-              className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500"
-              onClick={signIn}
-              type="button"
-            >
-              Retry Sign In
-            </button>
-          } />
-        </div>
-      ))
-      .onErrorTag('NetworkError', error => (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <ErrorAlert error={error} action={
-            <button
-              className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-500"
-              onClick={signIn}
-              type="button"
-            >
-              Retry
-            </button>
-          } />
-        </div>
-      ))
-      .onErrorTag('NotFoundError', error => (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <ErrorAlert error={error} />
-        </div>
-      ))
-      .onDefect(defect => (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <ErrorAlert message={String(defect)} />
-        </div>
-      ))
-      .onSuccess(accounts => {
-        const primaryAccount = accounts[0] ?? null
+    const accounts = Result.getOrElse(accountsResult, () => [])
+    const primaryAccount = accounts[0] ?? null
 
-        return (
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-4">
-                {primaryAccount?.avatarUrl ? (
-                  <img
-                    alt={primaryAccount.username}
-                    className="w-12 h-12 rounded-full"
-                    src={primaryAccount.avatarUrl}
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-gray-300">
-                    {primaryAccount?.username.slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <h3 className="text-white font-medium">
-                    {primaryAccount?.displayName ??
-                      primaryAccount?.username ??
-                      'Connected Account'}
-                  </h3>
-                  <p className="text-gray-400 text-sm">GitHub</p>
-                </div>
-                {primaryAccount && (
-                  <button
-                    className="ml-auto px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-                    onClick={() => signOut(primaryAccount.id)}
-                  >
-                    Sign Out
-                  </button>
-                )}
+    return (
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            {primaryAccount?.avatarUrl ? (
+              <img
+                alt={primaryAccount.username}
+                className="w-12 h-12 rounded-full"
+                src={primaryAccount.avatarUrl}
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-gray-300">
+                {primaryAccount?.username.slice(0, 2).toUpperCase()}
               </div>
-
-              {accounts.length > 1 && (
-                <div className="border-t border-gray-700 pt-4">
-                  <p className="text-gray-400 text-sm mb-2">Connected accounts</p>
-                  <div className="space-y-2">
-                    {accounts.map(account => (
-                      <div
-                        className="flex items-center justify-between text-sm text-gray-300 bg-gray-900/40 border border-gray-700/40 rounded-md px-3 py-2"
-                        key={account.id}
-                      >
-                        <span>{account.displayName ?? account.username}</span>
-                        <button
-                          className="text-red-400 hover:text-red-300"
-                          onClick={() => signOut(account.id)}
-                        >
-                          Disconnect
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+            )}
+            <div>
+              <h3 className="text-white font-medium">
+                {primaryAccount?.displayName ??
+                  primaryAccount?.username ??
+                  'Connected Account'}
+              </h3>
+              <p className="text-gray-400 text-sm">GitHub</p>
             </div>
+            {primaryAccount && (
+              <button
+                className="ml-auto px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                onClick={() => signOut(primaryAccount.id)}
+              >
+                Sign Out
+              </button>
+            )}
           </div>
-        )
-      })
-      .render()
+
+          {accounts.length > 1 && (
+            <div className="border-t border-gray-700 pt-4">
+              <p className="text-gray-400 text-sm mb-2">Connected accounts</p>
+              <div className="space-y-2">
+                {accounts.map(account => (
+                  <div
+                    className="flex items-center justify-between text-sm text-gray-300 bg-gray-900/40 border border-gray-700/40 rounded-md px-3 py-2"
+                    key={account.id}
+                  >
+                    <span>{account.displayName ?? account.username}</span>
+                    <button
+                      className="text-red-400 hover:text-red-300"
+                      onClick={() => signOut(account.id)}
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   // Show unauthenticated view

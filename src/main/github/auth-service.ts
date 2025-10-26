@@ -15,6 +15,9 @@ interface OAuthApp {
   removeListener(event: 'oauth-callback', listener: (url: string) => void): this
 }
 
+// Global flag to prevent concurrent sign-in attempts
+let isSignInInProgress = false
+
 export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
   'GitHubAuthService',
   {
@@ -35,6 +38,17 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
 
       return {
         startAuthFlow: Effect.gen(function* () {
+          // Prevent concurrent sign-in attempts
+          if (isSignInInProgress) {
+            console.log('[Auth] Sign-in already in progress, rejecting concurrent attempt')
+            return yield* Effect.fail(
+              new GitHubAuthError({
+                message: 'Sign-in already in progress',
+              })
+            )
+          }
+
+          isSignInInProgress = true
           console.log('[Auth] Starting GitHub OAuth flow')
           console.log('[Auth] Client ID:', clientId)
           console.log('[Auth] Redirect URI:', redirectUri)
@@ -48,10 +62,29 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
           console.log('[Auth] Opening browser to:', authUrl.toString())
           yield* Effect.sync(() => shell.openExternal(authUrl.toString()))
 
-          // Wait for OAuth callback via protocol handler
+          // Wait for OAuth callback via protocol handler (with 5 minute timeout)
           console.log('[Auth] Setting up oauth-callback listener...')
           const code = yield* Effect.async<string, GitHubAuthError>(resume => {
             let hasResolved = false
+
+            // Add timeout to prevent infinite waiting
+            const timeoutId = setTimeout(() => {
+              if (!hasResolved) {
+                console.error('[Auth] OAuth callback timeout (5 minutes)')
+                hasResolved = true
+                ;(app as unknown as OAuthApp).removeListener(
+                  'oauth-callback',
+                  handleCallback
+                )
+                resume(
+                  Effect.fail(
+                    new GitHubAuthError({
+                      message: 'OAuth callback timeout - no response received within 5 minutes',
+                    })
+                  )
+                )
+              }
+            }, 5 * 60 * 1000) // 5 minutes
 
             const handleCallback = (callbackUrl: string) => {
               console.log('[Auth] handleCallback called with:', callbackUrl)
@@ -82,6 +115,7 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
                 if (error) {
                   console.log('[Auth] OAuth error:', error)
                   hasResolved = true
+                  clearTimeout(timeoutId)
                   ;(app as unknown as OAuthApp).removeListener(
                     'oauth-callback',
                     handleCallback
@@ -99,6 +133,7 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
                 if (authCode) {
                   console.log('[Auth] Authorization code received:', authCode)
                   hasResolved = true
+                  clearTimeout(timeoutId)
                   ;(app as unknown as OAuthApp).removeListener(
                     'oauth-callback',
                     handleCallback
@@ -124,6 +159,7 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
             // Cleanup function
             return Effect.sync(() => {
               console.log('[Auth] Cleaning up oauth-callback listener')
+              clearTimeout(timeoutId)
               ;(app as unknown as OAuthApp).removeListener(
                 'oauth-callback',
                 handleCallback
@@ -153,8 +189,10 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
           const token = yield* httpService.exchangeCodeForToken(code)
           console.log('[Auth] Token received, fetching user...')
           const user = yield* httpService.fetchUser(token)
+          console.log('[Auth] User fetched successfully:', user.login)
 
           // Add account to AccountContext
+          console.log('[Auth] Adding account to context...')
           const account = yield* accountService.addAccount({
             provider: 'github',
             providerId: user.id.toString(),
@@ -162,21 +200,29 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
             displayName: user.name ?? undefined,
             avatarUrl: user.avatar_url ?? undefined,
           })
+          console.log('[Auth] Account added:', account.id)
 
           // Store token for this account
+          console.log('[Auth] Storing token for account...')
           yield* storeService.setAuthForAccount(
             account.id,
             Redacted.make(token)
           )
-
-          // Legacy: Also store in old format for backward compatibility
-          yield* storeService.setAuth(Redacted.make(token), user)
+          console.log('[Auth] Token stored successfully')
+          console.log('[Auth] Auth flow complete!')
 
           return { token: Redacted.make(token), user, account }
-        }),
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              console.log('[Auth] Clearing sign-in progress flag')
+              isSignInInProgress = false
+            })
+          )
+        ),
 
         /**
-         * Sign out - removes the active account (legacy behaviour)
+         * Sign out - removes the active account
          */
         signOut: Effect.gen(function* () {
           const activeAccount =
@@ -185,8 +231,6 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
             yield* storeService.clearAuthForAccount(activeAccount.id)
             yield* accountService.removeAccount(activeAccount.id)
           }
-          // Legacy cleanup
-          yield* storeService.clearAuth
         }),
 
         /**
@@ -199,7 +243,7 @@ export class GitHubAuthService extends Effect.Service<GitHubAuthService>()(
           }),
 
         /**
-         * Check authentication status for the active account (legacy)
+         * Check authentication status for the active account
          */
         checkAuth: Effect.gen(function* () {
           const activeAccount =

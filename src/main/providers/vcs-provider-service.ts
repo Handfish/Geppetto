@@ -10,8 +10,8 @@ import type {
   AccountId,
   ProviderType,
 } from '../../shared/schemas/account-context'
-import { ProviderRegistryService } from './registry'
-import type { ProviderRegistryPort } from './ports'
+import { ProviderRegistryService } from './provider-registry'
+import type { VcsProviderRegistryPort } from './provider-port'
 import { AccountContextService } from '../account/account-context-service'
 import { TierService } from '../tier/tier-service'
 
@@ -28,7 +28,7 @@ export class VcsProviderService extends Effect.Service<VcsProviderService>()(
       TierService.Default,
     ],
     effect: Effect.gen(function* () {
-      const registry: ProviderRegistryPort = yield* ProviderRegistryService
+      const registry: VcsProviderRegistryPort = yield* ProviderRegistryService
       const accountService = yield* AccountContextService
       const tierService = yield* TierService
 
@@ -36,7 +36,7 @@ export class VcsProviderService extends Effect.Service<VcsProviderService>()(
         Account.parseAccountId(accountId).provider
 
       return {
-        signIn: (provider: ProviderType): Effect.Effect<ProviderSignInResult> =>
+        signIn: (provider: ProviderType) =>
           Effect.gen(function* () {
             // Enforce tier-based feature availability
             if (provider !== 'github') {
@@ -48,7 +48,7 @@ export class VcsProviderService extends Effect.Service<VcsProviderService>()(
             return signInResult
           }),
 
-        signOut: (accountId: AccountId): Effect.Effect<void> =>
+        signOut: (accountId: AccountId) =>
           Effect.gen(function* () {
             const provider = resolveProvider(accountId)
             const adapter = yield* registry.getAdapter(provider)
@@ -62,7 +62,7 @@ export class VcsProviderService extends Effect.Service<VcsProviderService>()(
             yield* adapter.signOut(accountId)
           }),
 
-        checkAuth: (accountId: AccountId): Effect.Effect<ProviderAuthStatus> =>
+        checkAuth: (accountId: AccountId) =>
           Effect.gen(function* () {
             const provider = resolveProvider(accountId)
             const adapter = yield* registry.getAdapter(provider)
@@ -70,9 +70,7 @@ export class VcsProviderService extends Effect.Service<VcsProviderService>()(
             return yield* adapter.checkAuth(accountId)
           }),
 
-        getRepositories: (
-          accountId: AccountId
-        ): Effect.Effect<ReadonlyArray<ProviderRepository>> =>
+        getRepositories: (accountId: AccountId) =>
           Effect.gen(function* () {
             const provider = resolveProvider(accountId)
             const adapter = yield* registry.getAdapter(provider)
@@ -82,9 +80,7 @@ export class VcsProviderService extends Effect.Service<VcsProviderService>()(
             return repos
           }),
 
-        getRepositoriesByProvider: (
-          provider: ProviderType
-        ): Effect.Effect<ReadonlyArray<ProviderAccountRepositories>> =>
+        getRepositoriesByProvider: (provider: ProviderType) =>
           Effect.gen(function* () {
             const adapter = yield* registry.getAdapter(provider)
             const context = yield* accountService.getContext()

@@ -1,8 +1,8 @@
 import { Config } from 'effect'
 
 export const GitHubRateLimitDefaults = {
-  requestsPerSecond: 4,
-  requestsPerMinute: 60,
+  requestsPerSecond: 20,  // Increased from 4 to debug rate limit blocking
+  requestsPerMinute: 300,  // Increased from 60
   maxRetries: 5,
   backoffBaseMs: 250,
   maxBackoffSeconds: 30,

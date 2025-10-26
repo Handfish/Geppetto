@@ -15,6 +15,7 @@ import {
   type AccountStatus,
 } from '../../shared/schemas/account-context'
 import { TierService } from '../tier/tier-service'
+import { BroadcastService } from '../broadcast/broadcast-service'
 
 /**
  * Stored account context schema (auto-derived from AccountContext Schema)
@@ -28,9 +29,10 @@ type StoredAccountContext = S.Schema.Encoded<typeof AccountContext>
 export class AccountContextService extends Effect.Service<AccountContextService>()(
   'AccountContextService',
   {
-    dependencies: [TierService.Default],
+    dependencies: [TierService.Default, BroadcastService.Default],
     effect: Effect.gen(function* () {
       const tierService = yield* TierService
+      const broadcastService = yield* BroadcastService
 
       /**
        * Default empty context for initial store state
@@ -112,6 +114,10 @@ export class AccountContextService extends Effect.Service<AccountContextService>
                 lastModified: now,
               })
               saveContext(updatedContext)
+
+              // Broadcast to all windows
+              yield* broadcastService.broadcast('accounts:changed')
+
               return account
             }
 
@@ -127,6 +133,10 @@ export class AccountContextService extends Effect.Service<AccountContextService>
             })
 
             saveContext(updatedContext)
+
+            // Broadcast to all windows
+            yield* broadcastService.broadcast('accounts:changed')
+
             return account
           }),
 
@@ -151,10 +161,13 @@ export class AccountContextService extends Effect.Service<AccountContextService>
             })
 
             saveContext(updatedContext)
+
+            // Broadcast to all windows
+            yield* broadcastService.broadcast('accounts:changed')
           }),
 
         switchAccount: (accountId: AccountId) =>
-          Effect.sync(() => {
+          Effect.gen(function* () {
             const context = loadContext()
 
             if (!context.hasAccount(accountId)) {
@@ -168,6 +181,9 @@ export class AccountContextService extends Effect.Service<AccountContextService>
             })
 
             saveContext(updatedContext)
+
+            // Broadcast to all windows
+            yield* broadcastService.broadcast('accounts:changed')
           }),
 
         getActiveAccount: () =>

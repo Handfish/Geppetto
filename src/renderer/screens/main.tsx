@@ -33,8 +33,12 @@ import {
 } from '../lib/console-error-channel'
 import { WorkspaceSelector } from '../components/WorkspaceSelector'
 import { toast } from 'sonner'
+import { useCrossWindowSync } from '../hooks/useCrossWindowSync'
 
 export function MainScreen() {
+  // Enable cross-window state synchronization
+  useCrossWindowSync()
+
   const { accountsResult, activeAccount } =
     useProviderAuth('github')
 

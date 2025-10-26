@@ -111,11 +111,27 @@ export class ProviderClient extends Effect.Service<ProviderClient>()(
 
       return {
         signIn: (provider: SignInInput['provider']) =>
-          ipc.invoke('signIn', { provider }),
+          Effect.gen(function* () {
+            console.log('[ProviderClient] signIn called for provider:', provider)
+            const result = yield* ipc.invoke('signIn', { provider })
+            console.log('[ProviderClient] signIn completed successfully:', result)
+            return result
+          }).pipe(
+            Effect.tapError((error) =>
+              Effect.sync(() => {
+                console.error('[ProviderClient] signIn failed with error:', error)
+              })
+            )
+          ),
         checkAuth: (accountId: CheckAuthInput['accountId']) =>
           ipc.invoke('checkAuth', { accountId }),
         signOut: (accountId: SignOutInput['accountId']) =>
-          ipc.invoke('signOut', { accountId }),
+          Effect.gen(function* () {
+            console.log('[ProviderClient] signOut called for account:', accountId)
+            const result = yield* ipc.invoke('signOut', { accountId })
+            console.log('[ProviderClient] signOut completed')
+            return result
+          }),
         getAccountRepositories: (accountId: AccountReposInput['accountId']) =>
           ipc.invoke('getAccountRepositories', { accountId }),
         getProviderRepositories: (provider: ProviderReposInput['provider']) =>

@@ -6,16 +6,13 @@ import { GitHubAuthService } from './github/auth-service'
 import { GitHubApiService } from './github/api-service'
 import { GitHubHttpService } from './github/http-service'
 import { SecureStoreService } from './github/store-service'
-import { GitHubProviderAdapter } from './github/provider-adapter'
-import { GitLabProviderAdapter } from './gitlab/provider-adapter'
-import { BitbucketProviderAdapter } from './bitbucket/provider-adapter'
-import { GiteaProviderAdapter } from './gitea/provider-adapter'
+import { VcsAdaptersLayer } from './providers/adapters-layer'
 import { TierService } from './tier/tier-service'
 import { AccountContextService } from './account/account-context-service'
 import { setupAccountIpcHandlers } from './ipc/account-handlers'
 import { registerRoute } from '../lib/electron-router-dom'
 import { makeAppSetup } from '../lib/electron-app/factories/app/setup'
-import { ProviderRegistryService } from './providers/registry'
+import { ProviderRegistryService } from './providers/provider-registry'
 import { VcsProviderService } from './providers/vcs-provider-service'
 import { setupProviderIpcHandlers } from './ipc/provider-handlers'
 import { AiAccountContextService } from './ai/account-context-service'
@@ -42,6 +39,7 @@ import { WorkspaceService } from './workspace/workspace-service'
 import { setupWorkspaceIpcHandlers } from './ipc/workspace-handlers'
 import { AiWatchersLayer } from './ai-watchers'
 import { CoreInfrastructureLayer } from './core-infrastructure-layer'
+import { BroadcastService } from './broadcast/broadcast-service'
 
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
@@ -150,22 +148,29 @@ const MainLayer = Layer.mergeAll(
 
   // [FUTURE: CoreInfrastructureLayer] - NOW USING SHARED REFERENCE! ✅
   CoreInfrastructureLayer,                // ✅ MEMOIZED: All infrastructure services (Browser, Session, Store, Tier)
+  BroadcastService.Default,               // Cross-window state synchronization
 
-  // [FUTURE: VcsAdaptersLayer]
-  GitHubProviderAdapter.Default,          // Adapter: GitHub VCS provider
-  GitLabProviderAdapter.Default,          // Adapter: GitLab VCS provider
-  BitbucketProviderAdapter.Default,       // Adapter: Bitbucket VCS provider
-  GiteaProviderAdapter.Default,           // Adapter: Gitea VCS provider
-  SourceControlGitHubProviderAdapter.Default, // Adapter: GitHub source control provider
+  // [FUTURE: VcsAdaptersLayer] - NOW IMPLEMENTED! ✅
+  // Note: VcsAdaptersLayer is provided to VcsDomainLayer below
+  // This ensures adapters are available when domain services need them
 
-  // [FUTURE: VcsDomainLayer]
+  // [FUTURE: VcsDomainLayer] - NOW IMPLEMENTED with proper dependency injection! ✅
+  // These services require the VCS adapters, so we provide them via Layer.provide
+  Layer.provide(
+    Layer.mergeAll(
+      ProviderRegistryService.Default,      // Domain: VCS provider registry (captures adapters)
+      VcsProviderService.Default,           // Domain: VCS provider orchestration
+      ProviderFactoryService.Default,       // Domain: VCS provider factory
+    ),
+    VcsAdaptersLayer  // Provides all VCS adapters to services above
+  ),
+
+  // VCS domain services (these will be needed by adapters, so they're at top level)
   GitHubHttpService.Default,              // Domain: GitHub HTTP client
   GitHubAuthService.Default,              // Domain: GitHub OAuth flow
   GitHubApiService.Default,               // Domain: GitHub API operations
   AccountContextService.Default,          // Domain: Multi-account VCS management
-  ProviderRegistryService.Default,        // Domain: VCS provider registry
-  VcsProviderService.Default,             // Domain: VCS provider orchestration
-  ProviderFactoryService.Default,         // Domain: VCS provider factory
+  SourceControlGitHubProviderAdapter.Default, // Adapter: GitHub source control provider
 
   // [FUTURE: AiAdaptersLayer] - NOW IMPLEMENTED! ✅
   // Note: AiAdaptersLayer is provided to AiDomainLayer below
