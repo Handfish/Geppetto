@@ -1,20 +1,20 @@
 import { Effect, Layer } from 'effect'
-import { ProviderFeatureUnsupportedError } from '../providers/errors'
-import type { VcsProviderPort } from '../providers/provider-port'
-import { VcsProviderTags } from '../providers/provider-port'
+import { ProviderFeatureUnsupportedError } from '../errors'
+import type { VcsProviderPort } from '../provider-port'
+import { VcsProviderTags } from '../provider-port'
 
-const PROVIDER: 'gitea' = 'gitea'
+const PROVIDER: 'gitlab' = 'gitlab'
 
 /**
- * Stub adapter for Gitea integration.
+ * Stub adapter for GitLab integration.
  * Provides descriptive effect failures until the implementation lands.
  *
  * HEXAGONAL ARCHITECTURE: This is a STUB ADAPTER implementation of the VcsProviderPort.
- * It can be replaced with a real implementation when Gitea integration is ready.
+ * It can be replaced with a real implementation when GitLab integration is ready.
  */
 
 // Register the provider tag
-const GiteaProviderTag = VcsProviderTags.register(PROVIDER)
+const GitLabProviderTag = VcsProviderTags.register(PROVIDER)
 
 const unsupported = <A>(
   feature: string
@@ -27,11 +27,11 @@ const unsupported = <A>(
   )
 
 /**
- * Stub implementation of Gitea provider adapter as a Layer.
- * This Layer provides the VcsProviderPort for Gitea (stub).
+ * Stub implementation of GitLab provider adapter as a Layer.
+ * This Layer provides the VcsProviderPort for GitLab (stub).
  */
-export const GiteaBrowserProviderAdapter = Layer.succeed(
-  GiteaProviderTag,
+export const GitLabBrowserProviderAdapter = Layer.succeed(
+  GitLabProviderTag,
   {
     provider: PROVIDER,
     supportsRepositories: false,

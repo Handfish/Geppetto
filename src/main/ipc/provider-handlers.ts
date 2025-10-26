@@ -7,7 +7,7 @@
 
 import { Effect } from 'effect'
 import { ProviderIpcContracts } from '../../shared/ipc-contracts'
-import { VcsProviderService } from '../providers/vcs-provider-service'
+import { VcsProviderService } from '../vcs/vcs-provider-service'
 import { registerIpcHandler } from './ipc-handler-setup'
 
 /**

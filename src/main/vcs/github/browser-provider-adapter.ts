@@ -1,28 +1,28 @@
 import { Effect, Layer } from 'effect'
-import type { VcsProviderPort } from '../providers/provider-port'
-import { VcsProviderTags } from '../providers/provider-port'
+import type { VcsProviderPort } from '../provider-port'
+import { VcsProviderTags } from '../provider-port'
 import {
   ProviderAuthStatus,
   ProviderRepository,
   ProviderSignInResult,
   ProviderUser,
-} from '../../shared/schemas/provider'
+} from '../../../shared/schemas/provider'
 import {
   ProviderAuthenticationError,
   ProviderFeatureUnsupportedError,
   ProviderRepositoryError,
-} from '../providers/errors'
-import { GitHubAuthService } from './auth-service'
-import { GitHubApiService } from './api-service'
+} from '../errors'
+import { GitHubAuthService } from '../../github/auth-service'
+import { GitHubApiService } from '../../github/api-service'
 import {
   GitHubAuthError,
   GitHubTokenExchangeError,
   GitHubApiError,
   NotAuthenticatedError,
-} from './errors'
-import type { GitHubRepository } from '../../shared/schemas'
-import type { AccountId } from '../../shared/schemas/account-context'
-import { AccountLimitExceededError } from '../tier/tier-service'
+} from '../../github/errors'
+import type { GitHubRepository } from '../../../shared/schemas'
+import type { AccountId } from '../../../shared/schemas/account-context'
+import { AccountLimitExceededError } from '../../tier/tier-service'
 
 const PROVIDER: 'github' = 'github'
 

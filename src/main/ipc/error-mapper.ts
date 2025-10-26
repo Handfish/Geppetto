@@ -54,7 +54,7 @@ import {
   ProviderFeatureUnsupportedError,
   ProviderNotRegisteredError,
   ProviderRepositoryError,
-} from '../providers/errors'
+} from '../vcs/errors'
 import {
   AiProviderAuthenticationError,
   AiProviderFeatureUnsupportedError,

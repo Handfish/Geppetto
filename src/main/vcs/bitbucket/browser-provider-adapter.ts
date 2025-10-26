@@ -1,7 +1,7 @@
 import { Effect, Layer } from 'effect'
-import { ProviderFeatureUnsupportedError } from '../providers/errors'
-import type { VcsProviderPort } from '../providers/provider-port'
-import { VcsProviderTags } from '../providers/provider-port'
+import { ProviderFeatureUnsupportedError } from '../errors'
+import type { VcsProviderPort } from '../provider-port'
+import { VcsProviderTags } from '../provider-port'
 
 const PROVIDER: 'bitbucket' = 'bitbucket'
 

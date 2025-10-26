@@ -1,8 +1,8 @@
 import { Layer } from 'effect'
-import { GitHubBrowserProviderAdapter } from '../github/browser-provider-adapter'
-import { GitLabBrowserProviderAdapter } from '../gitlab/browser-provider-adapter'
-import { BitbucketBrowserProviderAdapter } from '../bitbucket/browser-provider-adapter'
-import { GiteaBrowserProviderAdapter } from '../gitea/browser-provider-adapter'
+import { GitHubBrowserProviderAdapter } from './github/browser-provider-adapter'
+import { GitLabBrowserProviderAdapter } from './gitlab/browser-provider-adapter'
+import { BitbucketBrowserProviderAdapter } from './bitbucket/browser-provider-adapter'
+import { GiteaBrowserProviderAdapter } from './gitea/browser-provider-adapter'
 
 /**
  * VcsAdaptersLayer - Hexagonal Architecture Adapter Layer
