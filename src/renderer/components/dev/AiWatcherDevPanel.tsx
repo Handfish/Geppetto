@@ -44,7 +44,7 @@ function WatcherLogsDisplay({
   autoRefresh: boolean
 }) {
   const { logsResult, refreshLogs } = useWatcherLogs(watcherId, 50)
-  const logsEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const renderCountRef = useRef(0)
   const refreshCountRef = useRef(0)
 
@@ -100,10 +100,20 @@ function WatcherLogsDisplay({
     }
   }, [autoRefresh, watcherId])  // ✅ Only depend on autoRefresh and watcherId
 
-  // Auto-scroll to bottom when logs change
+  // Auto-scroll to bottom when logs change (only if already at bottom)
   useEffect(() => {
-    if (logsResult._tag === 'Success') {
-      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (logsResult._tag !== 'Success') return
+
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    // Check if user was already scrolled to bottom (within 50px threshold)
+    const isNearBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight < 50
+
+    // Only auto-scroll if user was already at the bottom
+    if (isNearBottom) {
+      container.scrollTop = container.scrollHeight
     }
   }, [logsResult])
 
@@ -119,7 +129,11 @@ function WatcherLogsDisplay({
           ↻
         </button>
       </div>
-      <div className="bg-gray-900 rounded p-2 max-h-64 overflow-y-auto text-xs font-mono">
+      <div
+        ref={scrollContainerRef}
+        className="bg-gray-900 rounded p-2 max-h-64 overflow-y-auto text-xs font-mono"
+        style={{ overflowY: 'auto', maxHeight: '16rem' }}
+      >
         {Result.builder(logsResult)
           .onInitial(() => (
             <div className="text-gray-500">
@@ -168,7 +182,6 @@ function WatcherLogsDisplay({
                     {log.message}
                   </div>
                 ))}
-                <div ref={logsEndRef} />
               </div>
             )
           })
@@ -374,7 +387,7 @@ export function AiWatcherDevPanel() {
         </button>
       </div>
 
-      <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
+      <div className="p-4 space-y-4 max-h-96 overflow-y-auto" style={{ overflowY: 'auto' }}>
         {/* Tmux Sessions Section */}
         <div>
           <h4 className="text-sm font-semibold text-gray-300 mb-2">
