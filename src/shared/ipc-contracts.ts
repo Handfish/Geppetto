@@ -342,6 +342,243 @@ export const AiWatcherIpcContracts = {
 } as const
 
 /**
+ * Source Control IPC Contracts
+ */
+import {
+  Repository,
+  RepositoryId,
+  RepositoryMetadata,
+  RepositoryDiscoveryInfo,
+} from './schemas/source-control/repository'
+import {
+  CommitGraph,
+  GraphOptions,
+  GraphStatistics,
+  Commit,
+  CommitWithRefs,
+} from './schemas/source-control/commit-graph'
+import {
+  WorkingTree,
+  WorkingTreeStatus,
+  FileChange,
+  StashEntry,
+} from './schemas/source-control/working-tree'
+
+export const SourceControlIpcContracts = {
+  // Repository Management
+  'source-control:discover-repositories': {
+    channel: 'source-control:discover-repositories' as const,
+    input: S.Struct({
+      searchPaths: S.Array(S.String),
+    }),
+    output: S.Array(Repository),
+    errors: S.Union(NetworkError, GitOperationError),
+  },
+
+  'source-control:get-repository': {
+    channel: 'source-control:get-repository' as const,
+    input: S.Struct({
+      path: S.String,
+    }),
+    output: Repository,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:get-repository-by-id': {
+    channel: 'source-control:get-repository-by-id' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+    }),
+    output: Repository,
+    errors: S.Union(NotFoundError),
+  },
+
+  'source-control:refresh-repository': {
+    channel: 'source-control:refresh-repository' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+    }),
+    output: Repository,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:validate-repository': {
+    channel: 'source-control:validate-repository' as const,
+    input: S.Struct({
+      path: S.String,
+    }),
+    output: RepositoryDiscoveryInfo,
+    errors: S.Never,
+  },
+
+  'source-control:get-repository-metadata': {
+    channel: 'source-control:get-repository-metadata' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+    }),
+    output: RepositoryMetadata,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:get-all-repositories': {
+    channel: 'source-control:get-all-repositories' as const,
+    input: S.Void,
+    output: S.Array(Repository),
+    errors: S.Never,
+  },
+
+  'source-control:forget-repository': {
+    channel: 'source-control:forget-repository' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+    }),
+    output: S.Void,
+    errors: S.Never,
+  },
+
+  // Commit Graph Operations
+  'source-control:build-commit-graph': {
+    channel: 'source-control:build-commit-graph' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      options: S.optional(GraphOptions),
+    }),
+    output: CommitGraph,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:get-commit-graph-statistics': {
+    channel: 'source-control:get-commit-graph-statistics' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+    }),
+    output: GraphStatistics,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:get-commit': {
+    channel: 'source-control:get-commit' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      commitHash: S.String,
+    }),
+    output: Commit,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:get-commit-with-refs': {
+    channel: 'source-control:get-commit-with-refs' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      commitHash: S.String,
+    }),
+    output: CommitWithRefs,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:get-commit-history': {
+    channel: 'source-control:get-commit-history' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      branchName: S.String,
+      maxCount: S.optional(S.Number),
+    }),
+    output: S.Array(Commit),
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  // Working Tree Operations
+  'source-control:get-status': {
+    channel: 'source-control:get-status' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+    }),
+    output: WorkingTree,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:get-status-summary': {
+    channel: 'source-control:get-status-summary' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+    }),
+    output: WorkingTreeStatus,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:stage-files': {
+    channel: 'source-control:stage-files' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      paths: S.Array(S.String),
+    }),
+    output: WorkingTree,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:unstage-files': {
+    channel: 'source-control:unstage-files' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      paths: S.Array(S.String),
+    }),
+    output: WorkingTree,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:discard-changes': {
+    channel: 'source-control:discard-changes' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      paths: S.Array(S.String),
+    }),
+    output: WorkingTree,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:get-diff': {
+    channel: 'source-control:get-diff' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      path: S.String,
+      staged: S.optional(S.Boolean),
+    }),
+    output: S.String,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:create-stash': {
+    channel: 'source-control:create-stash' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      message: S.optional(S.String),
+      includeUntracked: S.optional(S.Boolean),
+    }),
+    output: S.String,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:list-stashes': {
+    channel: 'source-control:list-stashes' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+    }),
+    output: S.Array(StashEntry),
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:pop-stash': {
+    channel: 'source-control:pop-stash' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      stashIndex: S.optional(S.Number),
+    }),
+    output: WorkingTree,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+} as const
+
+/**
  * Combined IPC Contracts
  */
 export const IpcContracts = {
@@ -350,6 +587,7 @@ export const IpcContracts = {
   ...AiProviderIpcContracts,
   ...WorkspaceIpcContracts,
   ...AiWatcherIpcContracts,
+  ...SourceControlIpcContracts,
 } as const
 
 export type IpcContracts = typeof IpcContracts

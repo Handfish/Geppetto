@@ -59,25 +59,61 @@ This document tracks the implementation progress of the Git Tree feature for Gep
 - [ ] Refactor existing NodeGitCommandRunner to implement GitExecutorPort
 - [ ] Create adapter wrapper for backward compatibility
 
-### Week 2: Application Services & Basic Features ⏳ NOT STARTED
+### Week 2: Application Services & Basic Features ✅ COMPLETED
 
-#### Day 6-7: Repository Service
-- [ ] Implement RepositoryService with discovery and caching
-- [ ] Add repository state management
+#### Day 6-7: Repository Service ✅ COMPLETED
+- [x] Implement RepositoryService with discovery and caching
+- [x] Add repository state management
 
-#### Day 8-9: Commit Graph Service
-- [ ] Implement CommitGraphService with graph building
-- [ ] Add graph caching and incremental updates
+**Files Created:**
+- `src/main/source-control/services/repository-service.ts` - RepositoryManagementPort implementation with Ref-based caching
+- Features: Repository discovery, state management, branch/remote listing, metadata retrieval
 
-#### Day 10: File System Adapter
-- [ ] Create NodeFileSystemAdapter for repository discovery
-- [ ] Implement directory watching for auto-refresh
+**Completion Date:** 2025-10-26
 
-### Week 3: IPC Integration & Provider Abstraction ⏳ NOT STARTED
+#### Day 8-9: Commit Graph Service ✅ COMPLETED
+- [x] Implement CommitGraphService with graph building
+- [x] Add graph caching and incremental updates
 
-#### Day 11-12: IPC Contracts & Handlers
-- [ ] Define SourceControlIpcContracts
-- [ ] Create IPC handlers using registerIpcHandler pattern
+**Files Created:**
+- `src/main/source-control/services/commit-graph-service.ts` - CommitOperationsPort implementation with graph building
+- Features: Commit graph building with DAG construction, git log parsing, commit operations, Ref-based graph caching
+
+**Completion Date:** 2025-10-26
+
+#### Day 10: File System Adapter ✅ COMPLETED
+- [x] Create NodeFileSystemAdapter for repository discovery
+- [x] Implement directory watching for auto-refresh
+
+**Files Created:**
+- `src/main/source-control/adapters/file-system/node-file-system-adapter.ts` - FileSystemPort implementation using Node.js fs and chokidar
+- Features: Recursive repository discovery, directory watching with chokidar, file operations
+
+**Completion Date:** 2025-10-26
+
+### Week 3: IPC Integration & Provider Abstraction ⏳ IN PROGRESS
+
+#### Day 11-12: IPC Contracts & Handlers ✅ COMPLETED
+- [x] Define SourceControlIpcContracts
+- [x] Create IPC handlers using registerIpcHandler pattern
+- [x] Map source control domain errors to IPC errors
+
+**Files Created:**
+- `src/shared/schemas/source-control/repository.ts` - IPC-safe repository schemas
+- `src/shared/schemas/source-control/commit-graph.ts` - IPC-safe commit graph schemas
+- `src/shared/schemas/source-control/working-tree.ts` - IPC-safe working tree schemas
+- `src/shared/schemas/source-control/source-control-schemas.ts` - Schema exports
+- `src/shared/schemas/source-control/errors.ts` - Source control error schemas
+
+**Files Modified:**
+- `src/shared/ipc-contracts.ts` - Added SourceControlIpcContracts with 19 contract definitions
+- `src/main/ipc/error-mapper.ts` - Added source control domain error mapping
+
+**Files Created:**
+- `src/main/ipc/source-control-handlers.ts` - Type-safe IPC handlers with automatic validation
+- Features: 19 IPC handlers for repository, commit graph, and working tree operations
+
+**Completion Date:** 2025-10-26
 
 #### Day 13-14: Provider Port Abstraction
 - [ ] Create ProviderPort interface
@@ -414,21 +450,23 @@ This document tracks the implementation progress of the Git Tree feature for Gep
 
 ## Current Status Summary
 
-**Overall Progress:** 10% (Week 1, Day 1-4 completed)
+**Overall Progress:** 55% (11/20 days completed across Week 1-3)
 
 **Completed:**
 - ✅ Week 1, Day 1-2: Domain Model Setup (All value objects, entities, aggregates, and events)
 - ✅ Week 1, Day 3-4: Port Definitions (All primary and secondary ports)
+- ✅ Week 2, Day 6-7: Repository Service (RepositoryManagementPort implementation with caching)
+- ✅ Week 2, Day 8-9: Commit Graph Service (CommitOperationsPort with DAG graph building)
+- ✅ Week 2, Day 10: File System Adapter (NodeFileSystemAdapter with directory watching)
+- ✅ Week 3, Day 11-12: IPC Contracts & Handlers (SourceControlIpcContracts + 19 handlers + error mapping)
 
 **In Progress:**
-- ⏳ Week 1, Day 5: Infrastructure Refactoring (Next up)
+- ⏳ Week 3, Day 13-14: Provider Port Abstraction (Next up)
 
 **Not Started:**
-- Phase 1 (Remaining): Infrastructure Refactoring (Day 5)
-- Week 2: Application Services & Basic Features
-- Phase 2: Git Adapter Layer
-- Phase 3: Service Layer
-- Phase 4: IPC Integration
+- Week 1, Day 5: Infrastructure Refactoring (NodeGitCommandRunner wrapper)
+- Week 3, Day 15: Sync Service
+- Week 4: UI Integration & Testing (5 days)
 - Phase 5: Renderer Integration
 - Phase 6: Graph Visualization
 - Phase 7: Advanced Features

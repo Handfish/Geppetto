@@ -25,6 +25,20 @@ import {
   type GitCommandDomainError,
 } from '../../shared/schemas/source-control/errors'
 import {
+  RepositoryNotFoundError as DomainRepositoryNotFoundError,
+  InvalidRepositoryError,
+  RepositoryOperationError,
+} from '../source-control/domain/aggregates/repository'
+import {
+  GraphBuildError,
+  GraphUpdateError,
+} from '../source-control/domain/aggregates/commit-graph'
+import {
+  WorkingTreeError,
+  ConflictResolutionError,
+  StagingError,
+} from '../source-control/domain/aggregates/working-tree'
+import {
   GitHubAuthError,
   GitHubAuthTimeout,
   GitHubTokenExchangeError,
@@ -144,6 +158,19 @@ type AiWatcherDomainError =
 type GitDomainError = GitCommandDomainError
 
 /**
+ * Union of all source control domain errors
+ */
+type SourceControlDomainError =
+  | DomainRepositoryNotFoundError
+  | InvalidRepositoryError
+  | RepositoryOperationError
+  | GraphBuildError
+  | GraphUpdateError
+  | WorkingTreeError
+  | ConflictResolutionError
+  | StagingError
+
+/**
  * Type guard to check if an error is a tagged GitHub domain error
  */
 const isGitHubDomainError = (error: unknown): error is GitHubDomainError => {
@@ -215,6 +242,22 @@ const isAiWatcherDomainError = (error: unknown): error is AiWatcherDomainError =
     error instanceof DomainWatcherNotFoundError ||
     error instanceof TmuxSessionNotFoundError ||
     error instanceof TmuxCommandError
+  )
+}
+
+/**
+ * Type guard to check if an error is a source control domain error
+ */
+const isSourceControlDomainError = (error: unknown): error is SourceControlDomainError => {
+  return (
+    error instanceof DomainRepositoryNotFoundError ||
+    error instanceof InvalidRepositoryError ||
+    error instanceof RepositoryOperationError ||
+    error instanceof GraphBuildError ||
+    error instanceof GraphUpdateError ||
+    error instanceof WorkingTreeError ||
+    error instanceof ConflictResolutionError ||
+    error instanceof StagingError
   )
 }
 
@@ -468,6 +511,47 @@ export const mapDomainErrorToIpcError = (
           provider: error.provider,
           accountId: error.accountId,
           message: `AI account '${error.accountId}' could not be located.`,
+        }),
+      })
+    }
+  }
+
+  // Handle source control domain errors
+  if (isSourceControlDomainError(error)) {
+    // Repository not found errors
+    if (error instanceof DomainRepositoryNotFoundError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new NetworkError({
+          message: error.message ?? 'Repository not found',
+        }),
+      })
+    }
+
+    // Invalid repository errors (validation/structure issues)
+    if (error instanceof InvalidRepositoryError) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new ValidationError({
+          message: error.message ?? 'Invalid repository structure',
+          details: error.message,
+        }),
+      })
+    }
+
+    // All other source control errors map to GitOperationError
+    if (
+      error instanceof RepositoryOperationError ||
+      error instanceof GraphBuildError ||
+      error instanceof GraphUpdateError ||
+      error instanceof WorkingTreeError ||
+      error instanceof ConflictResolutionError ||
+      error instanceof StagingError
+    ) {
+      return Effect.succeed({
+        _tag: 'Error' as const,
+        error: new GitOperationError({
+          message: error.message ?? 'Source control operation failed',
         }),
       })
     }
