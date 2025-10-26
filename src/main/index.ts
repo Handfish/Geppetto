@@ -26,17 +26,16 @@ import { BrowserAuthService } from './ai/browser/browser-auth-service'
 import { CookieUsagePageAdapter } from './ai/browser/cookie-usage-page-adapter'
 import {
   GitCommandService,
-  NodeGitCommandRunner,
   RepositoryService,
   CommitGraphService,
   SyncService,
-  NodeFileSystemAdapter,
   SourceControlAdaptersLayer,
+  SourceControlProvidersAdaptersLayer,
   ProviderFactoryService,
   GitHubProviderAdapter as SourceControlGitHubProviderAdapter,
 } from './source-control'
 import { setupSourceControlIpcHandlers } from './ipc/source-control-handlers'
-import { WorkspaceService } from './workspace/workspace-service'
+import { WorkspaceDomainLayer } from './workspace/workspace-layer'
 import { setupWorkspaceIpcHandlers } from './ipc/workspace-handlers'
 import { AiWatchersLayer } from './ai-watchers'
 import { CoreInfrastructureLayer } from './core-infrastructure-layer'
@@ -46,157 +45,106 @@ import { BroadcastService } from './broadcast/broadcast-service'
 const PROTOCOL_SCHEME = 'geppetto'
 
 /**
- * FUTURE: Layer Separation Plan (ref: docs/effect_ports_migration_guide.md)
+ * MainLayer - Application-wide Effect Layer Composition
  *
- * Current MainLayer will be decomposed into hierarchical sublayers following
- * the Effectful Ports pattern, enabling:
- * - Port/Adapter separation (interfaces vs implementations)
- * - Hot-swappable adapters for testing and runtime flexibility
- * - Domain-based organization
- * - Cleaner dependency graphs
+ * This layer composes all services following Hexagonal Architecture with Effect.
+ * Services are organized by domain with proper dependency injection patterns.
  *
- * Planned structure:
+ * Architecture Patterns Used:
+ * 1. **Single Implementation Ports**: Infrastructure adapters (Git, FileSystem, Process)
+ *    - Use direct dependency injection via Layer.mergeAll
+ *    - Hot-swappable for testing (mock entire layer)
  *
- * 1. CoreAdaptersLayer - Infrastructure port implementations (bottom layer)
- *    - NodeGitCommandRunner (port: GitCommandRunner)
- *    - NodeFileSystemAdapter (port: FileSystemPort)
- *    - ElectronSessionService (port: SessionPort)
- *    Purpose: OS/platform-specific implementations, easily mockable
+ * 2. **Multiple Implementation Ports**: Provider adapters (AI, VCS)
+ *    - Use registry/factory pattern for dynamic selection
+ *    - Multiple active implementations (GitHub + GitLab + Bitbucket)
+ *    - Provided via Layer.provide to registry services
  *
- * 2. CoreInfrastructureLayer - Foundation services (depends on CoreAdaptersLayer)
- *    - SecureStoreService
- *    - TierService
- *    - BrowserAuthService
- *    - CookieUsagePageAdapter
- *    Purpose: Cross-cutting concerns used by all domains
+ * 3. **Layer Memoization**: Shared infrastructure via CoreInfrastructureLayer
+ *    - Single reference ensures services constructed once
+ *    - Prevents duplicate initialization
  *
- * 3. VcsAdaptersLayer - VCS provider port implementations
- *    - GitHubProviderAdapter (port: VcsProviderPort)
- *    - GitLabProviderAdapter (port: VcsProviderPort)
- *    - BitbucketProviderAdapter (port: VcsProviderPort)
- *    - GiteaProviderAdapter (port: VcsProviderPort)
- *    - SourceControlGitHubProviderAdapter (port: SourceControlProviderPort)
- *    Purpose: Swappable VCS backends, mockable for testing
- *
- * 4. VcsDomainLayer - VCS business logic (depends on VcsAdaptersLayer + CoreInfrastructureLayer)
- *    - GitHubHttpService
- *    - GitHubAuthService
- *    - GitHubApiService
- *    - AccountContextService
- *    - ProviderRegistryService
- *    - VcsProviderService
- *    - ProviderFactoryService
- *    Purpose: VCS domain operations and multi-account management
- *
- * 5. AiAdaptersLayer - AI provider port implementations
- *    - OpenAiBrowserProviderAdapter (port: AiProviderPort)
- *    - ClaudeBrowserProviderAdapter (port: AiProviderPort)
- *    Purpose: Swappable AI backends, mockable for testing
- *
- * 6. AiDomainLayer - AI business logic (depends on AiAdaptersLayer + CoreInfrastructureLayer)
- *    - AiAccountContextService
- *    - AiProviderRegistryService
- *    - AiProviderService
- *    - AiWatchersLayer
- *    Purpose: AI domain operations and session management
- *
- * 7. SourceControlDomainLayer - Git operations (depends on CoreAdaptersLayer + VcsDomainLayer)
- *    - GitCommandService
- *    - RepositoryService
- *    - CommitGraphService
- *    - SyncService
- *    Purpose: Local git repository operations and sync logic
- *
- * 8. WorkspaceDomainLayer - Workspace management (depends on all domain layers)
- *    - WorkspaceService
- *    Purpose: Orchestrates across all domains for workspace state
- *
- * Final composition will be:
- * ```typescript
- * const MainLayer = Layer.mergeAll(
- *   CoreAdaptersLayer,
- *   CoreInfrastructureLayer,
- *   VcsAdaptersLayer,
- *   VcsDomainLayer,
- *   AiAdaptersLayer,
- *   AiDomainLayer,
- *   SourceControlDomainLayer,
- *   WorkspaceDomainLayer
- * )
- * ```
- *
- * Benefits:
- * - Easier testing: Mock entire adapter layers (e.g., MockVcsAdaptersLayer for tests)
- * - Runtime flexibility: Swap adapters via Layer.provide for different environments
- * - Clear boundaries: Ports define contracts, adapters implement, services consume
- * - Parallel loading: Independent adapter layers can initialize concurrently
- * - Better IDE support: Smaller layer scopes improve type inference
- *
- * Migration approach:
- * 1. Identify ports (currently some services act as both port and adapter)
- * 2. Extract adapter implementations as separate Layer.succeed/Layer.effect
- * 3. Convert port interfaces to Effect.Service definitions
- * 4. Update dependent services to use port services via yield*
- * 5. Group layers by domain and dependency order
- * 6. Test each layer in isolation before composing
+ * For detailed architecture documentation, see:
+ * - docs/AI_ADAPTERS_HEXAGONAL_ARCHITECTURE.md
+ * - docs/SOURCE_CONTROL_HEXAGONAL_ARCHITECTURE.md
+ * - docs/AI_WATCHERS_LIFECYCLE.md
+ * - docs/VCS_PROVIDER_LIFECYCLE.md
  */
-
-// Current monolithic layer - TO BE DECOMPOSED
 const MainLayer = Layer.mergeAll(
-  // Source Control Adapters - Fully implemented with proper organization ✅
-  // Infrastructure adapters: Git execution (Node.js) + File system (Node.js)
-  SourceControlAdaptersLayer,             // Includes: NodeGitCommandRunner + NodeFileSystemAdapter
+  // ═══════════════════════════════════════════════════════════════════════
+  // INFRASTRUCTURE ADAPTERS (Single Implementation Pattern)
+  // ═══════════════════════════════════════════════════════════════════════
 
-  // Core Infrastructure - Shared services across all domains ✅
-  CoreInfrastructureLayer,                // ✅ MEMOIZED: All infrastructure services (Browser, Session, Store, Tier)
+  // Source Control Infrastructure: Git command execution + File system operations
+  SourceControlAdaptersLayer,             // NodeGitCommandRunner, NodeFileSystemAdapter
+
+  // Core Infrastructure: Shared services (memoized for performance)
+  CoreInfrastructureLayer,                // Browser, Session, Store, Tier services
   BroadcastService.Default,               // Cross-window state synchronization
 
-  // [FUTURE: VcsAdaptersLayer] - NOW IMPLEMENTED! ✅
-  // Note: VcsAdaptersLayer is provided to VcsDomainLayer below
-  // This ensures adapters are available when domain services need them
+  // ═══════════════════════════════════════════════════════════════════════
+  // VCS PROVIDER DOMAIN (Multiple Implementation Pattern with Registry)
+  // ═══════════════════════════════════════════════════════════════════════
 
-  // [FUTURE: VcsDomainLayer] - NOW IMPLEMENTED with proper dependency injection! ✅
-  // These services require the VCS adapters, so we provide them via Layer.provide
+  // VCS Provider Registry + Services (depends on VcsAdaptersLayer)
   Layer.provide(
     Layer.mergeAll(
-      ProviderRegistryService.Default,      // Domain: VCS provider registry (captures adapters)
-      VcsProviderService.Default,           // Domain: VCS provider orchestration
-      ProviderFactoryService.Default,       // Domain: VCS provider factory
+      ProviderRegistryService.Default,    // Registry: Manages VCS provider adapters
+      VcsProviderService.Default,         // Service: VCS provider orchestration
     ),
-    VcsAdaptersLayer  // Provides all VCS adapters to services above
+    VcsAdaptersLayer                      // Adapters: GitHub, GitLab, Bitbucket, Gitea
   ),
 
-  // VCS domain services (these will be needed by adapters, so they're at top level)
-  GitHubHttpService.Default,              // Domain: GitHub HTTP client
-  GitHubAuthService.Default,              // Domain: GitHub OAuth flow
-  GitHubApiService.Default,               // Domain: GitHub API operations
-  AccountContextService.Default,          // Domain: Multi-account VCS management
-  SourceControlGitHubProviderAdapter.Default, // Adapter: GitHub source control provider
+  // VCS Domain Services (used by adapters, so at top level)
+  GitHubHttpService.Default,              // GitHub HTTP client
+  GitHubAuthService.Default,              // GitHub OAuth flow
+  GitHubApiService.Default,               // GitHub API operations
+  AccountContextService.Default,          // Multi-account VCS management
+  SourceControlGitHubProviderAdapter.Default, // GitHub source control integration
 
-  // AI Provider Domain - Fully implemented with proper dependency injection ✅
-  // These services depend on AI provider adapters (OpenAI, Claude, Cursor)
+  // ═══════════════════════════════════════════════════════════════════════
+  // AI PROVIDER DOMAIN (Multiple Implementation Pattern with Registry)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // AI Provider Registry + Services (depends on AiAdaptersLayer)
   Layer.provide(
     Layer.mergeAll(
-      AiAccountContextService.Default,        // Domain: Multi-account AI management
-      AiProviderRegistryService.Default,      // Domain: AI provider registry (captures adapters)
-      AiProviderService.Default,              // Domain: AI provider orchestration
+      AiAccountContextService.Default,    // Multi-account AI management
+      AiProviderRegistryService.Default,  // Registry: Manages AI provider adapters
+      AiProviderService.Default,          // Service: AI provider orchestration
     ),
-    AiAdaptersLayer  // Provides: OpenAI, Claude, Cursor adapters
+    AiAdaptersLayer                       // Adapters: OpenAI, Claude, Cursor
   ),
 
-  // AI Watchers Domain - Independent, has its own adapters ✅
-  // Does NOT depend on AI provider adapters (OpenAI/Claude/Cursor)
-  // Has its own adapters: NodeProcessMonitor, TmuxSessionManager
-  AiWatchersLayer,  // Includes: WatcherAdaptersLayer + AiWatcherService
+  // ═══════════════════════════════════════════════════════════════════════
+  // AI WATCHERS DOMAIN (Single Implementation Pattern)
+  // ═══════════════════════════════════════════════════════════════════════
 
-  // [FUTURE: SourceControlDomainLayer]
-  GitCommandService.Default,              // Domain: Git command execution
-  RepositoryService.Default,              // Domain: Repository management
-  CommitGraphService.Default,             // Domain: Commit graph operations
-  SyncService.Default,                    // Domain: Repository sync logic
+  // AI Watchers (independent domain with own adapters)
+  AiWatchersLayer,                        // Process monitoring + Tmux session management
 
-  // [FUTURE: WorkspaceDomainLayer]
-  WorkspaceService.Default,               // Domain: Workspace orchestration
+  // ═══════════════════════════════════════════════════════════════════════
+  // SOURCE CONTROL DOMAIN (Hybrid: Single Infrastructure + Multiple Providers)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // Source Control Provider Factory (depends on SourceControlProvidersAdaptersLayer)
+  Layer.provide(
+    ProviderFactoryService.Default,       // Factory: Source control provider selection
+    SourceControlProvidersAdaptersLayer   // Adapters: GitHub, GitLab (future), Bitbucket (future)
+  ),
+
+  // Source Control Domain Services
+  GitCommandService.Default,              // Git command execution
+  RepositoryService.Default,              // Repository discovery and management
+  CommitGraphService.Default,             // Commit graph operations
+  SyncService.Default,                    // Repository synchronization
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // WORKSPACE DOMAIN (Orchestration Layer)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // Workspace orchestration across all domains
+  WorkspaceDomainLayer,                   // Workspace configuration and coordination
 )
 
 function createMainWindow() {
