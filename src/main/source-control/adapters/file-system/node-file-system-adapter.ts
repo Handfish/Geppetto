@@ -10,7 +10,6 @@ import {
   FileSystemError,
   FileNotFoundError,
   DirectoryNotFoundError,
-  PermissionDeniedError,
 } from '../../ports/secondary/file-system-port'
 
 /**
@@ -37,7 +36,12 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                   return new DirectoryNotFoundError({ path: basePath })
                 }
                 if ((error as NodeJS.ErrnoException)?.code === 'EACCES') {
-                  return new PermissionDeniedError({ path: basePath, operation: 'read' })
+                  return new FileSystemError({
+                    path: basePath,
+                    operation: 'read',
+                    reason: 'Permission denied',
+                    cause: error,
+                  })
                 }
                 return new FileSystemError({
                   path: basePath,
@@ -60,18 +64,24 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                 const entries = yield* Effect.tryPromise({
                   try: () => fs.readdir(dirPath, { withFileTypes: true }),
                   catch: (error: unknown) => {
-                    // Skip directories we can't read
-                    if ((error as NodeJS.ErrnoException)?.code === 'EACCES') {
-                      return [] as any[] // Return empty array to skip
-                    }
                     return new FileSystemError({
                       path: dirPath,
                       operation: 'readdir',
-                      reason: 'Failed to read directory',
+                      reason: (error as NodeJS.ErrnoException)?.code === 'EACCES'
+                        ? 'Permission denied'
+                        : 'Failed to read directory',
                       cause: error,
                     })
                   },
-                })
+                }).pipe(
+                  Effect.catchAll((error) => {
+                    // Skip directories we can't read (permission errors)
+                    if (error.reason === 'Permission denied') {
+                      return Effect.succeed([] as fsSync.Dirent[])
+                    }
+                    return Effect.fail(error)
+                  })
+                )
 
                 for (const entry of entries) {
                   const fullPath = path.join(dirPath, entry.name)
@@ -106,8 +116,15 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                 // Valid if .git exists as directory or file (worktree)
                 return stat.isDirectory() || stat.isFile()
               },
-              catch: () => false, // If .git doesn't exist, not a repo
-            })
+              catch: (error: unknown) => new FileSystemError({
+                path: gitDir,
+                operation: 'stat',
+                reason: 'Failed to check .git existence',
+                cause: error,
+              }),
+            }).pipe(
+              Effect.catchAll(() => Effect.succeed(false))
+            )
           }),
 
         /**
@@ -166,24 +183,15 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
         watchDirectory: (dirPath: string) =>
           Stream.asyncScoped<FileEvent, FileSystemError>((emit) =>
             Effect.gen(function* () {
-              let watcher: FSWatcher | undefined
-
-              const cleanup = Effect.sync(() => {
-                if (watcher) {
-                  watcher.close()
-                  watcher = undefined
-                }
-              })
-
-              yield* Effect.acquireRelease(
+              const watcher = yield* Effect.acquireRelease(
                 Effect.sync(() => {
-                  watcher = watch(dirPath, {
+                  const w = watch(dirPath, {
                     ignored: /(^|[/\\])\../, // Ignore dotfiles except the watched dir
                     persistent: true,
                     ignoreInitial: true,
                   })
 
-                  watcher.on('add', (filePath) => {
+                  w.on('add', (filePath) => {
                     emit.single({
                       type: 'added',
                       path: filePath,
@@ -191,7 +199,7 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                     })
                   })
 
-                  watcher.on('change', (filePath) => {
+                  w.on('change', (filePath) => {
                     emit.single({
                       type: 'changed',
                       path: filePath,
@@ -199,7 +207,7 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                     })
                   })
 
-                  watcher.on('unlink', (filePath) => {
+                  w.on('unlink', (filePath) => {
                     emit.single({
                       type: 'deleted',
                       path: filePath,
@@ -207,7 +215,7 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                     })
                   })
 
-                  watcher.on('error', (error) => {
+                  w.on('error', (error) => {
                     emit.fail(
                       new FileSystemError({
                         path: dirPath,
@@ -218,12 +226,16 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                     )
                   })
 
-                  return watcher
+                  return w
                 }),
-                cleanup
+                (w) => Effect.sync(() => {
+                  w.close()
+                })
               )
 
-              return cleanup
+              return Effect.sync(() => {
+                watcher.close()
+              })
             })
           ),
 
@@ -238,7 +250,12 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                 return new FileNotFoundError({ path: filePath })
               }
               if ((error as NodeJS.ErrnoException)?.code === 'EACCES') {
-                return new PermissionDeniedError({ path: filePath, operation: 'read' })
+                return new FileSystemError({
+                  path: filePath,
+                  operation: 'read',
+                  reason: 'Permission denied',
+                  cause: error,
+                })
               }
               return new FileSystemError({
                 path: filePath,
@@ -260,7 +277,12 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                 return new FileNotFoundError({ path: filePath })
               }
               if ((error as NodeJS.ErrnoException)?.code === 'EACCES') {
-                return new PermissionDeniedError({ path: filePath, operation: 'read' })
+                return new FileSystemError({
+                  path: filePath,
+                  operation: 'read',
+                  reason: 'Permission denied',
+                  cause: error,
+                })
               }
               return new FileSystemError({
                 path: filePath,
@@ -327,7 +349,12 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                   return new DirectoryNotFoundError({ path: dirPath })
                 }
                 if ((error as NodeJS.ErrnoException)?.code === 'EACCES') {
-                  return new PermissionDeniedError({ path: dirPath, operation: 'read' })
+                  return new FileSystemError({
+                    path: dirPath,
+                    operation: 'read',
+                    reason: 'Permission denied',
+                    cause: error,
+                  })
                 }
                 return new FileSystemError({
                   path: dirPath,
@@ -403,9 +430,3 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
   }
 ) {}
 
-/**
- * Default layer for NodeFileSystemAdapter
- */
-export const NodeFileSystemAdapterLive = NodeFileSystemAdapter.Default.pipe(
-  Effect.map((adapter) => adapter as FileSystemPort)
-)
