@@ -152,11 +152,37 @@ This document tracks the implementation progress of the Git Tree feature for Gep
 
 **Completion Date:** 2025-10-26
 
-### Week 4: UI Integration & Testing ⏳ NOT STARTED
+### Week 4: UI Integration & Testing ⏳ IN PROGRESS
 
-#### Day 16-17: Renderer Client & Atoms
-- [ ] Create SourceControlClient service
-- [ ] Build reactive atoms for repositories, graphs, and status
+#### Day 16-17: Renderer Client & Atoms ✅ COMPLETED
+- [x] Create SourceControlClient service
+- [x] Build reactive atoms for repositories, graphs, and status
+- [x] Create custom React hooks
+
+**Files Created:**
+- `src/renderer/lib/source-control-client.ts` - Type-safe renderer client for source control IPC operations
+- `src/renderer/atoms/source-control-atoms.ts` - Reactive state atoms for source control data
+- `src/renderer/hooks/useSourceControl.ts` - Custom React hooks for source control operations
+
+**Features:**
+- **SourceControlClient**: 19 type-safe methods wrapping IPC contracts
+  - Repository management (discover, get, refresh, validate, metadata, forget)
+  - Commit graph operations (build, statistics, get commit, history)
+  - Working tree operations (status, stage, unstage, discard, diff, stash)
+- **Atoms**: 20+ reactive atoms with automatic caching and invalidation
+  - Repository atoms (all, by path, by ID, metadata)
+  - Commit graph atoms (graph, statistics, commits, history)
+  - Working tree atoms (status, summary, stashes)
+  - Mutation atoms (refresh, stage, unstage, discard, stash operations)
+  - Reactivity keys for cache invalidation
+  - TTL-based caching (5s-10min depending on data type)
+- **Custom Hooks**: 20+ React hooks following Result.builder pattern
+  - All hooks return full Results for exhaustive error handling
+  - Convenience properties for common use cases
+  - Computed loading states
+  - Refresh functions for manual cache invalidation
+
+**Completion Date:** 2025-10-26
 
 #### Day 18-19: UI Components
 - [ ] Build RepositoryExplorer component
@@ -478,9 +504,9 @@ This document tracks the implementation progress of the Git Tree feature for Gep
 
 ## Current Status Summary
 
-**Overall Progress:** 70% (14/20 days completed across Week 1-3)
+**Overall Progress:** 80% (16/20 days completed across Week 1-4)
 
-**Week 3 Complete! ✅**
+**Week 1-3 Complete! ✅**
 
 **Completed:**
 - ✅ Week 1, Day 1-2: Domain Model Setup (All value objects, entities, aggregates, and events)
@@ -491,14 +517,13 @@ This document tracks the implementation progress of the Git Tree feature for Gep
 - ✅ Week 3, Day 11-12: IPC Contracts & Handlers (SourceControlIpcContracts + 19 handlers + error mapping)
 - ✅ Week 3, Day 13-14: Provider Port Abstraction (GitHub adapter + ProviderFactory)
 - ✅ Week 3, Day 15: Sync Service (Remote operations + provider sync)
+- ✅ Week 4, Day 16-17: Renderer Client & Atoms (Client, atoms, hooks)
 
 **In Progress:**
-- ⏳ Week 4: UI Integration & Testing (Next up - 5 days remaining)
+- ⏳ Week 4, Day 18-19: UI Components (Next up)
 
 **Not Started:**
 - Week 1, Day 5: Infrastructure Refactoring (NodeGitCommandRunner wrapper - optional, can be skipped)
-- Week 4, Day 16-17: Renderer Client & Atoms
-- Week 4, Day 18-19: UI Components
 - Week 4, Day 20: Testing Setup
 
 **Blocked:** None
@@ -506,7 +531,8 @@ This document tracks the implementation progress of the Git Tree feature for Gep
 **Notes:**
 - Week 1, 2, and 3 core implementation complete
 - Backend services and IPC layer fully functional
-- Ready for frontend integration in Week 4
+- Frontend integration in progress (Client, atoms, hooks complete)
+- Ready for UI components implementation
 
 ---
 
