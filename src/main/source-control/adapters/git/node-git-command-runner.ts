@@ -12,19 +12,19 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import type {
   GitCommandExecutionHandle,
   GitCommandRunnerPort,
-} from './ports'
+} from '../../ports'
 import {
   GitCommandEvent,
   GitCommandRequest,
   GitCommandResult,
-} from '../../shared/schemas/source-control'
+} from '../../../../shared/schemas/source-control'
 import {
   GitCommandFailedError,
   GitCommandSpawnError,
   GitCommandTimeoutError,
   GitExecutableUnavailableError,
   type GitCommandDomainError,
-} from '../../shared/schemas/source-control/errors'
+} from '../../../../shared/schemas/source-control/errors'
 
 /**
  * Node.js implementation of the GitCommandRunnerPort.

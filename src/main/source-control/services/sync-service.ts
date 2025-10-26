@@ -1,5 +1,5 @@
 import { Effect, Scope, Stream, pipe } from 'effect'
-import { NodeGitCommandRunner } from '../node-git-command-runner'
+import { NodeGitCommandRunner } from '../adapters/git/node-git-command-runner'
 import { ProviderFactoryService } from '../adapters/providers/provider-factory-service'
 import { RepositoryService } from './repository-service'
 import { RepositoryId, RepositoryNotFoundError } from '../domain/aggregates/repository'

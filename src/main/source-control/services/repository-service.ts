@@ -1,7 +1,7 @@
 import { Effect, Ref, Stream, Scope, Schema as S } from 'effect'
 import { RepositoryManagementPort } from '../ports/primary/repository-management-port'
 import { NodeFileSystemAdapter } from '../adapters/file-system/node-file-system-adapter'
-import { NodeGitCommandRunner } from '../node-git-command-runner'
+import { NodeGitCommandRunner } from '../adapters/git/node-git-command-runner'
 import {
   Repository,
   RepositoryId,

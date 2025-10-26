@@ -68,8 +68,8 @@ export const fetchUsagePageWithBrowser = (
         console.log(`[BrowserUsageFetch] Cookie domains (first 10):`, domains)
         return cookies.length
       },
-      catch: () => 0,
-    })
+      catch: (error) => new Error(`Failed to get cookies: ${String(error)}`),
+    }).pipe(Effect.catchAll(() => Effect.succeed(0)))
 
     if (cookieCount === 0) {
       yield* Effect.fail(
@@ -224,8 +224,8 @@ export const fetchUsagePageWithBrowser = (
             )
             return false
           },
-          catch: () => false,
-        })
+          catch: (error) => new Error(`Failed to check data loading: ${String(error)}`),
+        }).pipe(Effect.catchAll(() => Effect.succeed(false)))
 
         if (dataLoaded) {
           yield* Console.log(`[BrowserUsageFetch] Data loaded successfully`)

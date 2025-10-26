@@ -31,6 +31,7 @@ import {
   CommitGraphService,
   SyncService,
   NodeFileSystemAdapter,
+  SourceControlAdaptersLayer,
   ProviderFactoryService,
   GitHubProviderAdapter as SourceControlGitHubProviderAdapter,
 } from './source-control'
@@ -142,11 +143,11 @@ const PROTOCOL_SCHEME = 'geppetto'
 
 // Current monolithic layer - TO BE DECOMPOSED
 const MainLayer = Layer.mergeAll(
-  // [FUTURE: CoreAdaptersLayer]
-  NodeGitCommandRunner.Default,           // Adapter: GitCommandRunner port
-  NodeFileSystemAdapter.Default,          // Adapter: FileSystemPort
+  // Source Control Adapters - Fully implemented with proper organization ✅
+  // Infrastructure adapters: Git execution (Node.js) + File system (Node.js)
+  SourceControlAdaptersLayer,             // Includes: NodeGitCommandRunner + NodeFileSystemAdapter
 
-  // [FUTURE: CoreInfrastructureLayer] - NOW USING SHARED REFERENCE! ✅
+  // Core Infrastructure - Shared services across all domains ✅
   CoreInfrastructureLayer,                // ✅ MEMOIZED: All infrastructure services (Browser, Session, Store, Tier)
   BroadcastService.Default,               // Cross-window state synchronization
 

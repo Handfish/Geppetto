@@ -1,7 +1,7 @@
 import { Effect, Ref, Schema as S } from 'effect'
 import { CommitOperationsPort, CommitOptions, CherryPickOptions, RevertOptions } from '../ports/primary/commit-operations-port'
 import { RepositoryService } from './repository-service'
-import { NodeGitCommandRunner } from '../node-git-command-runner'
+import { NodeGitCommandRunner } from '../adapters/git/node-git-command-runner'
 import {
   CommitGraph,
   GraphOptions,

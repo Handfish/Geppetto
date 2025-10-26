@@ -5,7 +5,7 @@ import type {
   GitCommandResult,
 } from '../../shared/schemas/source-control'
 import type { GitCommandDomainError } from '../../shared/schemas/source-control/errors'
-import { NodeGitCommandRunner } from './node-git-command-runner'
+import { NodeGitCommandRunner } from './adapters/git/node-git-command-runner'
 import type { GitCommandExecutionHandle } from './ports'
 
 /**
