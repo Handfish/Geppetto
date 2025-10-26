@@ -1,7 +1,7 @@
 import { Effect, Ref, Schema as S } from 'effect'
 import { CommitOperationsPort, CommitOptions, CherryPickOptions, RevertOptions } from '../ports/primary/commit-operations-port'
-import { RepositoryManagementPort } from '../ports/primary/repository-management-port'
-import type { GitCommandRunnerPort } from '../ports'
+import { RepositoryService } from './repository-service'
+import { NodeGitCommandRunner } from '../node-git-command-runner'
 import {
   CommitGraph,
   GraphOptions,
@@ -40,8 +40,8 @@ import {
  */
 export class CommitGraphService extends Effect.Service<CommitGraphService>()('CommitGraphService', {
   effect: Effect.gen(function* () {
-    const gitRunner = yield* Effect.Tag<GitCommandRunnerPort>()('GitCommandRunnerPort')
-    const repoService = yield* RepositoryManagementPort
+    const gitRunner = yield* NodeGitCommandRunner
+    const repoService = yield* RepositoryService
 
     // Cache for commit graphs
     const graphCache = yield* Ref.make(new Map<string, { graph: CommitGraph; timestamp: number }>())
@@ -710,5 +710,5 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
     return port
   }),
-  dependencies: [Effect.Tag<GitCommandRunnerPort>()('GitCommandRunnerPort'), RepositoryManagementPort],
+  dependencies: [NodeGitCommandRunner.Default, RepositoryService.Default],
 }) {}

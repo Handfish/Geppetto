@@ -237,6 +237,20 @@ This document tracks the implementation progress of the Git Tree feature for Gep
 
 **Completion Date:** 2025-10-26
 
+**Developer Console Integration:**
+- `src/renderer/components/dev/SourceControlDevPanel.tsx` - Developer panel for source control testing
+- `src/renderer/App.tsx` - Integrated SourceControlDevPanel into developer console
+
+**Integration Features:**
+- Tabbed interface (Repositories, Commits, Branches, Status)
+- Repository selection and switching
+- Console API: `window.__DEV_SOURCE_CONTROL__`
+- Side-by-side with AI Watcher dev panel
+- Collapsible floating panel
+- Auto-refresh support for status
+
+**Completion Date:** 2025-10-26
+
 #### Day 20: Testing Setup
 - [ ] Unit tests for services with mock ports
 - [ ] Integration tests for adapters
@@ -580,6 +594,7 @@ This document tracks the implementation progress of the Git Tree feature for Gep
 **Notes:**
 - **Week 1, 2, and 3 complete** - Backend architecture fully functional
 - **Week 4 UI integration complete** - All UI components implemented
+- **Developer Console integration complete** - Source control UI integrated into dev panel
 - **Full end-to-end implementation** from domain to UI ready
 - Testing setup remains optional
 

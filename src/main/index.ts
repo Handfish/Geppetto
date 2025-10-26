@@ -31,7 +31,14 @@ import { CookieUsagePageAdapter } from './ai/browser/cookie-usage-page-adapter'
 import {
   GitCommandService,
   NodeGitCommandRunner,
+  RepositoryService,
+  CommitGraphService,
+  SyncService,
+  NodeFileSystemAdapter,
+  ProviderFactoryService,
+  GitHubProviderAdapter as SourceControlGitHubProviderAdapter,
 } from './source-control'
+import { setupSourceControlIpcHandlers } from './ipc/source-control-handlers'
 import { WorkspaceService } from './workspace/workspace-service'
 import { setupWorkspaceIpcHandlers } from './ipc/workspace-handlers'
 import { AiWatchersLayer } from './ai-watchers'
@@ -62,6 +69,12 @@ const MainLayer = Layer.mergeAll(
   AiProviderService.Default,
   NodeGitCommandRunner.Default,
   GitCommandService.Default,
+  NodeFileSystemAdapter.Default,
+  SourceControlGitHubProviderAdapter.Default,
+  ProviderFactoryService.Default,
+  RepositoryService.Default,
+  CommitGraphService.Default,
+  SyncService.Default,
   WorkspaceService.Default,
   AiWatchersLayer
 )
@@ -165,6 +178,7 @@ app.whenReady().then(async () => {
       yield* setupProviderIpcHandlers
       yield* setupAiProviderIpcHandlers
       yield* setupAiWatcherIpcHandlers
+      yield* setupSourceControlIpcHandlers
       yield* setupWorkspaceIpcHandlers
     }).pipe(Effect.provide(MainLayer))
   )

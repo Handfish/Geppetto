@@ -8,6 +8,7 @@ import { ToastViewport } from './components/ui/ToastViewport'
 import { ErrorTester } from './components/dev/ErrorTester'
 import { AiWatcherDevPanel } from './components/dev/AiWatcherDevPanel'
 import { WorkspaceSelector } from './components/WorkspaceSelector'
+import { SourceControlDevPanel } from './components/dev/SourceControlDevPanel'
 
 export function App() {
   const { isAuthenticated } = useProviderAuth('github')
@@ -16,7 +17,12 @@ export function App() {
     <div className="min-h-screen bg-gray-900 p-6 relative">
       <ToastViewport />
       <WorkspaceSelector />
-      {process.env.NODE_ENV === 'development' && <AiWatcherDevPanel />}
+      {process.env.NODE_ENV === 'development' && (
+        <>
+          <AiWatcherDevPanel />
+          <SourceControlDevPanel />
+        </>
+      )}
       <div className="max-w-6xl mx-auto space-y-8">
         <header className="space-y-4">
           <div className="flex items-center justify-center">

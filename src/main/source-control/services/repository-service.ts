@@ -1,7 +1,7 @@
 import { Effect, Ref, Stream, Scope, Schema as S } from 'effect'
 import { RepositoryManagementPort } from '../ports/primary/repository-management-port'
-import { FileSystemPort } from '../ports/secondary/file-system-port'
-import type { GitCommandRunnerPort } from '../ports'
+import { NodeFileSystemAdapter } from '../adapters/file-system/node-file-system-adapter'
+import { NodeGitCommandRunner } from '../node-git-command-runner'
 import {
   Repository,
   RepositoryId,
@@ -38,8 +38,8 @@ import { RepositoryDiscovered, RepositoryRefreshed } from '../domain/events/repo
  */
 export class RepositoryService extends Effect.Service<RepositoryService>()('RepositoryService', {
   effect: Effect.gen(function* () {
-    const gitRunner = yield* Effect.Tag<GitCommandRunnerPort>()('GitCommandRunnerPort')
-    const fileSystem = yield* FileSystemPort
+    const gitRunner = yield* NodeGitCommandRunner
+    const fileSystem = yield* NodeFileSystemAdapter
 
     // Cache for discovered repositories
     const repositoryCache = yield* Ref.make(new Map<string, Repository>())
@@ -609,5 +609,5 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
 
     return port
   }),
-  dependencies: [Effect.Tag<GitCommandRunnerPort>()('GitCommandRunnerPort'), FileSystemPort],
+  dependencies: [NodeGitCommandRunner.Default, NodeFileSystemAdapter.Default],
 }) {}

@@ -147,7 +147,8 @@ export function RepositoryExplorer({
         .onSuccess((data) => {
           const repositories = data.value
 
-          if (repositories.length === 0) {
+          // Safety check in case data.value is undefined
+          if (!repositories || repositories.length === 0) {
             return (
               <div className="text-center py-12">
                 <p className="text-gray-400 mb-4">No repositories found</p>

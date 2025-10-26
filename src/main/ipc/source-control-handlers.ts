@@ -1,12 +1,14 @@
 import { Effect } from 'effect'
 import { registerIpcHandler } from './ipc-handler-setup'
 import { SourceControlIpcContracts } from '../../shared/ipc-contracts'
-import { RepositoryManagementPort } from '../source-control/ports/primary/repository-management-port'
-import { CommitOperationsPort } from '../source-control/ports/primary/commit-operations-port'
+import { RepositoryService } from '../source-control/services/repository-service'
+import { CommitGraphService } from '../source-control/services/commit-graph-service'
 import { makeCommitHash } from '../source-control/domain/value-objects/commit-hash'
 import { makeBranchName } from '../source-control/domain/value-objects/branch-name'
 import { RepositoryId as DomainRepositoryId } from '../source-control/domain/aggregates/repository'
 import { GraphOptions as DomainGraphOptions } from '../source-control/domain/aggregates/commit-graph'
+import type { RepositoryManagementPort } from '../source-control/ports/primary/repository-management-port'
+import type { CommitOperationsPort } from '../source-control/ports/primary/commit-operations-port'
 
 /**
  * Setup Source Control IPC Handlers
@@ -15,12 +17,12 @@ import { GraphOptions as DomainGraphOptions } from '../source-control/domain/agg
  * Uses registerIpcHandler utility for type-safe handler registration.
  *
  * Dependencies:
- * - RepositoryManagementPort: For repository operations
- * - CommitOperationsPort: For commit graph operations
+ * - RepositoryService: For repository operations
+ * - CommitGraphService: For commit graph operations
  */
 export const setupSourceControlIpcHandlers = Effect.gen(function* () {
-  const repoService = yield* RepositoryManagementPort
-  const commitService = yield* CommitOperationsPort
+  const repoService = yield* RepositoryService
+  const commitService = yield* CommitGraphService
 
   /**
    * Helper: Convert shared schema RepositoryId to domain RepositoryId
@@ -35,8 +37,8 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
   const toDomainGraphOptions = (
     options?: {
       maxCommits: number
-      includeBranches?: string[]
-      excludeBranches?: string[]
+      includeBranches?: readonly string[]
+      excludeBranches?: readonly string[]
       since?: Date
       until?: Date
       author?: string
@@ -47,8 +49,8 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
 
     return new DomainGraphOptions({
       maxCommits: options.maxCommits,
-      includeBranches: options.includeBranches?.map(makeBranchName),
-      excludeBranches: options.excludeBranches?.map(makeBranchName),
+      includeBranches: options.includeBranches ? [...options.includeBranches].map(makeBranchName) : undefined,
+      excludeBranches: options.excludeBranches ? [...options.excludeBranches].map(makeBranchName) : undefined,
       since: options.since,
       until: options.until,
       author: options.author,
@@ -181,7 +183,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     SourceControlIpcContracts['source-control:discover-repositories'],
     (input) =>
       repoService.discoverRepositories(input.searchPaths).pipe(
-        Effect.map((repos) => repos.map(toSharedRepository))
+        Effect.map((repos: any) => repos.map(toSharedRepository))
       )
   )
 
@@ -213,7 +215,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     SourceControlIpcContracts['source-control:validate-repository'],
     (input) =>
       repoService.validateRepository(input.path).pipe(
-        Effect.map((info) => ({
+        Effect.map((info: any) => ({
           path: info.path,
           gitDir: info.gitDir,
           isValid: info.isValid,
@@ -227,7 +229,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     SourceControlIpcContracts['source-control:get-repository-metadata'],
     (input) =>
       repoService.getRepositoryMetadata(toDomainRepositoryId(input.repositoryId)).pipe(
-        Effect.map((metadata) => ({
+        Effect.map((metadata: any) => ({
           repositoryId: { value: metadata.repositoryId.value },
           size: metadata.size,
           commitCount: metadata.commitCount,
@@ -244,7 +246,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     SourceControlIpcContracts['source-control:get-all-repositories'],
     () =>
       repoService.getAllRepositories().pipe(
-        Effect.map((repos) => repos.map(toSharedRepository))
+        Effect.map((repos: any) => repos.map(toSharedRepository))
       )
   )
 
@@ -271,7 +273,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     SourceControlIpcContracts['source-control:get-commit-graph-statistics'],
     (input) =>
       commitService.getCommitGraphStatistics(toDomainRepositoryId(input.repositoryId)).pipe(
-        Effect.map((stats) => ({
+        Effect.map((stats: any) => ({
           totalNodes: stats.totalNodes,
           totalEdges: stats.totalEdges,
           mergeCommits: stats.mergeCommits,
@@ -299,7 +301,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
           makeCommitHash(input.commitHash)
         )
         .pipe(
-          Effect.map((commitWithRefs) => ({
+          Effect.map((commitWithRefs: any) => ({
             commit: toSharedCommit(commitWithRefs.commit),
             branches: commitWithRefs.branches,
             tags: commitWithRefs.tags,
@@ -317,7 +319,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
           makeBranchName(input.branchName),
           input.maxCount
         )
-        .pipe(Effect.map((commits) => commits.map(toSharedCommit)))
+        .pipe(Effect.map((commits: any) => commits.map(toSharedCommit)))
   )
 
   // ===== Working Tree Handlers =====

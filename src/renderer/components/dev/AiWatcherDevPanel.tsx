@@ -208,7 +208,7 @@ export function AiWatcherDevPanel() {
 
   const { sessionsResult, attachToSession, refreshSessions } = useTmuxSessions()
 
-  const [showPanel, setShowPanel] = useState(true)
+  const [showPanel, setShowPanel] = useState(false)
   const [expandedWatcherId, setExpandedWatcherId] = useState<string | null>(
     null
   )

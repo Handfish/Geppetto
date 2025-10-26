@@ -1,7 +1,7 @@
 import { Effect, Scope, Stream, pipe } from 'effect'
-import { GitCommandRunnerPort } from '../ports'
-import { ProviderFactory } from '../ports/secondary/provider-port'
-import { RepositoryManagementPort } from '../ports/primary/repository-management-port'
+import { NodeGitCommandRunner } from '../node-git-command-runner'
+import { ProviderFactoryService } from '../adapters/providers/provider-factory-service'
+import { RepositoryService } from './repository-service'
 import { RepositoryId, RepositoryNotFoundError } from '../domain/aggregates/repository'
 import { RemoteUrl } from '../domain/value-objects/remote-url'
 import { BranchName } from '../domain/value-objects/branch-name'
@@ -84,9 +84,9 @@ export class ProviderSyncResult extends Data.TaggedClass('ProviderSyncResult')<{
  */
 export class SyncService extends Effect.Service<SyncService>()('SyncService', {
   effect: Effect.gen(function* () {
-    const gitRunner = yield* Effect.Tag<GitCommandRunnerPort>()('GitCommandRunnerPort')
-    const providerFactory = yield* ProviderFactory
-    const repoManagement = yield* RepositoryManagementPort
+    const gitRunner = yield* NodeGitCommandRunner
+    const providerFactory = yield* ProviderFactoryService
+    const repoManagement = yield* RepositoryService
 
     /**
      * Helper: Execute git command and await result
@@ -405,8 +405,8 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
     }
   }),
   dependencies: [
-    Effect.Tag<GitCommandRunnerPort>()('GitCommandRunnerPort'),
-    ProviderFactory,
-    RepositoryManagementPort,
+    NodeGitCommandRunner.Default,
+    ProviderFactoryService.Default,
+    RepositoryService.Default,
   ],
 }) {}

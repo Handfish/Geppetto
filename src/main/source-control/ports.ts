@@ -19,6 +19,9 @@ export interface GitCommandExecutionHandle {
 
 /**
  * Secondary port describing the infrastructure required to spawn git processes.
+ *
+ * Note: This is implemented by NodeGitCommandRunner service.
+ * Services should depend on NodeGitCommandRunner directly, not this interface.
  */
 export interface GitCommandRunnerPort {
   execute(

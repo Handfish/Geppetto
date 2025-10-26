@@ -1,2 +1,5 @@
 export * from './command'
 export * from './errors'
+export * from './repository'
+export * from './commit-graph'
+export * from './working-tree'
