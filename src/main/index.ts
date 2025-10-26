@@ -172,21 +172,21 @@ const MainLayer = Layer.mergeAll(
   AccountContextService.Default,          // Domain: Multi-account VCS management
   SourceControlGitHubProviderAdapter.Default, // Adapter: GitHub source control provider
 
-  // [FUTURE: AiAdaptersLayer] - NOW IMPLEMENTED! ✅
-  // Note: AiAdaptersLayer is provided to AiDomainLayer below
-  // This ensures adapters are available when domain services need them
-
-  // [FUTURE: AiDomainLayer] - Partially implemented with proper dependency injection
-  // These services require the AI adapters, so we provide them via Layer.provide
+  // AI Provider Domain - Fully implemented with proper dependency injection ✅
+  // These services depend on AI provider adapters (OpenAI, Claude, Cursor)
   Layer.provide(
     Layer.mergeAll(
       AiAccountContextService.Default,        // Domain: Multi-account AI management
-      AiProviderRegistryService.Default,      // Domain: AI provider registry (requires adapters)
-      AiProviderService.Default,              // Domain: AI provider orchestration (requires registry + adapters)
-      AiWatchersLayer                         // Domain: AI session watchers
+      AiProviderRegistryService.Default,      // Domain: AI provider registry (captures adapters)
+      AiProviderService.Default,              // Domain: AI provider orchestration
     ),
-    AiAdaptersLayer  // Provide adapters to all domain services
+    AiAdaptersLayer  // Provides: OpenAI, Claude, Cursor adapters
   ),
+
+  // AI Watchers Domain - Independent, has its own adapters ✅
+  // Does NOT depend on AI provider adapters (OpenAI/Claude/Cursor)
+  // Has its own adapters: NodeProcessMonitor, TmuxSessionManager
+  AiWatchersLayer,  // Includes: WatcherAdaptersLayer + AiWatcherService
 
   // [FUTURE: SourceControlDomainLayer]
   GitCommandService.Default,              // Domain: Git command execution

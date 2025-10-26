@@ -2,10 +2,10 @@ import * as Effect from 'effect/Effect'
 import * as Duration from 'effect/Duration'
 import { exec, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { ProcessConfig } from './ports'
-import type { ProcessHandle, TmuxSession } from './schemas'
-import { TmuxSessionNotFoundError, TmuxCommandError } from './errors'
-import { ProcessMonitorService } from './process-monitor-service'
+import type { ProcessConfig } from '../ports'
+import type { ProcessHandle, TmuxSession } from '../schemas'
+import { TmuxSessionNotFoundError, TmuxCommandError } from '../errors'
+import { NodeProcessMonitorAdapter } from './node-process-monitor-adapter'
 
 const execAsync = promisify(exec)
 
@@ -29,20 +29,23 @@ const executeTmuxCommand = (
   })
 
 /**
- * TmuxSessionManager - manages tmux sessions for AI agent monitoring
+ * TmuxSessionManagerAdapter - Tmux implementation of SessionManagerPort
  *
- * This service provides:
+ * HEXAGONAL ARCHITECTURE: This is an ADAPTER implementing SessionManagerPort.
+ * It can be replaced with other implementations (Screen, Docker, SSH, etc.) for testing or different environments.
+ *
+ * This adapter provides:
  * - Creating new tmux sessions with AI agents
  * - Attaching to existing tmux sessions
  * - Listing active tmux sessions
  * - Managing session lifecycle
  */
-export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()(
-  'TmuxSessionManager',
+export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManagerAdapter>()(
+  'TmuxSessionManagerAdapter',
   {
-    dependencies: [ProcessMonitorService.Default],
+    dependencies: [NodeProcessMonitorAdapter.Default],
     effect: Effect.gen(function* () {
-      const processMonitor = yield* ProcessMonitorService
+      const processMonitor = yield* NodeProcessMonitorAdapter
 
       /**
        * Attach to a session by name, getting both pane ID and PID

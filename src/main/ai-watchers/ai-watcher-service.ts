@@ -16,8 +16,8 @@ import {
   AiWatcherStopError,
   WatcherNotFoundError,
 } from './errors'
-import { ProcessMonitorService } from './process-monitor-service'
-import { TmuxSessionManager } from './tmux-session-manager'
+import { NodeProcessMonitorAdapter } from './adapters/node-process-monitor-adapter'
+import { TmuxSessionManagerAdapter } from './adapters/tmux-session-manager-adapter'
 
 /**
  * Internal watcher state tracked by the service
@@ -47,7 +47,7 @@ const getAiAgentCommand = (
   if (config.command) {
     return {
       command: config.command,
-      args: config.args,
+      args: config.args ? [...config.args] : undefined, // Convert readonly to mutable
     }
   }
 
@@ -120,10 +120,10 @@ const processEventToLogEntry = (
 export class AiWatcherService extends Effect.Service<AiWatcherService>()(
   'AiWatcherService',
   {
-    dependencies: [TmuxSessionManager.Default, ProcessMonitorService.Default],
+    dependencies: [TmuxSessionManagerAdapter.Default, NodeProcessMonitorAdapter.Default],
     effect: Effect.gen(function* () {
-      const tmuxManager = yield* TmuxSessionManager
-      const processMonitor = yield* ProcessMonitorService
+      const tmuxManager = yield* TmuxSessionManagerAdapter
+      const processMonitor = yield* NodeProcessMonitorAdapter
 
       // Map of watcher ID to watcher state
       const watchers = new Map<string, WatcherState>()

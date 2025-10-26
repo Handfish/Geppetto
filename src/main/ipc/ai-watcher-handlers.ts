@@ -8,7 +8,7 @@
 import { Effect, Duration, Cache } from 'effect'
 import { AiWatcherIpcContracts } from '../../shared/ipc-contracts'
 import { AiWatcherService } from '../ai-watchers/ai-watcher-service'
-import { TmuxSessionManager } from '../ai-watchers/tmux-session-manager'
+import { TmuxSessionManagerAdapter } from '../ai-watchers/adapters/tmux-session-manager-adapter'
 import { registerIpcHandler } from './ipc-handler-setup'
 
 /**
@@ -16,7 +16,7 @@ import { registerIpcHandler } from './ipc-handler-setup'
  */
 export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   const aiWatcherService = yield* AiWatcherService
-  const tmuxManager = yield* TmuxSessionManager
+  const tmuxManager = yield* TmuxSessionManagerAdapter
 
   /**
    * Create a cache for log requests with 1-second TTL

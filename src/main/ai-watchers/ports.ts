@@ -67,6 +67,51 @@ export interface ProcessMonitorPort {
 }
 
 /**
+ * Session manager port - abstracts terminal multiplexer operations
+ *
+ * This port provides session management for AI agents:
+ * - Creating new sessions with commands
+ * - Attaching to existing sessions
+ * - Listing active sessions
+ * - Managing session lifecycle
+ */
+export interface SessionManagerPort {
+  /**
+   * Create a new session and spawn a command in it
+   */
+  createSession(
+    name: string,
+    command: string,
+    args?: string[],
+    cwd?: string
+  ): Effect.Effect<ProcessHandle, import('./errors').TmuxSessionNotFoundError>
+
+  /**
+   * Attach to an existing session by name
+   */
+  attachToSession(
+    sessionName: string
+  ): Effect.Effect<ProcessHandle, import('./errors').TmuxSessionNotFoundError>
+
+  /**
+   * List all active sessions
+   */
+  listSessions(): Effect.Effect<import('./schemas').TmuxSession[], never>
+
+  /**
+   * Kill a session by name
+   */
+  killSession(
+    sessionName: string
+  ): Effect.Effect<void, import('./errors').TmuxCommandError>
+
+  /**
+   * Check if a session exists
+   */
+  sessionExists(sessionName: string): Effect.Effect<boolean, never>
+}
+
+/**
  * AI watcher port - orchestrates AI agent lifecycle
  *
  * This port provides high-level AI agent management:

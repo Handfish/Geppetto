@@ -15,15 +15,15 @@ import * as Path from 'node:path'
 import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 import { exec } from 'node:child_process'
-import type { ProcessMonitorPort, ProcessConfig } from './ports'
-import { ProcessHandle, ProcessEvent, TmuxPipeConfig } from './schemas'
+import type { ProcessMonitorPort, ProcessConfig } from '../ports'
+import { ProcessHandle, ProcessEvent, TmuxPipeConfig } from '../schemas'
 import {
   ProcessSpawnError,
   ProcessAttachError,
   ProcessMonitorError,
   ProcessKillError,
   ProcessNotFoundError,
-} from './errors'
+} from '../errors'
 
 const execAsync = promisify(exec)
 
@@ -52,17 +52,20 @@ const SILENCE_THRESHOLD_MS = 30_000
 const ACTIVITY_CHECK_INTERVAL = Duration.seconds(5)
 
 /**
- * ProcessMonitorService - implements ProcessMonitorPort
+ * NodeProcessMonitorAdapter - Node.js implementation of ProcessMonitorPort
+ *
+ * HEXAGONAL ARCHITECTURE: This is an ADAPTER implementing ProcessMonitorPort.
+ * It can be replaced with other implementations (Docker, SSH, etc.) for testing or different environments.
  *
  * Provides low-level process lifecycle management:
- * - Spawning new processes
+ * - Spawning new processes using Node.js child_process
  * - Attaching to existing processes (limited - only tracks metadata)
  * - Event streaming (stdout, stderr, exit, error, silence detection)
  * - Process termination
  * - Activity tracking with automatic silence detection
  */
-export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>()(
-  'ProcessMonitorService',
+export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitorAdapter>()(
+  'NodeProcessMonitorAdapter',
   {
     effect: Effect.gen(function* () {
       // Map of process ID to process information
