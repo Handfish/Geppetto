@@ -400,6 +400,12 @@ Services use the `Effect.Service` pattern:
 - Access via `yield* ServiceName` in Effect.gen
 - Enables testing via mock layers
 
+**⚠️ CRITICAL: When implementing Effect.Service, ALWAYS double-check:**
+1. **Dependencies array** matches all services used via `yield*`
+2. **Imports** include all dependency services at the top of the file
+3. **All `yield*` statements** correspond to services in the dependencies array
+4. Missing any of these will cause runtime errors that TypeScript won't catch!
+
 ### 3. GitHub OAuth Flow
 OAuth flow using custom protocol handler (`geppetto://`):
 1. `GitHubAuthService.startAuthFlow` opens browser to GitHub with redirect URI `geppetto://auth/callback`
