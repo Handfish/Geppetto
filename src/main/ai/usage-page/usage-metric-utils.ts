@@ -1,5 +1,5 @@
 import { AiUsageMetric } from '../../../shared/schemas/ai/provider'
-import type { UsageBarSnapshot } from './ports'
+import type { UsageBarSnapshot } from './types'
 
 const PERCENT_LIMIT = 100
 

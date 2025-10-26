@@ -379,20 +379,29 @@ export class AiProviderRegistryService extends Effect.Service<AiProviderRegistry
 ## Files Changed
 
 ### Created
-- `src/main/ai/provider-port.ts` - Port definition and tag registry
-- `src/main/ai/adapters-layer.ts` - Layer composition
-- `src/main/ai/infrastructure-layer.ts` - AI infrastructure layer (re-exports CoreInfrastructureLayer)
-- `src/main/core-infrastructure-layer.ts` - **CRITICAL:** Shared infrastructure services for memoization
-- `docs/AI_ADAPTERS_HEXAGONAL_ARCHITECTURE.md` - This document
+- ✅ `src/main/ai/provider-port.ts` - Port definition and tag registry
+- ✅ `src/main/ai/adapters-layer.ts` - Layer composition
+- ✅ `src/main/ai/infrastructure-layer.ts` - AI infrastructure layer (re-exports CoreInfrastructureLayer)
+- ✅ `src/main/ai/usage-page/types.ts` - Clean type definitions (replaces ports.ts)
+- ✅ `src/main/core-infrastructure-layer.ts` - **CRITICAL:** Shared infrastructure services for memoization
+- ✅ `docs/AI_ADAPTERS_HEXAGONAL_ARCHITECTURE.md` - This document
 
 ### Modified
-- `src/main/ai/openai/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
-- `src/main/ai/claude/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
-- `src/main/ai/cursor/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
-- `src/main/ai/registry.ts` - Dynamic tag-based lookup + captures adapters at construction time
-- `src/main/ai/ai-provider-service.ts` - Removed narrow type annotations
-- `src/main/ai/ports.ts` - Deprecated, re-exports for compatibility
-- `src/main/index.ts` - Uses `CoreInfrastructureLayer` and `AiAdaptersLayer` with proper memoization
+- ✅ `src/main/ai/openai/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
+- ✅ `src/main/ai/claude/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
+- ✅ `src/main/ai/cursor/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
+- ✅ `src/main/ai/registry.ts` - Dynamic tag-based lookup + captures adapters at construction time
+- ✅ `src/main/ai/ai-provider-service.ts` - Removed narrow type annotations + updated imports
+- ✅ `src/main/ai/browser/cookie-usage-page-adapter.ts` - Updated imports to use types.ts
+- ✅ `src/main/ai/usage-page/usage-metric-utils.ts` - Updated imports to use types.ts
+- ✅ `src/main/index.ts` - Uses `CoreInfrastructureLayer` and `AiAdaptersLayer` with proper memoization
+
+### Removed (Cleanup - No Backward Compatibility)
+- ❌ `src/main/ai/ports.ts` - **REMOVED:** Deprecated, replaced by provider-port.ts and registry.ts
+- ❌ `src/main/ai/openai/provider-adapter.ts` - **REMOVED:** Old implementation (pre-hexagonal)
+- ❌ `src/main/ai/claude/provider-adapter.ts` - **REMOVED:** Old implementation (pre-hexagonal)
+- ❌ `src/main/ai/usage-page/web-usage-page-adapter.ts` - **REMOVED:** Replaced by cookie-usage-page-adapter.ts
+- ❌ `src/main/ai/usage-page/ports.ts` - **REMOVED:** Replaced by types.ts (cleaner naming)
 
 ### Memoization Improvements
 - ✅ Shared `CoreInfrastructureLayer` prevents duplicate service construction
@@ -400,10 +409,11 @@ export class AiProviderRegistryService extends Effect.Service<AiProviderRegistry
 - ✅ MainLayer uses shared infrastructure reference
 - ✅ Services constructed once, shared across all domains
 
-### Unchanged (Backward Compatible)
-- All IPC handlers continue to work
-- All renderer code continues to work
-- All schemas continue to work
+### Domain Cleanliness
+- ✅ No deprecated code remaining
+- ✅ No backward compatibility shims
+- ✅ Clean separation: ports define contracts, layers implement, services consume
+- ✅ Consistent naming: `types.ts` for data types, `*-port.ts` for interfaces, `*-layer.ts` for implementations
 
 ---
 

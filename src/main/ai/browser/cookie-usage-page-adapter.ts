@@ -5,8 +5,8 @@ import type {
   AiAccountId,
 } from '../../../shared/schemas/ai/provider'
 import { ElectronSessionService } from './electron-session-service'
-import type { UsagePageSnapshot, UsageBarSnapshot } from '../usage-page/ports'
-import { UsagePageError } from '../usage-page/ports'
+import type { UsagePageSnapshot, UsageBarSnapshot } from '../usage-page/types'
+import { UsagePageError } from '../usage-page/types'
 import { AiProviderAuthenticationError } from '../errors'
 import { fetchUsagePageWithBrowser } from './browser-usage-page-fetcher'
 

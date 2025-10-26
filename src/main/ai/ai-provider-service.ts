@@ -7,7 +7,7 @@ import {
   AiAccount,
 } from '../../shared/schemas/ai/provider'
 import { AiProviderRegistryService } from './registry'
-import type { AiProviderRegistryPort } from './ports'
+import type { AiProviderRegistryPort } from './registry'
 import { AiAccountContextService } from './account-context-service'
 import { TierService } from '../tier/tier-service'
 import { AiAccountNotFoundError } from './errors'

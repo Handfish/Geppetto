@@ -8,7 +8,7 @@ import {
   AiAccount,
 } from '../../../shared/schemas/ai/provider'
 import { AiProviderUsageError, AiProviderAuthenticationError } from '../errors'
-import { UsagePageError } from '../usage-page/ports'
+import { UsagePageError } from '../usage-page/types'
 import {
   BrowserAuthService,
   type BrowserAuthConfig,
