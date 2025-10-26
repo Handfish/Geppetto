@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto'
 import { WorkspaceConfig } from '../../shared/schemas/workspace'
 import { GitCommandService } from '../source-control/git-command-service'
 import { GitCommandRequest, GitWorktreeContext } from '../../shared/schemas/source-control/command'
+import { RepositoryService } from '../source-control/services/repository-service'
 
 /**
  * WorkspaceService - Manages workspace directory configuration
@@ -17,9 +18,10 @@ import { GitCommandRequest, GitWorktreeContext } from '../../shared/schemas/sour
 export class WorkspaceService extends Effect.Service<WorkspaceService>()(
   'WorkspaceService',
   {
-    dependencies: [GitCommandService.Default],
+    dependencies: [GitCommandService.Default, RepositoryService.Default],
     effect: Effect.gen(function* () {
       const gitCommandService = yield* GitCommandService
+      const repositoryService = yield* RepositoryService
 
       const store = new Store({
         name: 'workspace-config',
@@ -247,6 +249,56 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
               worktreePath,
             }
           }),
+
+        /**
+         * Discover all repositories in the current workspace
+         *
+         * Uses RepositoryService to discover and cache repositories.
+         * Returns empty array if no workspace is configured.
+         */
+        discoverWorkspaceRepositories: Effect.gen(function* () {
+          const currentPath = store.get('currentPath') as string | null | undefined
+
+          if (!currentPath) {
+            console.log('[WorkspaceService] No workspace configured, skipping discovery')
+            return []
+          }
+
+          console.log('[WorkspaceService] Discovering repositories in workspace:', currentPath)
+          const repositories = yield* repositoryService.discoverRepositories([currentPath])
+          console.log('[WorkspaceService] Discovered', repositories.length, 'repositories')
+
+          return repositories
+        }),
+
+        /**
+         * Get all repositories from cache
+         *
+         * Returns cached repositories discovered in the workspace.
+         * If cache is empty, triggers discovery first.
+         */
+        getWorkspaceRepositories: Effect.gen(function* () {
+          const currentPath = store.get('currentPath') as string | null | undefined
+
+          if (!currentPath) {
+            console.log('[WorkspaceService] No workspace configured, returning empty array')
+            return []
+          }
+
+          // Get cached repositories
+          let repositories = yield* repositoryService.getAllRepositories()
+
+          // If cache is empty, trigger discovery
+          if (repositories.length === 0) {
+            console.log('[WorkspaceService] Cache empty, triggering discovery in workspace:', currentPath)
+            repositories = yield* repositoryService.discoverRepositories([currentPath])
+            console.log('[WorkspaceService] Discovered', repositories.length, 'repositories')
+          } else {
+            console.log('[WorkspaceService] Returning', repositories.length, 'cached repositories')
+          }
+
+          return repositories
+        }),
       }
     }),
   }

@@ -1,6 +1,6 @@
 import React from 'react'
 import { Result } from '@effect-atom/atom-react'
-import { useAllRepositories, useDiscoverRepositories } from '../../hooks/useSourceControl'
+import { useWorkspaceRepositories } from '../../hooks/useWorkspace'
 import { ErrorAlert, LoadingSpinner } from '../ui/ErrorAlert'
 import type { Repository } from '../../../shared/schemas/source-control'
 
@@ -70,10 +70,11 @@ function RepositoryItem({ repository, onSelect }: RepositoryItemProps) {
  * Main component for exploring Git repositories.
  *
  * Features:
- * - Displays all discovered repositories
+ * - Displays repositories in the current workspace
  * - Shows repository status (branch, remotes, operation state)
  * - Provides repository selection
  * - Uses Result.builder pattern for exhaustive error handling
+ * - Automatically discovers repositories in workspace on load
  *
  * Usage:
  * ```tsx
@@ -85,25 +86,13 @@ interface RepositoryExplorerProps {
    * Callback when a repository is selected
    */
   onRepositorySelect?: (repository: Repository) => void
-
-  /**
-   * Optional search paths for repository discovery
-   * If not provided, shows all known repositories
-   */
-  searchPaths?: string[]
 }
 
 export function RepositoryExplorer({
   onRepositorySelect,
-  searchPaths,
 }: RepositoryExplorerProps) {
-  // Use discovery if search paths provided, otherwise show all repos
-  const { repositoriesResult: discoveredResult, refresh: refreshDiscovered } =
-    useDiscoverRepositories(searchPaths ?? [])
-  const { repositoriesResult: allResult, refresh: refreshAll } = useAllRepositories()
-
-  const repositoriesResult = searchPaths ? discoveredResult : allResult
-  const refresh = searchPaths ? refreshDiscovered : refreshAll
+  // Get repositories from current workspace
+  const { repositoriesResult, refresh } = useWorkspaceRepositories()
 
   return (
     <div className="space-y-4">
@@ -151,12 +140,10 @@ export function RepositoryExplorer({
           if (!repositories || repositories.length === 0) {
             return (
               <div className="text-center py-12">
-                <p className="text-gray-400 mb-4">No repositories found</p>
-                {searchPaths && (
-                  <p className="text-sm text-gray-500">
-                    Try searching in different directories
-                  </p>
-                )}
+                <p className="text-gray-400 mb-4">No repositories found in workspace</p>
+                <p className="text-sm text-gray-500">
+                  Clone a repository or configure your workspace directory
+                </p>
               </div>
             )
           }

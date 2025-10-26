@@ -214,6 +214,10 @@ export class WorkspaceClient extends Effect.Service<WorkspaceClient>()(
           ipc.invoke('cloneToWorkspace', input),
         checkRepositoryInWorkspace: (input: CheckRepositoryInput) =>
           ipc.invoke('checkRepositoryInWorkspace', input),
+        discoverWorkspaceRepositories: () =>
+          ipc.invoke('discoverWorkspaceRepositories', undefined),
+        getWorkspaceRepositories: () =>
+          ipc.invoke('getWorkspaceRepositories', undefined),
       } as const
     }),
   }

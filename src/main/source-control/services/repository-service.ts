@@ -9,15 +9,18 @@ import {
   RepositoryMetadata,
   RepositoryDiscoveryInfo,
   RepositoryConfig,
+  Branch,
+  Remote,
+  CommitHash,
+  BranchName,
+  RemoteName,
+  RemoteUrl,
+} from '../../../shared/schemas/source-control'
+import {
   RepositoryNotFoundError,
   InvalidRepositoryError,
   RepositoryOperationError,
 } from '../domain/aggregates/repository'
-import { Branch, BranchType } from '../domain/entities/branch'
-import { Remote, RemoteName, RefSpec } from '../domain/entities/remote'
-import { BranchName, makeBranchName } from '../domain/value-objects/branch-name'
-import { CommitHash, makeCommitHash } from '../domain/value-objects/commit-hash'
-import { RemoteUrl, makeRemoteUrl } from '../domain/value-objects/remote-url'
 import {
   GitCommandRequest,
   GitWorktreeContext,
@@ -36,13 +39,88 @@ import { RepositoryDiscovered, RepositoryRefreshed } from '../domain/events/repo
  * - GitCommandRunnerPort: For executing git commands
  * - FileSystemPort: For file system operations and repository discovery
  */
+/**
+ * Cached repository entry with timestamp
+ */
+interface CachedRepository {
+  repository: Repository
+  timestamp: number
+}
+
+/**
+ * Cache TTL in milliseconds
+ * Set to 30 seconds to prevent excessive git command execution
+ */
+const REPOSITORY_CACHE_TTL_MS = 30000
+
 export class RepositoryService extends Effect.Service<RepositoryService>()('RepositoryService', {
   effect: Effect.gen(function* () {
     const gitRunner = yield* NodeGitCommandRunner
     const fileSystem = yield* NodeFileSystemAdapter
 
-    // Cache for discovered repositories
-    const repositoryCache = yield* Ref.make(new Map<string, Repository>())
+    // Cache for discovered repositories with timestamps
+    // Key: repository path, Value: cached repository with timestamp
+    const repositoryCache = yield* Ref.make(new Map<string, CachedRepository>())
+
+    // Cache by ID for fast lookups
+    // Key: repository ID, Value: repository path
+    const idToPathCache = yield* Ref.make(new Map<string, string>())
+
+    // In-flight discovery tracking to prevent concurrent discoveries
+    const isDiscovering = yield* Ref.make(false)
+    const lastDiscoveryPaths = yield* Ref.make<string[]>([])
+    const lastDiscoveryTime = yield* Ref.make(0)
+
+    /**
+     * Helper: Check if cached repository is still fresh
+     */
+    const isCacheFresh = (cached: CachedRepository): boolean => {
+      return (Date.now() - cached.timestamp) < REPOSITORY_CACHE_TTL_MS
+    }
+
+    /**
+     * Helper: Store repository in cache
+     */
+    const cacheRepository = (repository: Repository) =>
+      Effect.gen(function* () {
+        const cached: CachedRepository = {
+          repository,
+          timestamp: Date.now(),
+        }
+        yield* Ref.update(repositoryCache, (cache) => {
+          cache.set(repository.path, cached)
+          return cache
+        })
+        yield* Ref.update(idToPathCache, (cache) => {
+          cache.set(repository.id.value, repository.path)
+          return cache
+        })
+      })
+
+    /**
+     * Helper: Get cached repository by path
+     */
+    const getCachedByPath = (path: string) =>
+      Effect.gen(function* () {
+        const cache = yield* Ref.get(repositoryCache)
+        const cached = cache.get(path)
+        if (cached && isCacheFresh(cached)) {
+          return cached.repository
+        }
+        return undefined
+      })
+
+    /**
+     * Helper: Get cached repository by ID
+     */
+    const getCachedById = (id: RepositoryId) =>
+      Effect.gen(function* () {
+        const pathCache = yield* Ref.get(idToPathCache)
+        const path = pathCache.get(id.value)
+        if (!path) return undefined
+
+        return yield* getCachedByPath(path)
+      })
 
     /**
      * Helper: Create a Repository aggregate from a path
@@ -110,7 +188,7 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
           Effect.catchAll(() => Effect.succeed(undefined))
         )
 
-        const head = headResult ? makeCommitHash(headResult) : undefined
+        const head = headResult ? new CommitHash({ value: headResult }) : undefined
 
         // Get current branch (symbolic-ref HEAD)
         const branchResult = yield* Effect.scoped(
@@ -130,7 +208,7 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
           Effect.catchAll(() => Effect.succeed(undefined))
         )
 
-        const branch = branchResult ? makeBranchName(branchResult) : undefined
+        const branch = branchResult ? new BranchName({ value: branchResult }) : undefined
         const isDetached = branch === undefined && head !== undefined
 
         // Check for special states
@@ -212,16 +290,12 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
           const [refname, objectname, upstream] = line.split('|')
           if (!refname || !objectname) continue
 
-          const branchName = makeBranchName(refname)
-          const commitHash = makeCommitHash(objectname)
-          const upstreamBranch = upstream ? makeBranchName(upstream) : undefined
-
           branches.push(
             new Branch({
-              name: branchName,
-              type: upstreamBranch ? 'tracking' : 'local',
-              commit: commitHash,
-              upstream: upstreamBranch,
+              name: new BranchName({ value: refname }),
+              type: upstream ? 'tracking' : 'local',
+              commit: new CommitHash({ value: objectname }),
+              upstream: upstream ? new BranchName({ value: upstream }) : undefined,
               isCurrent: refname === currentBranch,
               isDetached: false,
             })
@@ -304,10 +378,8 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
             remotes.push(
               new Remote({
                 name: new RemoteName({ value: remoteName }),
-                fetchUrl: makeRemoteUrl(fetchUrl),
-                pushUrl: pushUrl && pushUrl !== fetchUrl ? makeRemoteUrl(pushUrl) : undefined,
-                fetchRefSpecs: [], // Would need to parse from .git/config
-                pushRefSpecs: [],
+                fetchUrl: new RemoteUrl({ value: fetchUrl }),
+                pushUrl: pushUrl && pushUrl !== fetchUrl ? new RemoteUrl({ value: pushUrl }) : undefined,
               })
             )
           }
@@ -375,6 +447,35 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
     const port: RepositoryManagementPort = {
       discoverRepositories: (searchPaths: string[]) =>
         Effect.gen(function* () {
+          // Check if we recently discovered these same paths (within 5 seconds)
+          const now = Date.now()
+          const lastPaths = yield* Ref.get(lastDiscoveryPaths)
+          const lastTime = yield* Ref.get(lastDiscoveryTime)
+          const discovering = yield* Ref.get(isDiscovering)
+
+          const pathsMatch = JSON.stringify(searchPaths.sort()) === JSON.stringify(lastPaths.sort())
+          const recentDiscovery = (now - lastTime) < 5000 // 5 seconds
+
+          // If same paths were recently discovered or discovery is in progress, return cached results
+          if ((pathsMatch && recentDiscovery) || discovering) {
+            console.log('[RepositoryService] Skipping duplicate discovery, returning cached results')
+            const cache = yield* Ref.get(repositoryCache)
+            const repos: Repository[] = []
+            for (const cached of cache.values()) {
+              if (isCacheFresh(cached)) {
+                repos.push(cached.repository)
+              }
+            }
+            return repos
+          }
+
+          // Mark as discovering
+          yield* Ref.set(isDiscovering, true)
+          yield* Ref.set(lastDiscoveryPaths, searchPaths)
+          yield* Ref.set(lastDiscoveryTime, now)
+
+          console.log('[RepositoryService] Starting discovery for paths:', searchPaths)
+
           const allRepos: Repository[] = []
 
           for (const searchPath of searchPaths) {
@@ -396,85 +497,102 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
               if (repo) {
                 allRepos.push(repo)
 
-                // Update cache
-                yield* Ref.update(repositoryCache, (cache) => {
-                  cache.set(repo.path, repo)
-                  return cache
-                })
+                // Store in cache with timestamp
+                yield* cacheRepository(repo)
               }
             }
           }
 
+          // Mark as complete
+          yield* Ref.set(isDiscovering, false)
+          console.log('[RepositoryService] Discovery complete, found', allRepos.length, 'repositories')
+
           return allRepos
         }).pipe(
-          Effect.catchAll((error) =>
-            Effect.fail(
-              new RepositoryOperationError({
-                repositoryId: new RepositoryId({ value: crypto.randomUUID() }),
-                operation: 'discoverRepositories',
-                reason: 'Failed to discover repositories',
-                cause: error,
-              })
-            )
-          )
+          Effect.catchAll((error) => {
+            // Ensure we clear the discovering flag on error
+            return Effect.gen(function* () {
+              yield* Ref.set(isDiscovering, false)
+              return yield* Effect.fail(
+                new RepositoryOperationError({
+                  repositoryId: new RepositoryId({ value: crypto.randomUUID() }),
+                  operation: 'discoverRepositories',
+                  reason: 'Failed to discover repositories',
+                  cause: error,
+                })
+              )
+            })
+          })
         ),
 
       getRepository: (path: string) =>
         Effect.gen(function* () {
-          // Check cache first
-          const cache = yield* Ref.get(repositoryCache)
-          const cached = cache.get(path)
-
+          // Check cache first - return if fresh
+          const cached = yield* getCachedByPath(path)
           if (cached) {
+            console.log(`[RepositoryService] Cache HIT for path: ${path}`)
             return cached
           }
 
-          // Not in cache - create new
+          // Cache MISS - fetch fresh data
+          console.log(`[RepositoryService] Cache MISS for path: ${path} - executing git commands`)
           const repo = yield* createRepositoryFromPath(path)
 
-          // Add to cache
-          yield* Ref.update(repositoryCache, (cache) => {
-            cache.set(path, repo)
-            return cache
-          })
+          // Store in cache
+          yield* cacheRepository(repo)
 
           return repo
         }),
 
       getRepositoryById: (repositoryId: RepositoryId) =>
         Effect.gen(function* () {
-          const cache = yield* Ref.get(repositoryCache)
-
-          for (const repo of cache.values()) {
-            if (repo.id.equals(repositoryId)) {
-              return repo
-            }
+          // Check cache first - return if fresh
+          const cached = yield* getCachedById(repositoryId)
+          if (cached) {
+            console.log(`[RepositoryService] Cache HIT for id: ${repositoryId.value}`)
+            return cached
           }
 
+          // Not found in cache
+          console.log(`[RepositoryService] Cache MISS for id: ${repositoryId.value}`)
           return yield* Effect.fail(
             new RepositoryNotFoundError({
               path: `[id: ${repositoryId.value}]`,
-              reason: 'Repository not found by ID',
+              reason: 'Repository not found by ID - not in cache',
             })
           )
         }),
 
       getRepositoryState: (repositoryId: RepositoryId) =>
         Effect.gen(function* () {
-          const repo = yield* port.getRepositoryById(repositoryId)
+          const repo = yield* getCachedById(repositoryId)
+          if (!repo) {
+            return yield* Effect.fail(
+              new RepositoryNotFoundError({
+                path: `[id: ${repositoryId.value}]`,
+                reason: 'Repository not found by ID',
+              })
+            )
+          }
           return yield* getRepositoryStateInternal(repo.path)
         }),
 
       refreshRepository: (repositoryId: RepositoryId) =>
         Effect.gen(function* () {
-          const repo = yield* port.getRepositoryById(repositoryId)
+          const repo = yield* getCachedById(repositoryId)
+          if (!repo) {
+            return yield* Effect.fail(
+              new RepositoryNotFoundError({
+                path: `[id: ${repositoryId.value}]`,
+                reason: 'Repository not found by ID',
+              })
+            )
+          }
+          console.log(`[RepositoryService] Refreshing repository: ${repo.path}`)
           const refreshed = yield* createRepositoryFromPath(repo.path)
 
-          // Update cache
-          yield* Ref.update(repositoryCache, (cache) => {
-            cache.set(refreshed.path, refreshed)
-            return cache
-          })
+          // Update cache with fresh timestamp
+          yield* cacheRepository(refreshed)
 
           return refreshed
         }),
@@ -510,7 +628,15 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
       watchRepository: (repositoryId: RepositoryId) =>
         Stream.unwrapScoped(
           Effect.gen(function* () {
-            const repo = yield* port.getRepositoryById(repositoryId)
+            const repo = yield* getCachedById(repositoryId)
+            if (!repo) {
+              return yield* Effect.fail(
+                new RepositoryNotFoundError({
+                  path: `[id: ${repositoryId.value}]`,
+                  reason: 'Repository not found by ID',
+                })
+              )
+            }
 
             // Watch .git directory for changes
             return fileSystem.watchDirectory(`${repo.path}/.git`).pipe(
@@ -527,7 +653,15 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
 
       getRepositoryMetadata: (repositoryId: RepositoryId) =>
         Effect.gen(function* () {
-          const repo = yield* port.getRepositoryById(repositoryId)
+          const repo = yield* getCachedById(repositoryId)
+          if (!repo) {
+            return yield* Effect.fail(
+              new RepositoryNotFoundError({
+                path: `[id: ${repositoryId.value}]`,
+                reason: 'Repository not found by ID',
+              })
+            )
+          }
 
           // Count commits
           const commitCount = yield* Effect.scoped(
@@ -557,26 +691,48 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
       getAllRepositories: () =>
         Effect.gen(function* () {
           const cache = yield* Ref.get(repositoryCache)
-          return Array.from(cache.values())
+
+          // Only return fresh cached entries
+          const freshRepos: Repository[] = []
+          for (const cached of cache.values()) {
+            if (isCacheFresh(cached)) {
+              freshRepos.push(cached.repository)
+            }
+          }
+
+          console.log(`[RepositoryService] getAllRepositories returning ${freshRepos.length} fresh cached repositories`)
+          return freshRepos
         }),
 
       forgetRepository: (repositoryId: RepositoryId) =>
         Effect.gen(function* () {
-          const repo = yield* port.getRepositoryById(repositoryId).pipe(
-            Effect.catchAll(() => Effect.succeed(undefined as Repository | undefined))
-          )
+          const repo = yield* getCachedById(repositoryId)
 
           if (repo) {
+            // Clean up both caches
             yield* Ref.update(repositoryCache, (cache) => {
               cache.delete(repo.path)
               return cache
             })
+            yield* Ref.update(idToPathCache, (cache) => {
+              cache.delete(repo.id.value)
+              return cache
+            })
+            console.log(`[RepositoryService] Forgot repository: ${repo.path}`)
           }
         }),
 
       hasUncommittedChanges: (repositoryId: RepositoryId) =>
         Effect.gen(function* () {
-          const repo = yield* port.getRepositoryById(repositoryId)
+          const repo = yield* getCachedById(repositoryId)
+          if (!repo) {
+            return yield* Effect.fail(
+              new RepositoryNotFoundError({
+                path: `[id: ${repositoryId.value}]`,
+                reason: 'Repository not found by ID',
+              })
+            )
+          }
 
           // Quick check using git diff-index
           const hasChanges = yield* Effect.scoped(

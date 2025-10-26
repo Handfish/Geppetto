@@ -275,6 +275,20 @@ export const WorkspaceIpcContracts = {
     }),
     errors: S.Union(NetworkError),
   },
+
+  discoverWorkspaceRepositories: {
+    channel: 'workspace:discoverRepositories' as const,
+    input: S.Void,
+    output: S.Array(Repository),
+    errors: S.Union(NetworkError, GitOperationError),
+  },
+
+  getWorkspaceRepositories: {
+    channel: 'workspace:getRepositories' as const,
+    input: S.Void,
+    output: S.Array(Repository),
+    errors: S.Union(NetworkError),
+  },
 } as const
 
 /**

@@ -15,11 +15,25 @@ export class RepositoryId extends S.Class<RepositoryId>('RepositoryId')({
 }) {}
 
 /**
+ * CommitHash value object - for type safety
+ */
+export class CommitHash extends S.Class<CommitHash>('CommitHash')({
+  value: S.String,
+}) {}
+
+/**
+ * BranchName value object - for type safety
+ */
+export class BranchName extends S.Class<BranchName>('BranchName')({
+  value: S.String,
+}) {}
+
+/**
  * RepositoryState - Serializable repository state
  */
 export class RepositoryState extends S.Class<RepositoryState>('RepositoryState')({
-  head: S.optional(S.String), // Commit hash as string
-  branch: S.optional(S.String), // Branch name as string
+  head: S.optional(CommitHash), // Commit hash
+  branch: S.optional(BranchName), // Branch name
   isDetached: S.Boolean,
   isMerging: S.Boolean,
   isRebasing: S.Boolean,
@@ -32,21 +46,35 @@ export class RepositoryState extends S.Class<RepositoryState>('RepositoryState')
  * Branch - Serializable branch entity
  */
 export class Branch extends S.Class<Branch>('Branch')({
-  name: S.String,
+  name: BranchName,
   type: S.Literal('local', 'remote', 'tracking'),
-  commit: S.String, // Commit hash
-  upstream: S.optional(S.String), // Upstream branch name
+  commit: CommitHash, // Commit hash
+  upstream: S.optional(BranchName), // Upstream branch name
   isCurrent: S.Boolean,
   isDetached: S.Boolean,
+}) {}
+
+/**
+ * RemoteName value object - for type safety
+ */
+export class RemoteName extends S.Class<RemoteName>('RemoteName')({
+  value: S.String,
+}) {}
+
+/**
+ * RemoteUrl value object - for type safety
+ */
+export class RemoteUrl extends S.Class<RemoteUrl>('RemoteUrl')({
+  value: S.String,
 }) {}
 
 /**
  * Remote - Serializable remote entity
  */
 export class Remote extends S.Class<Remote>('Remote')({
-  name: S.String,
-  fetchUrl: S.String,
-  pushUrl: S.optional(S.String),
+  name: RemoteName,
+  fetchUrl: RemoteUrl,
+  pushUrl: S.optional(RemoteUrl),
 }) {}
 
 /**

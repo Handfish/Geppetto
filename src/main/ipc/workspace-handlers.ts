@@ -64,4 +64,14 @@ export const setupWorkspaceIpcHandlers = Effect.gen(function* () {
       input.defaultBranch
     )
   )
+
+  // Discover repositories in current workspace
+  registerIpcHandler(WorkspaceIpcContracts.discoverWorkspaceRepositories, () =>
+    workspaceService.discoverWorkspaceRepositories
+  )
+
+  // Get cached repositories from workspace
+  registerIpcHandler(WorkspaceIpcContracts.getWorkspaceRepositories, () =>
+    workspaceService.getWorkspaceRepositories
+  )
 })

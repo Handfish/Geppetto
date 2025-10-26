@@ -85,6 +85,38 @@ export const cloneToWorkspaceAtom = workspaceRuntime.fn(
       return yield* client.cloneToWorkspace(params)
     }),
   {
-    reactivityKeys: ['workspace:repos'],
+    reactivityKeys: ['workspace:repos', 'source-control:repositories'],
   }
 )
+
+/**
+ * Discover repositories in workspace atom
+ * Triggers repository discovery in the current workspace
+ */
+export const discoverWorkspaceRepositoriesAtom = workspaceRuntime
+  .atom(
+    Effect.gen(function* () {
+      const client = yield* WorkspaceClient
+      return yield* client.discoverWorkspaceRepositories()
+    })
+  )
+  .pipe(
+    Atom.withReactivity(['workspace:repos', 'source-control:repositories']),
+    Atom.setIdleTTL(Duration.seconds(30))
+  )
+
+/**
+ * Get workspace repositories atom
+ * Returns cached repositories from the workspace
+ */
+export const workspaceRepositoriesAtom = workspaceRuntime
+  .atom(
+    Effect.gen(function* () {
+      const client = yield* WorkspaceClient
+      return yield* client.getWorkspaceRepositories()
+    })
+  )
+  .pipe(
+    Atom.withReactivity(['workspace:repos', 'source-control:repositories']),
+    Atom.setIdleTTL(Duration.seconds(10))
+  )
