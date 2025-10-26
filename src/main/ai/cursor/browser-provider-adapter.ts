@@ -1,5 +1,6 @@
-import { Effect, Console } from 'effect'
-import type { AiProviderAdapter } from '../ports'
+import { Effect, Console, Layer } from 'effect'
+import type { AiProviderPort } from '../provider-port'
+import { AiProviderTags } from '../provider-port'
 import {
   AiProviderSignInResult,
   AiProviderAuthStatus,
@@ -15,6 +16,7 @@ import {
 import { CookieUsagePageAdapter } from '../browser/cookie-usage-page-adapter'
 import { usageBarsToMetrics } from '../usage-page/usage-metric-utils'
 import { ElectronSessionService } from '../browser/electron-session-service'
+import { AiInfrastructureLayer } from '../infrastructure-layer'
 
 const PROVIDER: 'cursor' = 'cursor'
 
@@ -112,21 +114,26 @@ const extractUserIdentifier = (
 
 /**
  * Cursor provider adapter using browser-based cookie authentication.
+ *
+ * HEXAGONAL ARCHITECTURE: This is an ADAPTER implementation of the AiProviderPort.
+ * It can be hot-swapped with other implementations (mock, test, alternative auth, etc.)
  */
-export class CursorBrowserProviderAdapter extends Effect.Service<CursorBrowserProviderAdapter>()(
-  'CursorBrowserProviderAdapter',
-  {
-    dependencies: [
-      BrowserAuthService.Default,
-      CookieUsagePageAdapter.Default,
-      ElectronSessionService.Default,
-    ],
-    effect: Effect.gen(function* () {
-      const browserAuth = yield* BrowserAuthService
-      const usagePage = yield* CookieUsagePageAdapter
-      const sessionService = yield* ElectronSessionService
 
-      const adapter: AiProviderAdapter = {
+// Register the provider tag
+const CursorProviderTag = AiProviderTags.register(PROVIDER)
+
+/**
+ * Live implementation of Cursor provider adapter as a Layer.
+ * This Layer provides the AiProviderPort for Cursor.
+ */
+export const CursorBrowserProviderAdapter = Layer.effect(
+  CursorProviderTag,
+  Effect.gen(function* () {
+    const browserAuth = yield* BrowserAuthService
+    const usagePage = yield* CookieUsagePageAdapter
+    const sessionService = yield* ElectronSessionService
+
+    const adapter: AiProviderPort = {
         provider: PROVIDER,
         supportsUsage: true,
 
@@ -346,9 +353,10 @@ export class CursorBrowserProviderAdapter extends Effect.Service<CursorBrowserPr
               metrics: usageBarsToMetrics(snapshot.bars),
             })
           }).pipe(Effect.mapError(mapUsageError(accountId))),
-      }
+    }
 
-      return adapter
-    }),
-  }
-) {}
+    return adapter
+  })
+).pipe(
+  Layer.provide(AiInfrastructureLayer)  // Shared infrastructure - memoized by reference
+)

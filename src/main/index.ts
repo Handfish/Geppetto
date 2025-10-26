@@ -19,8 +19,7 @@ import { ProviderRegistryService } from './providers/registry'
 import { VcsProviderService } from './providers/vcs-provider-service'
 import { setupProviderIpcHandlers } from './ipc/provider-handlers'
 import { AiAccountContextService } from './ai/account-context-service'
-import { OpenAiBrowserProviderAdapter } from './ai/openai/browser-provider-adapter'
-import { ClaudeBrowserProviderAdapter } from './ai/claude/browser-provider-adapter'
+import { AiAdaptersLayer } from './ai/adapters-layer'
 import { AiProviderRegistryService } from './ai/registry'
 import { AiProviderService } from './ai/ai-provider-service'
 import { setupAiProviderIpcHandlers } from './ipc/ai-provider-handlers'
@@ -42,6 +41,7 @@ import { setupSourceControlIpcHandlers } from './ipc/source-control-handlers'
 import { WorkspaceService } from './workspace/workspace-service'
 import { setupWorkspaceIpcHandlers } from './ipc/workspace-handlers'
 import { AiWatchersLayer } from './ai-watchers'
+import { CoreInfrastructureLayer } from './core-infrastructure-layer'
 
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
@@ -147,13 +147,9 @@ const MainLayer = Layer.mergeAll(
   // [FUTURE: CoreAdaptersLayer]
   NodeGitCommandRunner.Default,           // Adapter: GitCommandRunner port
   NodeFileSystemAdapter.Default,          // Adapter: FileSystemPort
-  ElectronSessionService.Default,         // Adapter: SessionPort (or Core Infra?)
 
-  // [FUTURE: CoreInfrastructureLayer]
-  SecureStoreService.Default,             // Core: Credential storage
-  TierService.Default,                    // Core: Feature gating
-  BrowserAuthService.Default,             // Core: Browser-based auth orchestration
-  CookieUsagePageAdapter.Default,         // Core: Cookie extraction adapter
+  // [FUTURE: CoreInfrastructureLayer] - NOW USING SHARED REFERENCE! ✅
+  CoreInfrastructureLayer,                // ✅ MEMOIZED: All infrastructure services (Browser, Session, Store, Tier)
 
   // [FUTURE: VcsAdaptersLayer]
   GitHubProviderAdapter.Default,          // Adapter: GitHub VCS provider
@@ -171,15 +167,21 @@ const MainLayer = Layer.mergeAll(
   VcsProviderService.Default,             // Domain: VCS provider orchestration
   ProviderFactoryService.Default,         // Domain: VCS provider factory
 
-  // [FUTURE: AiAdaptersLayer]
-  OpenAiBrowserProviderAdapter.Default,   // Adapter: OpenAI provider
-  ClaudeBrowserProviderAdapter.Default,   // Adapter: Claude provider
+  // [FUTURE: AiAdaptersLayer] - NOW IMPLEMENTED! ✅
+  // Note: AiAdaptersLayer is provided to AiDomainLayer below
+  // This ensures adapters are available when domain services need them
 
-  // [FUTURE: AiDomainLayer]
-  AiAccountContextService.Default,        // Domain: Multi-account AI management
-  AiProviderRegistryService.Default,      // Domain: AI provider registry
-  AiProviderService.Default,              // Domain: AI provider orchestration
-  AiWatchersLayer,                        // Domain: AI session watchers (already a sublayer!)
+  // [FUTURE: AiDomainLayer] - Partially implemented with proper dependency injection
+  // These services require the AI adapters, so we provide them via Layer.provide
+  Layer.provide(
+    Layer.mergeAll(
+      AiAccountContextService.Default,        // Domain: Multi-account AI management
+      AiProviderRegistryService.Default,      // Domain: AI provider registry (requires adapters)
+      AiProviderService.Default,              // Domain: AI provider orchestration (requires registry + adapters)
+      AiWatchersLayer                         // Domain: AI session watchers
+    ),
+    AiAdaptersLayer  // Provide adapters to all domain services
+  ),
 
   // [FUTURE: SourceControlDomainLayer]
   GitCommandService.Default,              // Domain: Git command execution

@@ -26,9 +26,7 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
       const tierService = yield* TierService
 
       return {
-        signIn: (
-          provider: AiProviderType
-        ): Effect.Effect<AiProviderSignInResult> =>
+        signIn: (provider: AiProviderType) =>
           Effect.gen(function* () {
             yield* tierService.ensureAiProvidersEnabled()
             const adapter = yield* registry.getAdapter(provider)
@@ -43,7 +41,7 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
             return signInResult
           }),
 
-        signOut: (accountId: AiAccountId): Effect.Effect<void> =>
+        signOut: (accountId: AiAccountId) =>
           Effect.gen(function* () {
             const context = yield* accountService.getContext()
             const account = context.getAccount(accountId)
@@ -71,7 +69,7 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
             return yield* adapter.checkAuth(accountId)
           }),
 
-        getUsage: (accountId: AiAccountId): Effect.Effect<AiUsageSnapshot> =>
+        getUsage: (accountId: AiAccountId) =>
           Effect.gen(function* () {
             const context = yield* accountService.getContext()
             const account = context.getAccount(accountId)
