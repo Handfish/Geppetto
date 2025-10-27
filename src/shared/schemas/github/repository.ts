@@ -12,6 +12,7 @@ export class GitHubRepository extends S.Class<GitHubRepository>(
   ssh_url: S.String,
   stargazers_count: S.Number,
   forks_count: S.Number,
+  fork: S.Boolean,
   open_issues_count: S.Number,
   language: S.NullOr(S.String),
   default_branch: S.String,

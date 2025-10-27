@@ -7,6 +7,7 @@ import { GitHubApiService } from './github/api-service'
 import { GitHubHttpService } from './github/http-service'
 import { SecureStoreService } from './github/store-service'
 import { VcsAdaptersLayer } from './vcs/adapters-layer'
+import { VcsSourceControlAdaptersLayer } from './vcs/adapters/source-control'
 import { TierService } from './tier/tier-service'
 import { AccountContextService } from './account/account-context-service'
 import { setupAccountIpcHandlers } from './ipc/account-handlers'
@@ -122,13 +123,26 @@ const MainLayer = Layer.mergeAll(
   // ═══════════════════════════════════════════════════════════════════════
   // SOURCE CONTROL DOMAIN (Infrastructure Adapters Only)
   // ═══════════════════════════════════════════════════════════════════════
-  // Note: Provider operations (GitHub, GitLab) use VCS domain services directly
+  // Note: Provider operations use ProviderPortFactory (implemented by VCS domain)
 
-  // Source Control Domain Services
-  GitCommandService.Default,              // Git command execution
-  RepositoryService.Default,              // Repository discovery and management
-  CommitGraphService.Default,             // Commit graph operations
-  SyncService.Default,                    // Repository synchronization (uses GitHubApiService from VCS)
+  // Source Control Domain Services with VCS adapter for ProviderPortFactory
+  // SyncService depends on ProviderPortFactory from VcsSourceControlAdaptersLayer
+  Layer.provide(
+    Layer.mergeAll(
+      GitCommandService.Default,              // Git command execution
+      RepositoryService.Default,              // Repository discovery and management
+      CommitGraphService.Default,             // Commit graph operations
+      SyncService.Default,                    // Repository synchronization (uses ProviderPortFactory)
+    ),
+    Layer.provide(
+      VcsSourceControlAdaptersLayer,
+      Layer.mergeAll(
+        GitHubApiService.Default,
+        GitHubHttpService.Default,
+        SecureStoreService.Default
+      )
+    )
+  ),
 
   // ═══════════════════════════════════════════════════════════════════════
   // WORKSPACE DOMAIN (Orchestration Layer)

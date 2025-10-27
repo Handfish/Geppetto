@@ -8,7 +8,7 @@ import { GitCommandRequest } from '../../../shared/schemas/source-control'
 import { GitCommandDomainError } from '../../../shared/schemas/source-control/errors'
 import { ProviderType } from '../../../shared/schemas/account-context'
 import { Data } from 'effect'
-import { GitHubApiService } from '../../github/api-service'
+import { ProviderPortFactory } from '../ports/secondary/provider-port'
 
 /**
  * Sync operation errors
@@ -85,7 +85,7 @@ export class ProviderSyncResult extends Data.TaggedClass('ProviderSyncResult')<{
 export class SyncService extends Effect.Service<SyncService>()('SyncService', {
   effect: Effect.gen(function* () {
     const gitRunner = yield* NodeGitCommandRunner
-    const githubApi = yield* GitHubApiService
+    const providerFactory = yield* ProviderPortFactory
     const repoManagement = yield* RepositoryService
 
     /**
@@ -292,37 +292,40 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
 
           const { owner, repo: repoName } = ownerAndRepo
 
-          // Only GitHub is currently supported
-          if (providerType !== 'github') {
-            return yield* Effect.fail(
-              new ProviderSyncError({
-                repositoryId,
-                provider: providerType,
-                message: `Provider ${providerType} not yet supported. Currently only 'github' is supported.`,
-              })
-            )
-          }
-
-          // Fetch repository metadata from GitHub
-          const githubRepo = yield* githubApi.getRepository(owner, repoName).pipe(
+          // Get provider implementation via factory
+          const provider = yield* providerFactory.getProvider(providerType).pipe(
             Effect.catchAll((error) =>
               Effect.fail(
                 new ProviderSyncError({
                   repositoryId,
                   provider: providerType,
-                  message: 'Failed to fetch repository metadata from GitHub',
+                  message: `Provider ${providerType} not supported: ${error.message ?? 'Unknown error'}`,
                   cause: error,
                 })
               )
             )
           )
 
-          // Convert to provider format
+          // Fetch repository metadata from provider
+          const providerRepo = yield* provider.getRepository(owner, repoName).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new ProviderSyncError({
+                  repositoryId,
+                  provider: providerType,
+                  message: 'Failed to fetch repository metadata from provider',
+                  cause: error,
+                })
+              )
+            )
+          )
+
+          // Extract metadata from provider response
           const metadata = {
-            defaultBranch: githubRepo.default_branch,
-            stars: githubRepo.stargazers_count ?? 0,
-            forks: githubRepo.forks_count ?? 0,
-            updatedAt: githubRepo.updated_at ? new Date(githubRepo.updated_at) : new Date(),
+            defaultBranch: providerRepo.defaultBranch,
+            stars: providerRepo.stars ?? 0,
+            forks: providerRepo.forks ?? 0,
+            updatedAt: providerRepo.updatedAt,
           }
 
           // Fetch latest changes from remote
@@ -411,7 +414,6 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
   }),
   dependencies: [
     NodeGitCommandRunner.Default,
-    GitHubApiService.Default,
     RepositoryService.Default,
   ],
 }) {}

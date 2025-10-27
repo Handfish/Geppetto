@@ -1,4 +1,4 @@
-import { Effect } from 'effect'
+import { Effect, Context } from 'effect'
 import { Data } from 'effect'
 import { AccountId, ProviderType } from '../../../../shared/schemas/account-context'
 import { Redacted } from 'effect'
@@ -298,22 +298,32 @@ export interface ProviderPort {
 }
 
 /**
- * Tag for dependency injection
- */
-export const ProviderPort = Effect.Tag<ProviderPort>('ProviderPort')
-
-/**
- * Note: Provider operations are now handled directly by VCS domain services.
- * The ProviderFactory pattern was removed as it created redundancy with the
- * existing VCS provider infrastructure (GitHubApiService, etc.).
+ * ProviderPortFactory - Factory for obtaining provider implementations
  *
- * For provider operations, use VCS domain services directly:
- * - GitHubApiService for GitHub operations
- * - GitLabApiService for GitLab operations (future)
- * - BitbucketApiService for Bitbucket operations (future)
+ * This port uses the Factory pattern for dynamic provider selection.
+ * The source-control domain defines this interface, and the VCS domain provides implementations.
  *
- * The SyncService uses GitHubApiService directly for provider-specific operations.
+ * Architecture:
+ * - Source-control domain: Defines ProviderPort and ProviderPortFactory (what it needs)
+ * - VCS domain: Implements adapters (GitHubProviderAdapter, GitLabProviderAdapter, etc.)
+ * - Dependency inversion: Source-control depends on interface, VCS implements it
+ *
+ * Example usage in SyncService:
+ * ```typescript
+ * const factory = yield* ProviderPortFactory
+ * const provider = yield* factory.getProvider('github')
+ * const repo = yield* provider.getRepository(owner, name)
+ * ```
  */
+export interface ProviderPortFactory {
+  /**
+   * Get a provider implementation by type
+   *
+   * @param type - Provider type (github, gitlab, bitbucket, gitea)
+   * @returns Provider implementation or error if not supported
+   */
+  getProvider(type: ProviderType): Effect.Effect<ProviderPort, ProviderNotSupportedError>
+}
 
 /**
  * Error when provider type is not supported
@@ -322,3 +332,8 @@ export class ProviderNotSupportedError extends Data.TaggedError('ProviderNotSupp
   providerType: string
   supportedProviders: string[]
 }> {}
+
+/**
+ * Tag for dependency injection
+ */
+export const ProviderPortFactory = Context.GenericTag<ProviderPortFactory>('SourceControl/ProviderPortFactory')
