@@ -43,6 +43,6 @@ export const GitHubRateLimitConfig = Config.all({
   ),
 })
 
-export type GitHubRateLimitSettings = Config.Success<
+export type GitHubRateLimitSettings = Config.Config.Success<
   typeof GitHubRateLimitConfig
 >

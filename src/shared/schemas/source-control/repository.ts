@@ -32,8 +32,8 @@ export class BranchName extends S.Class<BranchName>('BranchName')({
  * RepositoryState - Serializable repository state
  */
 export class RepositoryState extends S.Class<RepositoryState>('RepositoryState')({
-  head: S.optional(CommitHash), // Commit hash
-  branch: S.optional(BranchName), // Branch name
+  head: S.optional(S.String), // Commit hash as string
+  branch: S.optional(S.String), // Branch name as string
   isDetached: S.Boolean,
   isMerging: S.Boolean,
   isRebasing: S.Boolean,
@@ -46,10 +46,10 @@ export class RepositoryState extends S.Class<RepositoryState>('RepositoryState')
  * Branch - Serializable branch entity
  */
 export class Branch extends S.Class<Branch>('Branch')({
-  name: BranchName,
+  name: S.String, // Branch name as string
   type: S.Literal('local', 'remote', 'tracking'),
-  commit: CommitHash, // Commit hash
-  upstream: S.optional(BranchName), // Upstream branch name
+  commit: S.String, // Commit hash as string
+  upstream: S.optional(S.String), // Upstream branch name as string
   isCurrent: S.Boolean,
   isDetached: S.Boolean,
 }) {}
@@ -72,9 +72,9 @@ export class RemoteUrl extends S.Class<RemoteUrl>('RemoteUrl')({
  * Remote - Serializable remote entity
  */
 export class Remote extends S.Class<Remote>('Remote')({
-  name: RemoteName,
-  fetchUrl: RemoteUrl,
-  pushUrl: S.optional(RemoteUrl),
+  name: S.String, // Remote name as string
+  fetchUrl: S.String, // Fetch URL as string
+  pushUrl: S.optional(S.String), // Push URL as string
 }) {}
 
 /**

@@ -1,4 +1,4 @@
-import { Effect } from 'effect'
+import { Effect, Context } from 'effect'
 import { RepositoryId, RepositoryNotFoundError } from '../../domain/aggregates/repository'
 import {
   CommitGraph,
@@ -309,4 +309,4 @@ export interface CommitOperationsPort {
 /**
  * Tag for dependency injection
  */
-export const CommitOperationsPort = Effect.Tag<CommitOperationsPort>('CommitOperationsPort')
+export const CommitOperationsPort = Context.GenericTag<CommitOperationsPort>('CommitOperationsPort')

@@ -7,6 +7,7 @@ import { makeCommitHash } from '../source-control/domain/value-objects/commit-ha
 import { makeBranchName } from '../source-control/domain/value-objects/branch-name'
 import { RepositoryId as DomainRepositoryId } from '../source-control/domain/aggregates/repository'
 import { GraphOptions as DomainGraphOptions } from '../source-control/domain/aggregates/commit-graph'
+import { toSharedRepository } from './repository-mapper'
 import type { RepositoryManagementPort } from '../source-control/ports/primary/repository-management-port'
 import type { CommitOperationsPort } from '../source-control/ports/primary/commit-operations-port'
 
@@ -58,45 +59,6 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     })
   }
 
-  /**
-   * Helper: Convert domain Repository to shared schema Repository
-   */
-  const toSharedRepository = (repo: any) => ({
-    id: { value: repo.id.value },
-    path: repo.path,
-    name: repo.name,
-    state: {
-      head: repo.state.head?.value,
-      branch: repo.state.branch?.value,
-      isDetached: repo.state.isDetached,
-      isMerging: repo.state.isMerging,
-      isRebasing: repo.state.isRebasing,
-      isCherryPicking: repo.state.isCherryPicking,
-      isBisecting: repo.state.isBisecting,
-      isReverting: repo.state.isReverting,
-    },
-    branches: repo.branches.map((b: any) => ({
-      name: b.name.value,
-      type: b.type,
-      commit: b.commit.value,
-      upstream: b.upstream?.value,
-      isCurrent: b.isCurrent,
-      isDetached: b.isDetached,
-    })),
-    remotes: repo.remotes.map((r: any) => ({
-      name: r.name.value,
-      fetchUrl: r.fetchUrl.value,
-      pushUrl: r.pushUrl?.value,
-    })),
-    config: repo.config
-      ? {
-          userName: repo.config.userName,
-          userEmail: repo.config.userEmail,
-          defaultBranch: repo.config.defaultBranch?.value,
-        }
-      : undefined,
-    gitDir: repo.gitDir,
-  })
 
   /**
    * Helper: Convert domain CommitGraph to shared schema CommitGraph
@@ -182,7 +144,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
   registerIpcHandler(
     SourceControlIpcContracts['source-control:discover-repositories'],
     (input) =>
-      repoService.discoverRepositories(input.searchPaths).pipe(
+      repoService.discoverRepositories([...input.searchPaths]).pipe(
         Effect.map((repos: any) => repos.map(toSharedRepository))
       )
   )

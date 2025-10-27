@@ -1,4 +1,4 @@
-import { Effect } from 'effect'
+import { Effect, Context } from 'effect'
 import { RepositoryId, RepositoryNotFoundError } from '../../domain/aggregates/repository'
 import {
   Branch,
@@ -419,4 +419,4 @@ export interface BranchOperationsPort {
 /**
  * Tag for dependency injection
  */
-export const BranchOperationsPort = Effect.Tag<BranchOperationsPort>('BranchOperationsPort')
+export const BranchOperationsPort = Context.GenericTag<BranchOperationsPort>('BranchOperationsPort')

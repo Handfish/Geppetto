@@ -1,4 +1,4 @@
-import { Effect } from 'effect'
+import { Effect, Context } from 'effect'
 import { RepositoryId, RepositoryNotFoundError } from '../../domain/aggregates/repository'
 import {
   WorkingTree,
@@ -376,4 +376,4 @@ export interface WorkingTreePort {
 /**
  * Tag for dependency injection
  */
-export const WorkingTreePort = Effect.Tag<WorkingTreePort>('WorkingTreePort')
+export const WorkingTreePort = Context.GenericTag<WorkingTreePort>('WorkingTreePort')

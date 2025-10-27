@@ -10,6 +10,7 @@ import { BrowserWindow } from 'electron'
 import { WorkspaceIpcContracts } from '../../shared/ipc-contracts'
 import { WorkspaceService } from '../workspace/workspace-service'
 import { registerIpcHandler } from './ipc-handler-setup'
+import { toSharedRepository } from './repository-mapper'
 
 /**
  * Setup workspace IPC handlers
@@ -67,11 +68,15 @@ export const setupWorkspaceIpcHandlers = Effect.gen(function* () {
 
   // Discover repositories in current workspace
   registerIpcHandler(WorkspaceIpcContracts.discoverWorkspaceRepositories, () =>
-    workspaceService.discoverWorkspaceRepositories
+    workspaceService.discoverWorkspaceRepositories.pipe(
+      Effect.map((repos: any) => repos.map(toSharedRepository))
+    )
   )
 
   // Get cached repositories from workspace
   registerIpcHandler(WorkspaceIpcContracts.getWorkspaceRepositories, () =>
-    workspaceService.getWorkspaceRepositories
+    workspaceService.getWorkspaceRepositories.pipe(
+      Effect.map((repos: any) => repos.map(toSharedRepository))
+    )
   )
 })

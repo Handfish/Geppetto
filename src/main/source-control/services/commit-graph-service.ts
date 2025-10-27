@@ -324,6 +324,16 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
               return result.stdout ?? ''
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to get commit',
+                  cause: error,
+                })
+              )
+            )
           )
 
           const commits = parseCommits(output)
@@ -411,6 +421,16 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
               return result.stdout ?? ''
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to get commit history',
+                  cause: error,
+                })
+              )
+            )
           )
 
           return parseCommits(output)
@@ -437,6 +457,16 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
               return result.stdout ?? ''
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to get commits in range',
+                  cause: error,
+                })
+              )
+            )
           )
 
           return parseCommits(output)
@@ -466,6 +496,16 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
               return result.stdout ?? ''
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to get commits by author',
+                  cause: error,
+                })
+              )
+            )
           )
 
           return parseCommits(output)
@@ -489,7 +529,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
             args.push('--signoff')
           }
 
-          const output = yield* Effect.scoped(
+          yield* Effect.scoped(
             Effect.gen(function* () {
               const request = new GitCommandRequest({
                 id: crypto.randomUUID() as GitCommandId,
@@ -498,10 +538,18 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
               })
 
               const handle = yield* gitRunner.execute(request)
-              const result = yield* handle.awaitResult
-
-              return result.stdout ?? ''
+              yield* handle.awaitResult
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to create commit',
+                  cause: error,
+                })
+              )
+            )
           )
 
           // Get new HEAD commit
@@ -518,6 +566,16 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
               return result.stdout?.trim() ?? ''
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to get HEAD commit',
+                  cause: error,
+                })
+              )
+            )
           )
 
           return makeCommitHash(headOutput)
@@ -556,6 +614,16 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
               const handle = yield* gitRunner.execute(request)
               yield* handle.awaitResult
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to cherry-pick commit',
+                  cause: error,
+                })
+              )
+            )
           )
 
           if (options?.noCommit) {
@@ -576,6 +644,16 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
               return result.stdout?.trim() ?? ''
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to get HEAD commit',
+                  cause: error,
+                })
+              )
+            )
           )
 
           return makeCommitHash(headOutput)
@@ -606,6 +684,16 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
               const handle = yield* gitRunner.execute(request)
               yield* handle.awaitResult
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to revert commit',
+                  cause: error,
+                })
+              )
+            )
           )
 
           // Get new HEAD
@@ -622,6 +710,16 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
               return result.stdout?.trim() ?? ''
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to get HEAD commit',
+                  cause: error,
+                })
+              )
+            )
           )
 
           return makeCommitHash(headOutput)
@@ -656,6 +754,16 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
               return result.stdout ?? ''
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to get child commits',
+                  cause: error,
+                })
+              )
+            )
           )
 
           const allCommits = parseCommits(output)
@@ -702,6 +810,16 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
               return result.stdout?.trim() ?? ''
             })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to find merge base',
+                  cause: error,
+                })
+              )
+            )
           )
 
           return makeCommitHash(output)

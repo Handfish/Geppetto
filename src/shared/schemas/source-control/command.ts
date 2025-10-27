@@ -42,13 +42,13 @@ export class GitCommandRequest extends S.Class<GitCommandRequest>(
   'GitCommandRequest'
 )({
   id: GitCommandId,
-  binary: S.optionalWith(S.String, () => 'git'),
+  binary: S.optionalWith(S.String, { default: () => 'git' }),
   args: S.Array(S.String),
   worktree: GitWorktreeContext,
   environment: S.optional(S.Array(GitCommandEnvironmentVariable)),
-  stdio: S.optionalWith(GitCommandStdioMode, () => 'pipe'),
+  stdio: S.optionalWith(GitCommandStdioMode, { default: () => 'pipe' as const }),
   timeoutMs: S.optional(S.Number.pipe(S.greaterThanOrEqualTo(0))),
-  allowInteractive: S.optionalWith(S.Boolean, () => false),
+  allowInteractive: S.optionalWith(S.Boolean, { default: () => false }),
 }) {}
 
 /**

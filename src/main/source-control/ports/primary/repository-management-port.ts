@@ -1,4 +1,4 @@
-import { Effect, Stream, Scope } from 'effect'
+import { Effect, Stream, Scope, Context } from 'effect'
 import {
   Repository,
   RepositoryId,
@@ -177,6 +177,6 @@ export interface RepositoryManagementPort {
 /**
  * Tag for dependency injection
  */
-export const RepositoryManagementPort = Effect.Tag<RepositoryManagementPort>(
+export const RepositoryManagementPort = Context.GenericTag<RepositoryManagementPort>(
   'RepositoryManagementPort'
 )

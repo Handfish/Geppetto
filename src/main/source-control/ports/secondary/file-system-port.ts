@@ -1,4 +1,4 @@
-import { Effect, Stream, Scope } from 'effect'
+import { Effect, Stream, Scope, Context } from 'effect'
 import { Data } from 'effect'
 
 /**
@@ -167,4 +167,4 @@ export interface FileSystemPort {
 /**
  * Tag for dependency injection
  */
-export const FileSystemPort = Effect.Tag<FileSystemPort>('FileSystemPort')
+export const FileSystemPort = Context.GenericTag<FileSystemPort>('FileSystemPort')

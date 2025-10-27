@@ -132,7 +132,7 @@ export class SourceControlClient extends Effect.Service<SourceControlClient>()(
         /**
          * Get all known repositories
          */
-        getAllRepositories: () => ipc.invoke('source-control:get-all-repositories', {}),
+        getAllRepositories: () => ipc.invoke('source-control:get-all-repositories', undefined),
 
         /**
          * Forget a repository (remove from cache)
@@ -257,11 +257,13 @@ export class SourceControlClient extends Effect.Service<SourceControlClient>()(
          */
         getDiff: (
           repositoryId: GetDiffInput['repositoryId'],
-          options: GetDiffInput['options']
+          path: GetDiffInput['path'],
+          staged?: GetDiffInput['staged']
         ) =>
           ipc.invoke('source-control:get-diff', {
             repositoryId,
-            options,
+            path,
+            staged,
           }),
 
         /**
@@ -289,11 +291,11 @@ export class SourceControlClient extends Effect.Service<SourceControlClient>()(
          */
         popStash: (
           repositoryId: PopStashInput['repositoryId'],
-          index?: PopStashInput['index']
+          stashIndex?: PopStashInput['stashIndex']
         ) =>
           ipc.invoke('source-control:pop-stash', {
             repositoryId,
-            index,
+            stashIndex,
           }),
       } as const
     }),
