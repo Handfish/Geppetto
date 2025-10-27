@@ -4,7 +4,7 @@ import { RepositoryService } from './repository-service'
 import { RepositoryId, RepositoryNotFoundError } from '../domain/aggregates/repository'
 import { RemoteUrl } from '../domain/value-objects/remote-url'
 import { BranchName } from '../domain/value-objects/branch-name'
-import { GitCommandRequest } from '../../../shared/schemas/source-control'
+import { GitCommandRequest, GitCommandId, GitWorktreeContext } from '../../../shared/schemas/source-control'
 import { GitCommandDomainError } from '../../../shared/schemas/source-control/errors'
 import { ProviderType } from '../../../shared/schemas/account-context'
 import { Data } from 'effect'
@@ -14,7 +14,7 @@ import { ProviderPortFactory } from '../ports/secondary/provider-port'
  * Sync operation errors
  */
 export class SyncOperationError extends Data.TaggedError('SyncOperationError')<{
-  operation: 'fetch' | 'pull' | 'push' | 'sync'
+  operation: 'fetch' | 'pull' | 'push' | 'sync' | 'git'
   repositoryId: RepositoryId
   message: string
   cause?: unknown
@@ -88,39 +88,6 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
     const providerFactory = yield* ProviderPortFactory
     const repoManagement = yield* RepositoryService
 
-    /**
-     * Helper: Execute git command and await result
-     */
-    const executeGitCommand = (
-      repositoryPath: string,
-      args: string[]
-    ): Effect.Effect<string, SyncOperationError | GitCommandDomainError, Scope.Scope> =>
-      Effect.gen(function* () {
-        const request: GitCommandRequest = {
-          commandId: crypto.randomUUID(),
-          args,
-          workingDirectory: repositoryPath,
-          env: {},
-        }
-
-        const handle = yield* gitRunner.execute(request)
-
-        const result = yield* handle.awaitResult
-
-        if (!result.success) {
-          return yield* Effect.fail(
-            new SyncOperationError({
-              operation: 'fetch',
-              repositoryId: new RepositoryId({ value: crypto.randomUUID() }),
-              message: `Git command failed: ${result.stderr}`,
-              cause: result.stderr,
-            })
-          )
-        }
-
-        return result.stdout
-      })
-
     return {
       /**
        * Fetch objects and refs from remote
@@ -132,7 +99,7 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
           prune?: boolean
           tags?: boolean
         }
-      ): Effect.Effect<SyncResult, RepositoryNotFoundError | SyncOperationError, Scope.Scope> =>
+      ): Effect.Effect<SyncResult, RepositoryNotFoundError | SyncOperationError | GitCommandDomainError | RemoteNotFoundError, Scope.Scope> =>
         Effect.gen(function* () {
           const repo = yield* repoManagement.getRepositoryById(repositoryId)
 
@@ -152,7 +119,30 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
           if (options?.prune) args.push('--prune')
           if (options?.tags) args.push('--tags')
 
-          yield* executeGitCommand(repo.path, args)
+          // Execute fetch command
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const request = new GitCommandRequest({
+                id: crypto.randomUUID() as GitCommandId,
+                args,
+                worktree: new GitWorktreeContext({ repositoryPath: repo.path }),
+              })
+
+              const handle = yield* gitRunner.execute(request)
+              const result = yield* handle.awaitResult
+
+              if (result.exitCode !== 0) {
+                return yield* Effect.fail(
+                  new SyncOperationError({
+                    operation: 'fetch',
+                    repositoryId,
+                    message: `Fetch failed: ${result.stderr ?? 'Unknown error'}`,
+                    cause: result.stderr,
+                  })
+                )
+              }
+            })
+          )
 
           return new SyncResult({
             operation: 'fetch',
@@ -174,7 +164,7 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
           rebase?: boolean
           ff?: 'only' | 'no'
         }
-      ): Effect.Effect<SyncResult, RepositoryNotFoundError | SyncOperationError, Scope.Scope> =>
+      ): Effect.Effect<SyncResult, RepositoryNotFoundError | SyncOperationError | GitCommandDomainError | RemoteNotFoundError, Scope.Scope> =>
         Effect.gen(function* () {
           const repo = yield* repoManagement.getRepositoryById(repositoryId)
 
@@ -196,7 +186,30 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
           if (options?.ff === 'only') args.push('--ff-only')
           if (options?.ff === 'no') args.push('--no-ff')
 
-          yield* executeGitCommand(repo.path, args)
+          // Execute pull command
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const request = new GitCommandRequest({
+                id: crypto.randomUUID() as GitCommandId,
+                args,
+                worktree: new GitWorktreeContext({ repositoryPath: repo.path }),
+              })
+
+              const handle = yield* gitRunner.execute(request)
+              const result = yield* handle.awaitResult
+
+              if (result.exitCode !== 0) {
+                return yield* Effect.fail(
+                  new SyncOperationError({
+                    operation: 'pull',
+                    repositoryId,
+                    message: `Pull failed: ${result.stderr ?? 'Unknown error'}`,
+                    cause: result.stderr,
+                  })
+                )
+              }
+            })
+          )
 
           return new SyncResult({
             operation: 'pull',
@@ -220,7 +233,7 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
           setUpstream?: boolean
           tags?: boolean
         }
-      ): Effect.Effect<SyncResult, RepositoryNotFoundError | SyncOperationError, Scope.Scope> =>
+      ): Effect.Effect<SyncResult, RepositoryNotFoundError | SyncOperationError | GitCommandDomainError | RemoteNotFoundError, Scope.Scope> =>
         Effect.gen(function* () {
           const repo = yield* repoManagement.getRepositoryById(repositoryId)
 
@@ -242,7 +255,30 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
           if (options?.setUpstream) args.push('--set-upstream')
           if (options?.tags) args.push('--tags')
 
-          yield* executeGitCommand(repo.path, args)
+          // Execute push command
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const request = new GitCommandRequest({
+                id: crypto.randomUUID() as GitCommandId,
+                args,
+                worktree: new GitWorktreeContext({ repositoryPath: repo.path }),
+              })
+
+              const handle = yield* gitRunner.execute(request)
+              const result = yield* handle.awaitResult
+
+              if (result.exitCode !== 0) {
+                return yield* Effect.fail(
+                  new SyncOperationError({
+                    operation: 'push',
+                    repositoryId,
+                    message: `Push failed: ${result.stderr ?? 'Unknown error'}`,
+                    cause: result.stderr,
+                  })
+                )
+              }
+            })
+          )
 
           return new SyncResult({
             operation: 'push',
@@ -262,7 +298,7 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
         repositoryId: RepositoryId,
         providerType: ProviderType,
         remoteName: string = 'origin'
-      ): Effect.Effect<ProviderSyncResult, RepositoryNotFoundError | ProviderSyncError, Scope.Scope> =>
+      ): Effect.Effect<ProviderSyncResult, RepositoryNotFoundError | ProviderSyncError | SyncOperationError | GitCommandDomainError | RemoteNotFoundError, Scope.Scope> =>
         Effect.gen(function* () {
           const repo = yield* repoManagement.getRepositoryById(repositoryId)
 
@@ -328,15 +364,23 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
             updatedAt: providerRepo.updatedAt,
           }
 
-          // Fetch latest changes from remote
-          let localUpdated = false
-          try {
-            yield* executeGitCommand(repo.path, ['fetch', remoteName])
-            localUpdated = true
-          } catch (error) {
-            // Fetch failed, but we still have provider metadata
-            localUpdated = false
-          }
+          // Fetch latest changes from remote (best effort - don't fail if this fails)
+          const localUpdated = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const request = new GitCommandRequest({
+                id: crypto.randomUUID() as GitCommandId,
+                args: ['fetch', remoteName],
+                worktree: new GitWorktreeContext({ repositoryPath: repo.path }),
+              })
+
+              const handle = yield* gitRunner.execute(request)
+              const result = yield* handle.awaitResult
+
+              return result.exitCode === 0
+            })
+          ).pipe(
+            Effect.catchAll(() => Effect.succeed(false)) // If fetch fails, still return metadata
+          )
 
           return new ProviderSyncResult({
             provider: providerType,
@@ -361,7 +405,7 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
         options?: {
           prune?: boolean
         }
-      ): Effect.Effect<SyncResult[], RepositoryNotFoundError | SyncOperationError, Scope.Scope> =>
+      ): Effect.Effect<SyncResult[], RepositoryNotFoundError | SyncOperationError | GitCommandDomainError, Scope.Scope> =>
         Effect.gen(function* () {
           const repo = yield* repoManagement.getRepositoryById(repositoryId)
 
@@ -369,7 +413,30 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
           const args = ['fetch', '--all']
           if (options?.prune) args.push('--prune')
 
-          yield* executeGitCommand(repo.path, args)
+          // Execute fetch --all command
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const request = new GitCommandRequest({
+                id: crypto.randomUUID() as GitCommandId,
+                args,
+                worktree: new GitWorktreeContext({ repositoryPath: repo.path }),
+              })
+
+              const handle = yield* gitRunner.execute(request)
+              const result = yield* handle.awaitResult
+
+              if (result.exitCode !== 0) {
+                return yield* Effect.fail(
+                  new SyncOperationError({
+                    operation: 'fetch',
+                    repositoryId,
+                    message: `Fetch all failed: ${result.stderr ?? 'Unknown error'}`,
+                    cause: result.stderr,
+                  })
+                )
+              }
+            })
+          )
 
           return repo.remotes.map(
             (remote) =>
@@ -391,19 +458,38 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
         branchName: BranchName
       ): Effect.Effect<
         { ahead: number; behind: number },
-        RepositoryNotFoundError | SyncOperationError,
+        RepositoryNotFoundError | SyncOperationError | GitCommandDomainError,
         Scope.Scope
       > =>
         Effect.gen(function* () {
           const repo = yield* repoManagement.getRepositoryById(repositoryId)
 
           // Get tracking information
-          const output = yield* executeGitCommand(repo.path, [
-            'rev-list',
-            '--left-right',
-            '--count',
-            `${branchName.value}...@{u}`,
-          ])
+          const output = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const request = new GitCommandRequest({
+                id: crypto.randomUUID() as GitCommandId,
+                args: ['rev-list', '--left-right', '--count', `${branchName.value}...@{u}`],
+                worktree: new GitWorktreeContext({ repositoryPath: repo.path }),
+              })
+
+              const handle = yield* gitRunner.execute(request)
+              const result = yield* handle.awaitResult
+
+              if (result.exitCode !== 0) {
+                return yield* Effect.fail(
+                  new SyncOperationError({
+                    operation: 'sync',
+                    repositoryId,
+                    message: `Failed to get tracking status: ${result.stderr ?? 'Unknown error'}`,
+                    cause: result.stderr,
+                  })
+                )
+              }
+
+              return result.stdout ?? ''
+            })
+          )
 
           // Parse output: "ahead\tbehind"
           const [ahead, behind] = output.trim().split('\t').map(Number)

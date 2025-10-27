@@ -6,7 +6,7 @@ import path from 'path'
 import { randomUUID } from 'crypto'
 import { WorkspaceConfig } from '../../shared/schemas/workspace'
 import { GitCommandService } from '../source-control/git-command-service'
-import { GitCommandRequest, GitWorktreeContext } from '../../shared/schemas/source-control/command'
+import { GitCommandRequest, GitWorktreeContext, GitCommandId } from '../../shared/schemas/source-control/command'
 import { RepositoryService } from '../source-control/services/repository-service'
 
 /**
@@ -176,7 +176,7 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
             // Step 1: Clone with --no-checkout and bare config
             // Git will create the directory for us
             const cloneRequest = new GitCommandRequest({
-              id: S.UUID.make(randomUUID()),
+              id: randomUUID() as GitCommandId,
               binary: 'git',
               args: ['clone', '--no-checkout', '-c', 'core.bare=true', cloneUrl, `${owner}-${provider}-${repoName}`],
               worktree: new GitWorktreeContext({
@@ -201,7 +201,7 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
             // Step 2: cd into directory and add worktree
             console.log('[WorkspaceService] Starting worktree add...')
             const worktreeRequest = new GitCommandRequest({
-              id: S.UUID.make(randomUUID()),
+              id: randomUUID() as GitCommandId,
               binary: 'git',
               args: ['worktree', 'add', defaultBranch, defaultBranch],
               worktree: new GitWorktreeContext({

@@ -605,7 +605,18 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
 
       validateRepository: (path: string) =>
         Effect.gen(function* () {
-          const isValid = yield* fileSystem.isGitRepository(path)
+          const isValid = yield* fileSystem.isGitRepository(path).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new RepositoryOperationError({
+                  repositoryId: new RepositoryId({ value: crypto.randomUUID() }),
+                  operation: 'validateRepository',
+                  reason: 'Failed to check if path is a Git repository',
+                  cause: error,
+                })
+              )
+            )
+          )
 
           if (!isValid) {
             return new RepositoryDiscoveryInfo({
@@ -618,7 +629,16 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
           }
 
           const gitDir = yield* fileSystem.getGitDirectory(path).pipe(
-            Effect.catchAll(() => Effect.succeed(''))
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new RepositoryOperationError({
+                  repositoryId: new RepositoryId({ value: crypto.randomUUID() }),
+                  operation: 'validateRepository',
+                  reason: 'Failed to get Git directory',
+                  cause: error,
+                })
+              )
+            )
           )
 
           const isBare = gitDir === path
@@ -646,6 +666,14 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
 
             // Watch .git directory for changes
             return fileSystem.watchDirectory(`${repo.path}/.git`).pipe(
+              Stream.mapError((error) =>
+                new RepositoryOperationError({
+                  repositoryId: repo.id,
+                  operation: 'watchRepository',
+                  reason: 'Failed to watch repository directory',
+                  cause: error,
+                })
+              ),
               Stream.map(
                 (fsEvent) =>
                   new RepositoryRefreshed({
