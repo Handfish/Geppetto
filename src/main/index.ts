@@ -30,9 +30,6 @@ import {
   CommitGraphService,
   SyncService,
   SourceControlAdaptersLayer,
-  SourceControlProvidersAdaptersLayer,
-  ProviderFactoryService,
-  GitHubProviderAdapter as SourceControlGitHubProviderAdapter,
 } from './source-control'
 import { setupSourceControlIpcHandlers } from './ipc/source-control-handlers'
 import { WorkspaceDomainLayer } from './workspace/workspace-layer'
@@ -100,7 +97,6 @@ const MainLayer = Layer.mergeAll(
   GitHubAuthService.Default,              // GitHub OAuth flow
   GitHubApiService.Default,               // GitHub API operations
   AccountContextService.Default,          // Multi-account VCS management
-  SourceControlGitHubProviderAdapter.Default, // GitHub source control integration
 
   // ═══════════════════════════════════════════════════════════════════════
   // AI PROVIDER DOMAIN (Multiple Implementation Pattern with Registry)
@@ -124,20 +120,15 @@ const MainLayer = Layer.mergeAll(
   AiWatchersLayer,                        // Process monitoring + Tmux session management
 
   // ═══════════════════════════════════════════════════════════════════════
-  // SOURCE CONTROL DOMAIN (Hybrid: Single Infrastructure + Multiple Providers)
+  // SOURCE CONTROL DOMAIN (Infrastructure Adapters Only)
   // ═══════════════════════════════════════════════════════════════════════
-
-  // Source Control Provider Factory (depends on SourceControlProvidersAdaptersLayer)
-  Layer.provide(
-    ProviderFactoryService.Default,       // Factory: Source control provider selection
-    SourceControlProvidersAdaptersLayer   // Adapters: GitHub, GitLab (future), Bitbucket (future)
-  ),
+  // Note: Provider operations (GitHub, GitLab) use VCS domain services directly
 
   // Source Control Domain Services
   GitCommandService.Default,              // Git command execution
   RepositoryService.Default,              // Repository discovery and management
   CommitGraphService.Default,             // Commit graph operations
-  SyncService.Default,                    // Repository synchronization
+  SyncService.Default,                    // Repository synchronization (uses GitHubApiService from VCS)
 
   // ═══════════════════════════════════════════════════════════════════════
   // WORKSPACE DOMAIN (Orchestration Layer)

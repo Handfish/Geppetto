@@ -303,21 +303,17 @@ export interface ProviderPort {
 export const ProviderPort = Effect.Tag<ProviderPort>('ProviderPort')
 
 /**
- * ProviderFactory - Factory for creating provider adapters
+ * Note: Provider operations are now handled directly by VCS domain services.
+ * The ProviderFactory pattern was removed as it created redundancy with the
+ * existing VCS provider infrastructure (GitHubApiService, etc.).
  *
- * Allows getting the appropriate provider adapter based on ProviderType.
+ * For provider operations, use VCS domain services directly:
+ * - GitHubApiService for GitHub operations
+ * - GitLabApiService for GitLab operations (future)
+ * - BitbucketApiService for Bitbucket operations (future)
+ *
+ * The SyncService uses GitHubApiService directly for provider-specific operations.
  */
-export interface ProviderFactory {
-  /**
-   * Get a provider adapter for the specified type
-   */
-  getProvider(type: ProviderType): Effect.Effect<ProviderPort, ProviderNotSupportedError>
-
-  /**
-   * Get all supported provider types
-   */
-  getSupportedProviders(): ProviderType[]
-}
 
 /**
  * Error when provider type is not supported
@@ -326,8 +322,3 @@ export class ProviderNotSupportedError extends Data.TaggedError('ProviderNotSupp
   providerType: string
   supportedProviders: string[]
 }> {}
-
-/**
- * Tag for dependency injection
- */
-export const ProviderFactory = Effect.Tag<ProviderFactory>('ProviderFactory')
