@@ -42,6 +42,22 @@ import { BroadcastService } from './broadcast/broadcast-service'
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
 
+// Create shared layer references to ensure single construction (memoization by reference)
+const GitHubServicesLayer = Layer.mergeAll(
+  GitHubHttpService.Default,
+  GitHubAuthService.Default,
+  GitHubApiService.Default
+)
+
+// VCS adapter layer with dependencies already provided
+const VcsSourceControlAdaptersWithDeps = Layer.provide(
+  VcsSourceControlAdaptersLayer,
+  Layer.mergeAll(
+    GitHubServicesLayer,
+    SecureStoreService.Default
+  )
+)
+
 /**
  * MainLayer - Application-wide Effect Layer Composition
  *
@@ -93,10 +109,8 @@ const MainLayer = Layer.mergeAll(
     VcsAdaptersLayer                      // Adapters: GitHub, GitLab, Bitbucket, Gitea
   ),
 
-  // VCS Domain Services (used by adapters, so at top level)
-  GitHubHttpService.Default,              // GitHub HTTP client
-  GitHubAuthService.Default,              // GitHub OAuth flow
-  GitHubApiService.Default,               // GitHub API operations
+  // VCS Domain Services (single reference to avoid duplication)
+  GitHubServicesLayer,                    // GitHub HTTP, Auth, API services
   AccountContextService.Default,          // Multi-account VCS management
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -125,23 +139,16 @@ const MainLayer = Layer.mergeAll(
   // ═══════════════════════════════════════════════════════════════════════
   // Note: Provider operations use ProviderPortFactory (implemented by VCS domain)
 
-  // Source Control Domain Services with VCS adapter for ProviderPortFactory
-  // SyncService depends on ProviderPortFactory from VcsSourceControlAdaptersLayer
+  // Source Control Domain Services with ProviderPortFactory
+  // SyncService needs ProviderPortFactory, so provide it via VcsSourceControlAdaptersWithDeps
   Layer.provide(
     Layer.mergeAll(
-      GitCommandService.Default,              // Git command execution
-      RepositoryService.Default,              // Repository discovery and management
-      CommitGraphService.Default,             // Commit graph operations
-      SyncService.Default,                    // Repository synchronization (uses ProviderPortFactory)
+      GitCommandService.Default,          // Git command execution
+      RepositoryService.Default,          // Repository discovery and management
+      CommitGraphService.Default,         // Commit graph operations
+      SyncService.Default,                // Repository synchronization (uses ProviderPortFactory)
     ),
-    Layer.provide(
-      VcsSourceControlAdaptersLayer,
-      Layer.mergeAll(
-        GitHubApiService.Default,
-        GitHubHttpService.Default,
-        SecureStoreService.Default
-      )
-    )
+    VcsSourceControlAdaptersWithDeps      // Provides ProviderPortFactory
   ),
 
   // ═══════════════════════════════════════════════════════════════════════

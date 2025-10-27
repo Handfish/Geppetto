@@ -415,5 +415,6 @@ export class SyncService extends Effect.Service<SyncService>()('SyncService', {
   dependencies: [
     NodeGitCommandRunner.Default,
     RepositoryService.Default,
+    // ProviderPortFactory is provided by VcsSourceControlAdaptersLayer in main/index.ts
   ],
 }) {}
