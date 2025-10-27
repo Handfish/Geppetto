@@ -1,8 +1,9 @@
 import { Schema as S } from 'effect'
-import { RepositoryId } from './repository'
+import { RepositoryId, CommitHash, BranchName } from './repository'
 
 /**
  * Shared schemas for CommitGraph domain - IPC-safe versions
+ * Uses branded types for type safety
  */
 
 /**
@@ -18,8 +19,8 @@ export class GitAuthor extends S.Class<GitAuthor>('GitAuthor')({
  * Commit - Serializable commit entity
  */
 export class Commit extends S.Class<Commit>('Commit')({
-  hash: S.String,
-  parents: S.Array(S.String),
+  hash: CommitHash,
+  parents: S.Array(CommitHash),
   author: GitAuthor,
   committer: GitAuthor,
   message: S.String,
@@ -33,8 +34,8 @@ export class Commit extends S.Class<Commit>('Commit')({
  */
 export class CommitWithRefs extends S.Class<CommitWithRefs>('CommitWithRefs')({
   commit: Commit,
-  branches: S.Array(S.String),
-  tags: S.Array(S.String),
+  branches: S.Array(BranchName),
+  tags: S.Array(S.String), // Keep tags as plain strings for now
   isHead: S.Boolean,
 }) {}
 
@@ -50,7 +51,7 @@ export class GraphLayoutPosition extends S.Class<GraphLayoutPosition>('GraphLayo
  * CommitGraphNode - Node in the commit graph
  */
 export class CommitGraphNode extends S.Class<CommitGraphNode>('CommitGraphNode')({
-  id: S.String, // Commit hash
+  id: CommitHash,
   commit: Commit,
   refs: S.Array(S.String),
   isHead: S.Boolean,
@@ -62,8 +63,8 @@ export class CommitGraphNode extends S.Class<CommitGraphNode>('CommitGraphNode')
  * CommitGraphEdge - Edge in the commit graph
  */
 export class CommitGraphEdge extends S.Class<CommitGraphEdge>('CommitGraphEdge')({
-  from: S.String, // Parent commit hash
-  to: S.String, // Child commit hash
+  from: CommitHash, // Parent commit hash
+  to: CommitHash, // Child commit hash
   isMerge: S.Boolean,
   column: S.Number,
 }) {}
@@ -73,8 +74,8 @@ export class CommitGraphEdge extends S.Class<CommitGraphEdge>('CommitGraphEdge')
  */
 export class GraphOptions extends S.Class<GraphOptions>('GraphOptions')({
   maxCommits: S.Number.pipe(S.int(), S.positive()),
-  includeBranches: S.optional(S.Array(S.String)),
-  excludeBranches: S.optional(S.Array(S.String)),
+  includeBranches: S.optional(S.Array(BranchName)),
+  excludeBranches: S.optional(S.Array(BranchName)),
   since: S.optional(S.Date),
   until: S.optional(S.Date),
   author: S.optional(S.String),

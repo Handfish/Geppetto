@@ -46,7 +46,7 @@ export interface RepositoryManagementPort {
    * @param path - Absolute path to repository root
    * @returns Repository aggregate
    */
-  getRepository(path: string): Effect.Effect<Repository, RepositoryNotFoundError>
+  getRepository(path: string): Effect.Effect<Repository, RepositoryNotFoundError | RepositoryOperationError>
 
   /**
    * Get a repository by its ID
@@ -94,7 +94,7 @@ export interface RepositoryManagementPort {
    * @param path - Path to check
    * @returns Validation result with details
    */
-  validateRepository(path: string): Effect.Effect<RepositoryDiscoveryInfo, never>
+  validateRepository(path: string): Effect.Effect<RepositoryDiscoveryInfo, RepositoryOperationError>
 
   /**
    * Watch a repository for changes
@@ -108,7 +108,7 @@ export interface RepositoryManagementPort {
    */
   watchRepository(
     repositoryId: RepositoryId
-  ): Stream.Stream<AnyRepositoryEvent, RepositoryNotFoundError, Scope.Scope>
+  ): Stream.Stream<AnyRepositoryEvent, RepositoryNotFoundError | RepositoryOperationError, Scope.Scope>
 
   /**
    * Get repository metadata

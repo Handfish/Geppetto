@@ -4,36 +4,41 @@ import { Schema as S } from 'effect'
  * Shared schemas for Repository domain - IPC-safe versions
  *
  * These schemas are serializable and can cross the IPC boundary.
- * They mirror the domain aggregates but use primitive types.
+ * Uses branded types for type safety without runtime overhead.
  */
+
+/**
+ * Branded types for type-safe primitives
+ * These serialize as plain strings/UUIDs but have compile-time type safety
+ */
+export const RepositoryIdValue = S.UUID.pipe(S.brand('RepositoryId'))
+export type RepositoryIdValue = S.Schema.Type<typeof RepositoryIdValue>
+
+export const CommitHash = S.String.pipe(S.brand('CommitHash'))
+export type CommitHash = S.Schema.Type<typeof CommitHash>
+
+export const BranchName = S.String.pipe(S.brand('BranchName'))
+export type BranchName = S.Schema.Type<typeof BranchName>
+
+export const RemoteName = S.String.pipe(S.brand('RemoteName'))
+export type RemoteName = S.Schema.Type<typeof RemoteName>
+
+export const RemoteUrl = S.String.pipe(S.brand('RemoteUrl'))
+export type RemoteUrl = S.Schema.Type<typeof RemoteUrl>
 
 /**
  * RepositoryId - Serializable repository identifier
  */
 export class RepositoryId extends S.Class<RepositoryId>('RepositoryId')({
-  value: S.UUID,
-}) {}
-
-/**
- * CommitHash value object - for type safety
- */
-export class CommitHash extends S.Class<CommitHash>('CommitHash')({
-  value: S.String,
-}) {}
-
-/**
- * BranchName value object - for type safety
- */
-export class BranchName extends S.Class<BranchName>('BranchName')({
-  value: S.String,
+  value: RepositoryIdValue,
 }) {}
 
 /**
  * RepositoryState - Serializable repository state
  */
 export class RepositoryState extends S.Class<RepositoryState>('RepositoryState')({
-  head: S.optional(S.String), // Commit hash as string
-  branch: S.optional(S.String), // Branch name as string
+  head: S.optional(CommitHash),
+  branch: S.optional(BranchName),
   isDetached: S.Boolean,
   isMerging: S.Boolean,
   isRebasing: S.Boolean,
@@ -46,35 +51,21 @@ export class RepositoryState extends S.Class<RepositoryState>('RepositoryState')
  * Branch - Serializable branch entity
  */
 export class Branch extends S.Class<Branch>('Branch')({
-  name: S.String, // Branch name as string
+  name: BranchName,
   type: S.Literal('local', 'remote', 'tracking'),
-  commit: S.String, // Commit hash as string
-  upstream: S.optional(S.String), // Upstream branch name as string
+  commit: CommitHash,
+  upstream: S.optional(BranchName),
   isCurrent: S.Boolean,
   isDetached: S.Boolean,
-}) {}
-
-/**
- * RemoteName value object - for type safety
- */
-export class RemoteName extends S.Class<RemoteName>('RemoteName')({
-  value: S.String,
-}) {}
-
-/**
- * RemoteUrl value object - for type safety
- */
-export class RemoteUrl extends S.Class<RemoteUrl>('RemoteUrl')({
-  value: S.String,
 }) {}
 
 /**
  * Remote - Serializable remote entity
  */
 export class Remote extends S.Class<Remote>('Remote')({
-  name: S.String, // Remote name as string
-  fetchUrl: S.String, // Fetch URL as string
-  pushUrl: S.optional(S.String), // Push URL as string
+  name: RemoteName,
+  fetchUrl: RemoteUrl,
+  pushUrl: S.optional(RemoteUrl),
 }) {}
 
 /**

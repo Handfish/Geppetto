@@ -9,18 +9,22 @@ import {
   RepositoryMetadata,
   RepositoryDiscoveryInfo,
   RepositoryConfig,
-  Branch,
-  Remote,
-  CommitHash,
-  BranchName,
-  RemoteName,
-  RemoteUrl,
-} from '../../../shared/schemas/source-control'
-import {
   RepositoryNotFoundError,
   InvalidRepositoryError,
   RepositoryOperationError,
 } from '../domain/aggregates/repository'
+import {
+  Branch,
+  BranchType,
+} from '../domain/entities/branch'
+import {
+  Remote,
+  RemoteName,
+  RefSpec,
+} from '../domain/entities/remote'
+import { CommitHash, makeCommitHash } from '../domain/value-objects/commit-hash'
+import { BranchName, makeBranchName } from '../domain/value-objects/branch-name'
+import { RemoteUrl, makeRemoteUrl } from '../domain/value-objects/remote-url'
 import {
   GitCommandRequest,
   GitWorktreeContext,
@@ -380,6 +384,8 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
                 name: new RemoteName({ value: remoteName }),
                 fetchUrl: new RemoteUrl({ value: fetchUrl }),
                 pushUrl: pushUrl && pushUrl !== fetchUrl ? new RemoteUrl({ value: pushUrl }) : undefined,
+                fetchRefSpecs: [], // TODO: Fetch actual refspecs
+                pushRefSpecs: [], // TODO: Fetch actual refspecs
               })
             )
           }
