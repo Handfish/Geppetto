@@ -247,12 +247,17 @@ export function useForgetRepository() {
  *
  * **IMPORTANT**: This hook requires a non-null repositoryId.
  * Components should handle null with early returns before calling this hook.
+ *
+ * **NOTE**: The `options` parameter should be memoized or defined as a constant
+ * to prevent atom family from creating new subscriptions. See SourceControlDevPanel
+ * for an example of proper memoization.
  */
 export function useCommitGraph(
   repositoryId: RepositoryId,
   options?: GraphOptions,
 ) {
   // Memoize params to prevent atom family from creating new subscriptions on every render
+  // IMPORTANT: Callers must memoize the options object to ensure this works correctly
   const params = useMemo(
     () => ({ repositoryId, options }),
     [repositoryId.value, options]

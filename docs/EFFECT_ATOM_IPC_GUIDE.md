@@ -344,6 +344,52 @@ reposAtom(undefined)  // ← Cache entry 3 (current user)
 - Separate reactivity key for invalidation
 - Distinct subscription tracking
 
+#### ⚠️ Critical: Object Parameter Memoization
+
+**Atom families use object identity** (reference equality) to determine if it's the same atom. This means **you must memoize objects passed to atom families** or you'll create infinite subscription loops!
+
+```typescript
+// ❌ WRONG: New object every render = infinite loop
+function CommitView({ repoId }: Props) {
+  const { graph } = useCommitGraph(repoId, { maxCommits: 20, layout: 'topological' })
+  //                                        ▲ New object reference every render!
+  // This creates a NEW atom subscription on every render → infinite requests
+}
+
+// ✅ CORRECT: Memoized object = stable reference
+function CommitView({ repoId }: Props) {
+  const graphOptions = useMemo(
+    () => ({ maxCommits: 20, layout: 'topological' as const }),
+    [] // Empty deps = stable reference
+  )
+  const { graph } = useCommitGraph(repoId, graphOptions)
+  // Same object reference every render → reuses same atom → shared cache
+}
+
+// ✅ ALSO CORRECT: Module-level constant (when options don't change)
+const GRAPH_OPTIONS = { maxCommits: 20, layout: 'topological' as const }
+
+function CommitView({ repoId }: Props) {
+  const { graph } = useCommitGraph(repoId, GRAPH_OPTIONS)
+  // All components share the same constant → perfect cache sharing
+}
+```
+
+**Why this matters:**
+
+1. **Performance**: New object = new atom = new IPC call = wasted work
+2. **Cache sharing**: Multiple components with same options should share cache
+3. **Memory leaks**: Uncollected atom subscriptions accumulate in memory
+
+**Best practices:**
+
+- **Simple values** (strings, numbers): No memoization needed
+- **Objects/arrays**: Always memoize with `useMemo` or use module-level constants
+- **Computed options**: Include all source values in `useMemo` dependency array
+- **Shared options**: Define once at module level, import everywhere
+
+See the **[Atom Family Memoization Pattern](#pattern-5-atom-family-parameter-memoization)** section for detailed examples.
+
 ### 3. Reactivity Keys (Cache Invalidation)
 
 Reactivity keys create relationships between atoms for smart invalidation:
@@ -867,6 +913,202 @@ function IssueList() {
 }
 ```
 
+### Pattern 5: Atom Family Parameter Memoization
+
+**Problem:** Atom families use object identity to cache subscriptions. Passing inline objects creates infinite loops because each render creates a new object reference, which the atom family treats as a different subscription.
+
+**Symptoms of the problem:**
+- Infinite IPC requests in console logs
+- UI stuck in loading state
+- Backend logs show repeated cache hits for same query
+- Browser performance degrades over time
+
+#### Anti-Pattern: Inline Objects
+
+```typescript
+// ❌ WRONG: Creates infinite loop
+function CommitGraphView({ repositoryId }: Props) {
+  const { graphResult } = useCommitGraph(
+    repositoryId,
+    { maxCommits: 20, layoutAlgorithm: 'topological' }  // ← New object every render!
+  )
+  // Every render:
+  // 1. New options object created
+  // 2. Hook creates new params object
+  // 3. Atom family sees different reference
+  // 4. Creates new atom subscription
+  // 5. Triggers IPC request
+  // 6. Result arrives → component re-renders
+  // 7. Go to step 1 → INFINITE LOOP
+}
+```
+
+**What you'll see in console:**
+```
+[commitGraphAtom] Requesting commit graph for: abc-123
+[CommitGraphService] Cache HIT for repository: abc-123
+[commitGraphAtom] Received graph with 20 nodes
+[commitGraphAtom] Requesting commit graph for: abc-123  ← Again!
+[CommitGraphService] Cache HIT for repository: abc-123
+[commitGraphAtom] Received graph with 20 nodes
+[commitGraphAtom] Requesting commit graph for: abc-123  ← Again!!
+... (repeats infinitely)
+```
+
+#### Solution 1: useMemo in Component
+
+Use `useMemo` to create a stable reference within the component:
+
+```typescript
+// ✅ CORRECT: Memoized object = stable reference
+function CommitGraphView({ repositoryId }: Props) {
+  // Memoize options object to ensure stable reference
+  const graphOptions = useMemo(
+    () => ({ maxCommits: 20, layoutAlgorithm: 'topological' as const }),
+    [] // Empty array = never recreates (static options)
+  )
+
+  const { graphResult } = useCommitGraph(repositoryId, graphOptions)
+  // Same object reference every render → reuses same atom → no duplicate requests
+}
+
+// For computed options, include dependencies:
+function DynamicCommitGraphView({ repositoryId, maxCommits }: Props) {
+  const graphOptions = useMemo(
+    () => ({ maxCommits, layoutAlgorithm: 'topological' as const }),
+    [maxCommits]  // Recreate only when maxCommits changes
+  )
+
+  const { graphResult } = useCommitGraph(repositoryId, graphOptions)
+}
+```
+
+#### Solution 2: Module-Level Constants
+
+For options that never change, define constants at module level:
+
+```typescript
+// ✅ BEST: Module-level constant (shared across ALL components)
+const DEFAULT_GRAPH_OPTIONS = { maxCommits: 20, layoutAlgorithm: 'topological' as const }
+const LARGE_GRAPH_OPTIONS = { maxCommits: 100, layoutAlgorithm: 'topological' as const }
+
+function CommitGraphView({ repositoryId }: Props) {
+  const { graphResult } = useCommitGraph(repositoryId, DEFAULT_GRAPH_OPTIONS)
+  // All components using DEFAULT_GRAPH_OPTIONS share the same atom!
+}
+
+function DetailedGraphView({ repositoryId }: Props) {
+  const { graphResult } = useCommitGraph(repositoryId, LARGE_GRAPH_OPTIONS)
+  // Different options = different atom (but still properly cached)
+}
+```
+
+**Benefits of module-level constants:**
+- ✅ Perfect cache sharing across all components
+- ✅ Zero re-computation overhead
+- ✅ Clearest intent (options are truly constant)
+- ✅ Easy to maintain (defined once, used everywhere)
+
+#### Solution 3: Smart Hook Implementation
+
+You can also handle memoization inside custom hooks:
+
+```typescript
+// Custom hook with built-in memoization
+export function useCommitGraph(
+  repositoryId: RepositoryId,
+  options?: GraphOptions,
+) {
+  // Memoize params object based on repositoryId and options reference
+  const params = useMemo(
+    () => ({ repositoryId, options }),
+    [repositoryId.value, options]  // ← Depends on options reference
+  )
+
+  const graphResult = useAtomValue(commitGraphAtom(params))
+  const refresh = useAtomRefresh(commitGraphAtom(params))
+
+  return {
+    graphResult,
+    refresh,
+    graph: Result.getOrElse(graphResult, () => null),
+    isLoading: graphResult._tag === "Initial" && graphResult.waiting,
+  }
+}
+
+// Callers must still memoize options!
+// The hook only memoizes the params wrapper, not the options themselves
+```
+
+#### When to Use Each Approach
+
+| Scenario | Approach | Example |
+|----------|----------|---------|
+| Static options (never change) | Module-level constant | `const OPTIONS = { maxCommits: 20 }` |
+| Options vary by component | `useMemo` in component | `useMemo(() => ({ maxCommits }), [maxCommits])` |
+| Options computed from props | `useMemo` with dependencies | `useMemo(() => ({ max: limit * 2 }), [limit])` |
+| Options shared across features | Exported constants | `export const GRAPH_OPTIONS = {...}` |
+
+#### Real-World Example
+
+```typescript
+// src/renderer/components/dev/SourceControlDevPanel.tsx
+
+function SourceControlDevPanel() {
+  const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
+
+  // Memoize graph options to ensure stable reference for atom family
+  // This prevents creating new atom subscriptions on every render
+  const graphOptions = useMemo(
+    () => ({ maxCommits: 20, layoutAlgorithm: 'topological' as const }),
+    [] // Static options - never change
+  )
+
+  return (
+    <div>
+      {selectedRepository && (
+        <CommitGraphView
+          repositoryId={selectedRepository.id}
+          options={graphOptions}  // ← Stable reference
+        />
+      )}
+    </div>
+  )
+}
+
+// Multiple instances share the same atom because options reference is stable:
+// Instance 1: useCommitGraph(repo1, graphOptions)  → Atom A
+// Instance 2: useCommitGraph(repo2, graphOptions)  → Atom B (different repo)
+// Instance 3: useCommitGraph(repo1, graphOptions)  → Atom A (reused!)
+```
+
+#### Debugging Tips
+
+If you suspect an infinite loop issue:
+
+1. **Check console logs**: Look for repeated identical requests
+2. **Add logging to hooks**: Log when params objects are created
+3. **Use React DevTools**: Check if component is re-rendering continuously
+4. **Verify memoization**: Add `console.log(options)` in hook to see if reference changes
+
+```typescript
+export function useCommitGraph(repositoryId: RepositoryId, options?: GraphOptions) {
+  // Debug: Log when options reference changes
+  React.useEffect(() => {
+    console.log('[useCommitGraph] Options reference changed:', options)
+  }, [options])
+
+  const params = useMemo(
+    () => {
+      console.log('[useCommitGraph] Creating new params object')
+      return { repositoryId, options }
+    },
+    [repositoryId.value, options]
+  )
+  // If you see "Creating new params object" on every render, options aren't memoized!
+}
+```
+
 ---
 
 ## Summary
@@ -898,9 +1140,13 @@ GitHub REST API
 
 1. **Atoms are reactive caches** for Effect computations
 2. **Atom families** create per-parameter cache instances (like React Query keys)
-3. **Reactivity keys** enable cross-atom cache invalidation
-4. **Result type** provides exhaustive async state handling
-5. **Type safety** is enforced end-to-end via Effect Schema
-6. **Dependency injection** composes cleanly from main process to React
+3. **⚠️ Object parameters must be memoized** to prevent infinite loops with atom families
+4. **Reactivity keys** enable cross-atom cache invalidation
+5. **Result type** provides exhaustive async state handling
+6. **Type safety** is enforced end-to-end via Effect Schema
+7. **Dependency injection** composes cleanly from main process to React
+
+**Critical Best Practice:**
+Always memoize objects/arrays passed to atom families using `useMemo` or module-level constants. Failure to do so creates infinite subscription loops that degrade performance and waste resources. See [Pattern 5: Atom Family Parameter Memoization](#pattern-5-atom-family-parameter-memoization) for details.
 
 This architecture gives you the best of both worlds: Effect's functional programming power with React's reactive UI model.

@@ -95,7 +95,8 @@ export function SourceControlDevPanel() {
     )
   }
 
-  // Memoize graph options to prevent atom family from creating new subscriptions
+  // Memoize graph options to ensure stable reference for atom family
+  // This prevents creating new atom subscriptions on every render
   const graphOptions = useMemo(
     () => ({ maxCommits: 20, layoutAlgorithm: 'topological' as const }),
     []
