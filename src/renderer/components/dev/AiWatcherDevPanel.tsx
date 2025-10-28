@@ -5,59 +5,59 @@
  * Exposes window.__DEV_AI_WATCHERS__ API in console.
  */
 
-import { useEffect, useRef, useState } from 'react'
-import { Result } from '@effect-atom/atom-react'
+import { useEffect, useRef, useState } from "react";
+import { Result } from "@effect-atom/atom-react";
 import {
   useAiWatchers,
   useTmuxSessions,
   useWatcherLogs,
-} from '../../hooks/useAiWatchers'
+} from "../../hooks/useAiWatchers";
 import type {
   AiWatcherConfig,
   AiWatcher,
   TmuxSession,
   LogEntry,
-} from '../../../shared/schemas/ai-watchers'
-import type { NetworkError } from '../../../shared/schemas/errors'
-import type { WatcherNotFoundError } from '../../../shared/schemas/ai-watchers/errors'
+} from "../../../shared/schemas/ai-watchers";
+import type { NetworkError } from "../../../shared/schemas/errors";
+import type { WatcherNotFoundError } from "../../../shared/schemas/ai-watchers/errors";
 
 // Type-safe window extension for dev API
 interface DevAiWatchersAPI {
-  listWatchers: () => readonly AiWatcher[]
-  listTmuxSessions: () => readonly TmuxSession[]
-  createWatcher: (config: Partial<AiWatcherConfig>) => void
-  attachToTmux: (sessionName: string) => void
-  stopWatcher: (watcherId: string) => void
-  startWatcher: (watcherId: string) => void
-  showPanel: () => void
-  hidePanel: () => void
-  togglePanel: () => void
+  listWatchers: () => readonly AiWatcher[];
+  listTmuxSessions: () => readonly TmuxSession[];
+  createWatcher: (config: Partial<AiWatcherConfig>) => void;
+  attachToTmux: (sessionName: string) => void;
+  stopWatcher: (watcherId: string) => void;
+  startWatcher: (watcherId: string) => void;
+  showPanel: () => void;
+  hidePanel: () => void;
+  togglePanel: () => void;
   getResults: () => {
-    watchers: unknown
-    sessions: unknown
-    createResult: unknown
-  }
+    watchers: unknown;
+    sessions: unknown;
+    createResult: unknown;
+  };
 }
 
 declare global {
   interface Window {
-    __DEV_AI_WATCHERS__?: DevAiWatchersAPI
+    __DEV_AI_WATCHERS__?: DevAiWatchersAPI;
   }
 }
 
 // Helper to clean object by removing undefined properties
 // This ensures optional schema fields work correctly over IPC
 function cleanConfig<T extends Record<string, unknown>>(obj: T): Partial<T> {
-  const result: Partial<T> = {}
+  const result: Partial<T> = {};
   for (const key in obj) {
     if (obj[key] !== undefined) {
-      result[key] = obj[key]
+      result[key] = obj[key];
     }
   }
-  return result
+  return result;
 }
 
-const LOG_REFRESH_INTERVAL_MS = 1000  // Simple 1-second refresh
+const LOG_REFRESH_INTERVAL_MS = 1000; // Simple 1-second refresh
 
 /**
  * Component to display logs for a watcher
@@ -66,82 +66,94 @@ function WatcherLogsDisplay({
   watcherId,
   autoRefresh,
 }: {
-  watcherId: string
-  autoRefresh: boolean
+  watcherId: string;
+  autoRefresh: boolean;
 }) {
-  const { logsResult, refreshLogs } = useWatcherLogs(watcherId, 50)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const renderCountRef = useRef(0)
-  const refreshCountRef = useRef(0)
+  const { logsResult, refreshLogs } = useWatcherLogs(watcherId, 50);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const renderCountRef = useRef(0);
+  const refreshCountRef = useRef(0);
 
   // Debug: Track renders
-  renderCountRef.current++
-  console.log(`[WatcherLogsDisplay ${watcherId}] Render #${renderCountRef.current}`, {
-    autoRefresh,
-    logsResultTag: logsResult._tag,
-    waiting: logsResult.waiting,
-  })
+  renderCountRef.current++;
+  console.log(
+    `[WatcherLogsDisplay ${watcherId}] Render #${renderCountRef.current}`,
+    {
+      autoRefresh,
+      logsResultTag: logsResult._tag,
+      waiting: logsResult.waiting,
+    },
+  );
 
   // Store refreshLogs in a ref to avoid recreating the effect
-  const refreshLogsRef = useRef(refreshLogs)
-  refreshLogsRef.current = refreshLogs
+  const refreshLogsRef = useRef(refreshLogs);
+  refreshLogsRef.current = refreshLogs;
 
   // Auto-refresh logs every 1 second if enabled
   useEffect(() => {
     if (!autoRefresh) {
-      console.log(`[WatcherLogsDisplay ${watcherId}] Auto-refresh disabled, skipping`)
-      return
+      console.log(
+        `[WatcherLogsDisplay ${watcherId}] Auto-refresh disabled, skipping`,
+      );
+      return;
     }
 
-    console.log(`[WatcherLogsDisplay ${watcherId}] Starting auto-refresh (${LOG_REFRESH_INTERVAL_MS}ms interval)`)
+    console.log(
+      `[WatcherLogsDisplay ${watcherId}] Starting auto-refresh (${LOG_REFRESH_INTERVAL_MS}ms interval)`,
+    );
 
-    let intervalId: number | undefined
-    let cancelled = false
+    let intervalId: number | undefined;
+    let cancelled = false;
 
     const runRefresh = () => {
       if (cancelled) {
-        console.log(`[WatcherLogsDisplay ${watcherId}] Refresh cancelled`)
-        return
+        console.log(`[WatcherLogsDisplay ${watcherId}] Refresh cancelled`);
+        return;
       }
 
-      refreshCountRef.current++
-      console.log(`[WatcherLogsDisplay ${watcherId}] Calling refreshLogs #${refreshCountRef.current}`)
+      refreshCountRef.current++;
+      console.log(
+        `[WatcherLogsDisplay ${watcherId}] Calling refreshLogs #${refreshCountRef.current}`,
+      );
 
       // Use the ref to call the latest refreshLogs
-      refreshLogsRef.current()
-    }
+      refreshLogsRef.current();
+    };
 
     // Initial refresh
-    runRefresh()
+    runRefresh();
 
     // Set up interval for subsequent refreshes
-    intervalId = window.setInterval(runRefresh, LOG_REFRESH_INTERVAL_MS)
+    intervalId = window.setInterval(runRefresh, LOG_REFRESH_INTERVAL_MS);
 
     return () => {
-      console.log(`[WatcherLogsDisplay ${watcherId}] Cleaning up auto-refresh effect`)
-      cancelled = true
+      console.log(
+        `[WatcherLogsDisplay ${watcherId}] Cleaning up auto-refresh effect`,
+      );
+      cancelled = true;
       if (intervalId !== undefined) {
-        window.clearInterval(intervalId)
+        window.clearInterval(intervalId);
       }
-    }
-  }, [autoRefresh, watcherId])  // ✅ Only depend on autoRefresh and watcherId
+    };
+  }, [autoRefresh, watcherId]); // ✅ Only depend on autoRefresh and watcherId
 
   // Auto-scroll to bottom when logs change (only if already at bottom)
   useEffect(() => {
-    if (logsResult._tag !== 'Success') return
+    if (logsResult._tag !== "Success") return;
 
-    const container = scrollContainerRef.current
-    if (!container) return
+    const container = scrollContainerRef.current;
+    if (!container) return;
 
     // Check if user was already scrolled to bottom (within 50px threshold)
     const isNearBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight < 50
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      50;
 
     // Only auto-scroll if user was already at the bottom
     if (isNearBottom) {
-      container.scrollTop = container.scrollHeight
+      container.scrollTop = container.scrollHeight;
     }
-  }, [logsResult])
+  }, [logsResult]);
 
   return (
     <div className="mt-2 border-t border-gray-600 pt-2">
@@ -158,52 +170,52 @@ function WatcherLogsDisplay({
       <div
         ref={scrollContainerRef}
         className="bg-gray-900 rounded p-2 max-h-64 overflow-y-auto text-xs font-mono"
-        style={{ overflowY: 'auto', maxHeight: '16rem' }}
+        style={{ overflowY: "auto", maxHeight: "16rem" }}
       >
         {Result.builder(logsResult)
           .onInitial(() => (
             <div className="text-gray-500">
-              {logsResult.waiting ? 'Loading logs...' : 'Ready to load logs'}
+              {logsResult.waiting ? "Loading logs..." : "Ready to load logs"}
             </div>
           ))
-          .onErrorTag('NetworkError', (error: NetworkError) => (
+          .onErrorTag("NetworkError", (error: NetworkError) => (
             <div className="text-red-400">Network error: {error.message}</div>
           ))
-          .onErrorTag('WatcherNotFoundError', (error: WatcherNotFoundError) => (
+          .onErrorTag("WatcherNotFoundError", (error: WatcherNotFoundError) => (
             <div className="text-yellow-400">
               Watcher not found: {error.message}
             </div>
           ))
           .onSuccess((logs: readonly LogEntry[]) => {
             if (logs.length === 0) {
-              return <div className="text-gray-500">No logs yet</div>
+              return <div className="text-gray-500">No logs yet</div>;
             }
             return (
               <div className="space-y-1">
                 {logs.map((log, idx) => (
                   <div
                     className={`${
-                      log.level === 'stdout'
-                        ? 'text-green-400'
-                        : log.level === 'stderr'
-                          ? 'text-red-400'
-                          : log.level === 'error'
-                            ? 'text-red-300'
-                            : log.level === 'info'
-                              ? 'text-blue-400'
-                              : 'text-gray-400'
+                      log.level === "stdout"
+                        ? "text-green-400"
+                        : log.level === "stderr"
+                          ? "text-red-400"
+                          : log.level === "error"
+                            ? "text-red-300"
+                            : log.level === "info"
+                              ? "text-blue-400"
+                              : "text-gray-400"
                     }`}
                     key={idx}
                   >
                     <span className="text-gray-600">
                       [{new Date(log.timestamp).toLocaleTimeString()}]
-                    </span>{' '}
-                    <span className="text-gray-500">[{log.level}]</span>{' '}
+                    </span>{" "}
+                    <span className="text-gray-500">[{log.level}]</span>{" "}
                     {log.message}
                   </div>
                 ))}
               </div>
-            )
+            );
           })
           .onDefect((defect: unknown) => (
             <div className="text-red-400">
@@ -213,7 +225,7 @@ function WatcherLogsDisplay({
           .render()}
       </div>
     </div>
-  )
+  );
 }
 
 export function AiWatcherDevPanel() {
@@ -224,146 +236,147 @@ export function AiWatcherDevPanel() {
     stopWatcher,
     startWatcher,
     refreshWatchers,
-  } = useAiWatchers()
+  } = useAiWatchers();
 
-  const { sessionsResult, attachToSession, refreshSessions } = useTmuxSessions()
+  const { sessionsResult, attachToSession, refreshSessions } =
+    useTmuxSessions();
 
-  const [showPanel, setShowPanel] = useState(false)
+  const [showPanel, setShowPanel] = useState(true);
   const [expandedWatcherId, setExpandedWatcherId] = useState<string | null>(
-    null
-  )
-  const [autoRefreshLogs, setAutoRefreshLogs] = useState(true)  // ✅ Auto-refresh ON by default
-  const hasLoggedRef = useRef(false)
+    null,
+  );
+  const [autoRefreshLogs, setAutoRefreshLogs] = useState(true); // ✅ Auto-refresh ON by default
+  const hasLoggedRef = useRef(false);
 
   // Log welcome message only once on mount
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && !hasLoggedRef.current) {
-      hasLoggedRef.current = true
+    if (process.env.NODE_ENV === "development" && !hasLoggedRef.current) {
+      hasLoggedRef.current = true;
 
       console.log(
-        '%c[AI Watcher] Developer panel loaded!',
-        'color: #8b5cf6; font-weight: bold'
-      )
+        "%c[AI Watcher] Developer panel loaded!",
+        "color: #8b5cf6; font-weight: bold",
+      );
       console.log(
-        '%cUse window.__DEV_AI_WATCHERS__ to interact:',
-        'color: #6b7280'
-      )
-      console.log('  • listWatchers()          - List all AI watchers')
-      console.log('  • listTmuxSessions()      - List all tmux sessions')
+        "%cUse window.__DEV_AI_WATCHERS__ to interact:",
+        "color: #6b7280",
+      );
+      console.log("  • listWatchers()          - List all AI watchers");
+      console.log("  • listTmuxSessions()      - List all tmux sessions");
       console.log(
-        '  • createWatcher(config)   - Create new watcher (config: {type, name, workingDirectory, command, args})'
-      )
-      console.log('  • attachToTmux(name)      - Attach to tmux session')
-      console.log('  • stopWatcher(id)         - Stop a watcher')
-      console.log('  • startWatcher(id)        - Start a watcher')
-      console.log('  • showPanel()             - Show visual panel')
-      console.log('  • hidePanel()             - Hide visual panel')
-      console.log('  • getResults()            - Get current Results')
-      console.log('')
-      console.log('Examples:')
-      console.log('  window.__DEV_AI_WATCHERS__.listTmuxSessions()')
-      console.log('  window.__DEV_AI_WATCHERS__.createWatcher({')
-      console.log('    type: "custom",')
-      console.log('    name: "MyWatcher",')
-      console.log('    workingDirectory: "/tmp",')
-      console.log('    command: "bash",')
-      console.log('    args: ["-c", "echo test"]')
-      console.log('  })')
+        "  • createWatcher(config)   - Create new watcher (config: {type, name, workingDirectory, command, args})",
+      );
+      console.log("  • attachToTmux(name)      - Attach to tmux session");
+      console.log("  • stopWatcher(id)         - Stop a watcher");
+      console.log("  • startWatcher(id)        - Start a watcher");
+      console.log("  • showPanel()             - Show visual panel");
+      console.log("  • hidePanel()             - Hide visual panel");
+      console.log("  • getResults()            - Get current Results");
+      console.log("");
+      console.log("Examples:");
+      console.log("  window.__DEV_AI_WATCHERS__.listTmuxSessions()");
+      console.log("  window.__DEV_AI_WATCHERS__.createWatcher({");
+      console.log('    type: "custom",');
+      console.log('    name: "MyWatcher",');
+      console.log('    workingDirectory: "/tmp",');
+      console.log('    command: "bash",');
+      console.log('    args: ["-c", "echo test"]');
+      console.log("  })");
     }
-  }, [])
+  }, []);
 
   // Update API when functions/results change
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       // Expose API to console
       const api = {
         // List operations
         listWatchers: () => {
-          console.log('[AI Watcher] Listing watchers...')
-          refreshWatchers()
+          console.log("[AI Watcher] Listing watchers...");
+          refreshWatchers();
           const watchers: readonly AiWatcher[] = Result.getOrElse(
             watchersResult,
-            () => []
-          )
+            () => [],
+          );
           if (watchers && watchers.length > 0) {
             console.table(
-              watchers.map(w => ({
+              watchers.map((w) => ({
                 id: w.id,
                 name: w.name,
                 type: w.type,
                 status: w.status,
                 pid: w.processHandle.pid,
-              }))
-            )
+              })),
+            );
           }
-          return watchers
+          return watchers;
         },
 
         listTmuxSessions: () => {
-          console.log('[AI Watcher] Listing tmux sessions...')
-          refreshSessions()
+          console.log("[AI Watcher] Listing tmux sessions...");
+          refreshSessions();
           const sessions: readonly TmuxSession[] = Result.getOrElse(
             sessionsResult,
-            () => []
-          )
+            () => [],
+          );
           if (sessions && sessions.length > 0) {
             console.table(
-              sessions.map(s => ({
+              sessions.map((s) => ({
                 name: s.name,
                 attached: s.attached,
                 created: s.created.toISOString(),
-              }))
-            )
+              })),
+            );
           }
-          return sessions
+          return sessions;
         },
 
         // Create operations
         createWatcher: (config: Partial<AiWatcherConfig>) => {
-          console.log('[AI Watcher] Creating watcher...', config)
+          console.log("[AI Watcher] Creating watcher...", config);
           // Build config with defaults and remove undefined fields for Effect Schema
           const fullConfig = cleanConfig({
-            type: config.type || 'custom',
-            workingDirectory: config.workingDirectory || '/tmp',
+            type: config.type || "custom",
+            workingDirectory: config.workingDirectory || "/tmp",
             name: config.name,
             command: config.command,
             args: config.args,
             env: config.env,
-          })
+          });
 
-          createWatcher(fullConfig as AiWatcherConfig)
-          setTimeout(() => refreshWatchers(), 500)
+          createWatcher(fullConfig as AiWatcherConfig);
+          setTimeout(() => refreshWatchers(), 500);
           console.log(
-            '[AI Watcher] Create request sent. Watchers will refresh.'
-          )
+            "[AI Watcher] Create request sent. Watchers will refresh.",
+          );
         },
 
         attachToTmux: (sessionName: string) => {
-          console.log('[AI Watcher] Attaching to tmux session:', sessionName)
-          attachToSession(sessionName)
-          setTimeout(() => refreshWatchers(), 500)
+          console.log("[AI Watcher] Attaching to tmux session:", sessionName);
+          attachToSession(sessionName);
+          setTimeout(() => refreshWatchers(), 500);
           console.log(
-            '[AI Watcher] Attach request sent. Watchers will refresh.'
-          )
+            "[AI Watcher] Attach request sent. Watchers will refresh.",
+          );
         },
 
         // Control operations
         stopWatcher: (watcherId: string) => {
-          console.log('[AI Watcher] Stopping watcher:', watcherId)
-          stopWatcher(watcherId)
-          setTimeout(() => refreshWatchers(), 500)
+          console.log("[AI Watcher] Stopping watcher:", watcherId);
+          stopWatcher(watcherId);
+          setTimeout(() => refreshWatchers(), 500);
         },
 
         startWatcher: (watcherId: string) => {
-          console.log('[AI Watcher] Starting watcher:', watcherId)
-          startWatcher(watcherId)
-          setTimeout(() => refreshWatchers(), 500)
+          console.log("[AI Watcher] Starting watcher:", watcherId);
+          startWatcher(watcherId);
+          setTimeout(() => refreshWatchers(), 500);
         },
 
         // UI toggle
         showPanel: () => setShowPanel(true),
         hidePanel: () => setShowPanel(false),
-        togglePanel: () => setShowPanel(prev => !prev),
+        togglePanel: () => setShowPanel((prev) => !prev),
 
         // Results
         getResults: () => ({
@@ -371,16 +384,16 @@ export function AiWatcherDevPanel() {
           sessions: sessionsResult,
           createResult,
         }),
-      }
+      };
 
-      window.__DEV_AI_WATCHERS__ = api
+      window.__DEV_AI_WATCHERS__ = api;
     }
 
     return () => {
-      if (process.env.NODE_ENV === 'development') {
-        delete window.__DEV_AI_WATCHERS__
+      if (process.env.NODE_ENV === "development") {
+        delete window.__DEV_AI_WATCHERS__;
       }
-    }
+    };
   }, [
     watchersResult,
     sessionsResult,
@@ -391,9 +404,9 @@ export function AiWatcherDevPanel() {
     attachToSession,
     refreshWatchers,
     refreshSessions,
-  ])
+  ]);
 
-  if (!showPanel) return null
+  if (!showPanel) return null;
 
   return (
     <div className="fixed bottom-4 right-4 w-96 bg-gray-800 border border-purple-500 rounded-lg shadow-2xl z-50">
@@ -407,7 +420,10 @@ export function AiWatcherDevPanel() {
         </button>
       </div>
 
-      <div className="p-4 space-y-4 max-h-96 overflow-y-auto" style={{ overflowY: 'auto' }}>
+      <div
+        className="p-4 space-y-4 max-h-96 overflow-y-auto"
+        style={{ overflowY: "auto" }}
+      >
         {/* Tmux Sessions Section */}
         <div>
           <h4 className="text-sm font-semibold text-gray-300 mb-2">
@@ -415,9 +431,7 @@ export function AiWatcherDevPanel() {
           </h4>
           <button
             className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded"
-            onClick={() =>
-              window.__DEV_AI_WATCHERS__?.listTmuxSessions()
-            }
+            onClick={() => window.__DEV_AI_WATCHERS__?.listTmuxSessions()}
           >
             List Tmux Sessions
           </button>
@@ -433,7 +447,7 @@ export function AiWatcherDevPanel() {
                 if (sessions.length > 0) {
                   return (
                     <div className="space-y-1">
-                      {sessions.map(session => (
+                      {sessions.map((session) => (
                         <div
                           className="text-xs p-2 bg-gray-700 rounded flex justify-between items-center"
                           key={session.name}
@@ -442,9 +456,9 @@ export function AiWatcherDevPanel() {
                           <button
                             className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
                             onClick={() => {
-                              attachToSession(session.name)
+                              attachToSession(session.name);
                               // Refresh watchers list after a short delay to show the new watcher
-                              setTimeout(() => refreshWatchers(), 500)
+                              setTimeout(() => refreshWatchers(), 500);
                             }}
                           >
                             Attach
@@ -452,13 +466,13 @@ export function AiWatcherDevPanel() {
                         </div>
                       ))}
                     </div>
-                  )
+                  );
                 }
                 return (
                   <div className="text-xs text-gray-500">No tmux sessions</div>
-                )
+                );
               })
-              .onDefect(defect => (
+              .onDefect((defect) => (
                 <div className="text-xs text-red-400">
                   Error: {String(defect)}
                 </div>
@@ -475,7 +489,7 @@ export function AiWatcherDevPanel() {
               <input
                 checked={autoRefreshLogs}
                 className="rounded"
-                onChange={e => setAutoRefreshLogs(e.target.checked)}
+                onChange={(e) => setAutoRefreshLogs(e.target.checked)}
                 type="checkbox"
               />
               Auto-refresh logs
@@ -493,17 +507,17 @@ export function AiWatcherDevPanel() {
               onClick={() => {
                 // Only include fields with actual values - no undefined
                 const config = {
-                  type: 'custom' as const,
+                  type: "custom" as const,
                   name: `Test-${Date.now()}`,
-                  workingDirectory: '/tmp',
-                  command: 'bash',
+                  workingDirectory: "/tmp",
+                  command: "bash",
                   args: [
-                    '-c',
+                    "-c",
                     'for i in {1..100}; do echo "Test output $i"; sleep 2; done',
                   ],
-                }
-                createWatcher(config)
-                setTimeout(() => refreshWatchers(), 500)
+                };
+                createWatcher(config);
+                setTimeout(() => refreshWatchers(), 500);
               }}
               title="Create a test watcher that outputs every 2 seconds"
             >
@@ -522,7 +536,7 @@ export function AiWatcherDevPanel() {
                 if (watchers.length > 0) {
                   return (
                     <div className="space-y-1">
-                      {watchers.map(watcher => (
+                      {watchers.map((watcher) => (
                         <div
                           className="text-xs p-2 bg-gray-700 rounded"
                           key={watcher.id}
@@ -535,20 +549,20 @@ export function AiWatcherDevPanel() {
                                 </span>
                                 <span
                                   className={`px-2 py-0.5 rounded text-xs ${
-                                    watcher.status === 'running'
-                                      ? 'bg-green-600'
-                                      : watcher.status === 'idle'
-                                        ? 'bg-yellow-600'
-                                        : watcher.status === 'stopped'
-                                          ? 'bg-gray-600'
-                                          : 'bg-red-600'
+                                    watcher.status === "running"
+                                      ? "bg-green-600"
+                                      : watcher.status === "idle"
+                                        ? "bg-yellow-600"
+                                        : watcher.status === "stopped"
+                                          ? "bg-gray-600"
+                                          : "bg-red-600"
                                   } text-white`}
                                 >
                                   {watcher.status}
                                 </span>
                               </div>
                               <div className="text-gray-500 mt-1">
-                                PID: {watcher.processHandle.pid} | Type:{' '}
+                                PID: {watcher.processHandle.pid} | Type:{" "}
                                 {watcher.type}
                               </div>
                             </div>
@@ -559,23 +573,23 @@ export function AiWatcherDevPanel() {
                                   setExpandedWatcherId(
                                     expandedWatcherId === watcher.id
                                       ? null
-                                      : watcher.id
-                                  )
+                                      : watcher.id,
+                                  );
                                 }}
                                 title={
                                   expandedWatcherId === watcher.id
-                                    ? 'Hide logs'
-                                    : 'View logs'
+                                    ? "Hide logs"
+                                    : "View logs"
                                 }
                               >
-                                {expandedWatcherId === watcher.id ? '▼' : '▶'}
+                                {expandedWatcherId === watcher.id ? "▼" : "▶"}
                               </button>
-                              {watcher.status === 'stopped' ? (
+                              {watcher.status === "stopped" ? (
                                 <button
                                   className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
                                   onClick={() => {
-                                    startWatcher(watcher.id)
-                                    setTimeout(() => refreshWatchers(), 500)
+                                    startWatcher(watcher.id);
+                                    setTimeout(() => refreshWatchers(), 500);
                                   }}
                                   title="Start watcher"
                                 >
@@ -585,8 +599,8 @@ export function AiWatcherDevPanel() {
                                 <button
                                   className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs"
                                   onClick={() => {
-                                    stopWatcher(watcher.id)
-                                    setTimeout(() => refreshWatchers(), 500)
+                                    stopWatcher(watcher.id);
+                                    setTimeout(() => refreshWatchers(), 500);
                                   }}
                                   title="Stop watcher"
                                 >
@@ -604,11 +618,11 @@ export function AiWatcherDevPanel() {
                         </div>
                       ))}
                     </div>
-                  )
+                  );
                 }
-                return <div className="text-xs text-gray-500">No watchers</div>
+                return <div className="text-xs text-gray-500">No watchers</div>;
               })
-              .onDefect(defect => (
+              .onDefect((defect) => (
                 <div className="text-xs text-red-400">
                   Defect: {String(defect)}
                 </div>
@@ -623,5 +637,5 @@ export function AiWatcherDevPanel() {
         </div>
       </div>
     </div>
-  )
+  );
 }
