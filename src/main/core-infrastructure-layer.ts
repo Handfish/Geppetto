@@ -4,6 +4,7 @@ import { TierService } from "./tier/tier-service";
 import { BrowserAuthService } from "./ai/browser/browser-auth-service";
 import { CookieUsagePageAdapter } from "./ai/browser/cookie-usage-page-adapter";
 import { ElectronSessionService } from "./ai/browser/electron-session-service";
+import { PlatformLayer } from "./platform/platform-layer";
 
 /**
  * Core Infrastructure Layer - Shared Services
@@ -60,6 +61,7 @@ export const CoreSecureStoreLayer = SecureStoreService.Default;
  * These are constructed ONCE and shared throughout the application.
  *
  * Services included:
+ * - PlatformLayer: Effect Platform services (FileSystem, Path, Command, Terminal)
  * - ElectronSessionService: Manages Electron session partitions for cookie isolation
  * - BrowserAuthService: Browser-based authentication orchestration
  * - CookieUsagePageAdapter: Extracts usage data from browser cookies
@@ -67,6 +69,7 @@ export const CoreSecureStoreLayer = SecureStoreService.Default;
  * - TierService: Feature gating and tier limits
  */
 export const CoreInfrastructureLayer = Layer.mergeAll(
+  PlatformLayer,
   ElectronSessionService.Default,
   BrowserAuthService.Default,
   CookieUsagePageAdapter.Default,
