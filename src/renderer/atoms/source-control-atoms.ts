@@ -183,14 +183,17 @@ export const commitGraphAtom = Atom.family(
     sourceControlRuntime
       .atom(
         Effect.gen(function* () {
+          console.log('[commitGraphAtom] Requesting commit graph for:', params.repositoryId.value)
           const client = yield* SourceControlClient
-          return yield* client.buildCommitGraph(params.repositoryId, params.options)
+          const graph = yield* client.buildCommitGraph(params.repositoryId, params.options)
+          console.log('[commitGraphAtom] Received graph with', graph.nodes.length, 'nodes')
+          return graph
         })
       )
       .pipe(
         Atom.withReactivity([
-          `source-control:graph:${params.repositoryId}`,
-          `source-control:repository:${params.repositoryId}`,
+          `source-control:graph:${params.repositoryId.value}`,
+          `source-control:repository:${params.repositoryId.value}`,
         ]),
         Atom.setIdleTTL(Duration.seconds(30))
       )

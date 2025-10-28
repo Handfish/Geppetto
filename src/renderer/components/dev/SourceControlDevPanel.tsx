@@ -5,7 +5,7 @@
  * Displays repositories, commit graphs, branches, and working tree status.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { Result } from '@effect-atom/atom-react'
 import {
   RepositoryExplorer,
@@ -95,6 +95,12 @@ export function SourceControlDevPanel() {
     )
   }
 
+  // Memoize graph options to prevent atom family from creating new subscriptions
+  const graphOptions = useMemo(
+    () => ({ maxCommits: 20, layoutAlgorithm: 'topological' as const }),
+    []
+  )
+
   const tabs: { id: TabType; label: string; icon: string }[] = [
     { id: 'repositories', label: 'Repositories', icon: '📂' },
     { id: 'commits', label: 'Commits', icon: '🔀' },
@@ -175,7 +181,7 @@ export function SourceControlDevPanel() {
           <div className="space-y-6">
             <CommitGraphView
               repositoryId={selectedRepository.id}
-              options={{ maxCommits: 20, layoutAlgorithm: 'topological' }}
+              options={graphOptions}
             />
           </div>
         )}

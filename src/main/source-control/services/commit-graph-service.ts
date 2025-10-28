@@ -51,40 +51,68 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
      */
     const parseCommits = (output: string): Commit[] => {
       const commits: Commit[] = []
-      const commitBlocks = output.split('\x00\x00') // Delimiter between commits
+
+      // Handle empty output
+      if (!output || !output.trim()) {
+        return commits
+      }
+
+      const commitBlocks = output.split('\x1e') // ASCII record separator between commits
 
       for (const block of commitBlocks) {
         if (!block.trim()) continue
 
         const lines = block.split('\x00') // Field delimiter
-        if (lines.length < 7) continue
+        if (lines.length < 7) {
+          console.warn(`[CommitGraphService] Skipping block with ${lines.length} fields (expected 7+)`)
+          continue
+        }
 
         const [hash, parentHashes, authorName, authorEmail, authorDate, subject, body] = lines
 
-        const parents = parentHashes
-          ? parentHashes.split(' ').filter(Boolean).map(makeCommitHash)
-          : []
+        // Skip if hash is invalid
+        if (!hash || !hash.trim()) {
+          console.warn('[CommitGraphService] Skipping commit with empty hash')
+          continue
+        }
 
-        commits.push(
-          new Commit({
-            hash: makeCommitHash(hash),
-            parents,
-            author: new GitAuthor({
-              name: authorName,
-              email: authorEmail,
-              timestamp: new Date(authorDate),
-            }),
-            committer: new GitAuthor({
-              name: authorName,
-              email: authorEmail,
-              timestamp: new Date(authorDate),
-            }),
-            message: `${subject}\n${body || ''}`.trim(),
-            subject: subject,
-            body: body || undefined,
-            tree: '', // Would need separate git command to get tree SHA
-          })
-        )
+        try {
+          // Parse parent hashes with error handling
+          const parents = parentHashes && parentHashes.trim()
+            ? parentHashes.split(' ').filter(Boolean).map((p) => {
+                try {
+                  return makeCommitHash(p.trim())
+                } catch (error) {
+                  console.warn(`[CommitGraphService] Invalid parent hash: ${p}`, error)
+                  return null
+                }
+              }).filter((p): p is CommitHash => p !== null)
+            : []
+
+          commits.push(
+            new Commit({
+              hash: makeCommitHash(hash.trim()),
+              parents,
+              author: new GitAuthor({
+                name: authorName || 'Unknown',
+                email: authorEmail || 'unknown@example.com',
+                timestamp: new Date(authorDate || Date.now()),
+              }),
+              committer: new GitAuthor({
+                name: authorName || 'Unknown',
+                email: authorEmail || 'unknown@example.com',
+                timestamp: new Date(authorDate || Date.now()),
+              }),
+              message: `${subject || 'No subject'}\n${body || ''}`.trim(),
+              subject: subject || 'No subject',
+              body: body || undefined,
+              tree: '', // Would need separate git command to get tree SHA
+            })
+          )
+        } catch (error) {
+          console.warn('[CommitGraphService] Failed to parse commit, skipping:', { hash, error })
+          continue
+        }
       }
 
       return commits
@@ -160,7 +188,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
         const args = [
           'log',
           `--max-count=${options.maxCommits}`,
-          '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x00%x00', // Custom format with null delimiters
+          '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x1e', // Custom format: fields separated by \x00, commits by \x1e
           '--all', // All branches
         ]
 
@@ -208,11 +236,38 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
     const port: CommitOperationsPort = {
       buildCommitGraph: (repositoryId: RepositoryId, options?: GraphOptions) =>
         Effect.gen(function* () {
-          const repo = yield* repoService.getRepositoryById(repositoryId)
           const graphOptions = options ?? GraphOptions.default()
 
+          // Check cache first
+          const cache = yield* Ref.get(graphCache)
+          const cached = cache.get(repositoryId.value)
+
+          if (cached) {
+            const age = Date.now() - cached.timestamp
+            const maxAge = 30_000 // 30 seconds
+
+            // Return cached graph if fresh and options match
+            if (
+              age < maxAge &&
+              cached.graph.options.maxCommits === graphOptions.maxCommits &&
+              cached.graph.options.layoutAlgorithm === graphOptions.layoutAlgorithm
+            ) {
+              console.log(`[CommitGraphService] Cache HIT for repository: ${repositoryId.value}`)
+              return cached.graph
+            }
+
+            console.log(`[CommitGraphService] Cache STALE for repository: ${repositoryId.value} (age: ${age}ms)`)
+          }
+
+          console.log(`[CommitGraphService] Cache MISS for repository: ${repositoryId.value}`)
+          const repo = yield* repoService.getRepositoryById(repositoryId)
+          console.log(`[CommitGraphService] Repository found: ${repo.path}`)
+
           const commits = yield* getCommitsFromRepo(repo.path, graphOptions)
+          console.log(`[CommitGraphService] Parsed ${commits.length} commits`)
+
           const graph = buildGraphFromCommits(repositoryId, commits, graphOptions)
+          console.log(`[CommitGraphService] Built graph with ${graph.nodes.length} nodes, ${graph.edges.length} edges`)
 
           // Cache the graph
           yield* Ref.update(graphCache, (cache) => {
@@ -223,6 +278,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
             return cache
           })
 
+          console.log(`[CommitGraphService] Graph cached and returning`)
           return graph
         }),
 
@@ -231,7 +287,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
           const repo = yield* repoService.getRepositoryById(repositoryId)
 
           // Get new commits since latest commit in graph
-          const args = ['log', '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x00%x00', '--all']
+          const args = ['log', '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x1e', '--all']
 
           if (existingGraph.latestCommit) {
             args.push(`${existingGraph.latestCommit.value}..HEAD`)
@@ -312,7 +368,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
                 id: crypto.randomUUID() as GitCommandId,
                 args: [
                   'show',
-                  '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x00%x00',
+                  '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x1e',
                   '--no-patch',
                   commitHash.value,
                 ],
@@ -410,7 +466,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
                 args: [
                   'log',
                   `--max-count=${count}`,
-                  '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x00%x00',
+                  '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x1e',
                   branchName.value,
                 ],
                 worktree: new GitWorktreeContext({ repositoryPath: repo.path }),
@@ -446,7 +502,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
                 id: crypto.randomUUID() as GitCommandId,
                 args: [
                   'log',
-                  '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x00%x00',
+                  '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x1e',
                   range.toGitNotation(),
                 ],
                 worktree: new GitWorktreeContext({ repositoryPath: repo.path }),
@@ -485,7 +541,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
                   'log',
                   `--max-count=${count}`,
                   `--author=${authorEmail}`,
-                  '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x00%x00',
+                  '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x1e',
                   '--all',
                 ],
                 worktree: new GitWorktreeContext({ repositoryPath: repo.path }),
@@ -741,7 +797,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
                 id: crypto.randomUUID() as GitCommandId,
                 args: [
                   'log',
-                  '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x00%x00',
+                  '--format=%H%x00%P%x00%an%x00%ae%x00%aI%x00%s%x00%b%x1e',
                   '--all',
                   '--ancestry-path',
                   `${commitHash.value}..HEAD`,

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   useAtom,
   useAtomRefresh,
@@ -251,8 +252,14 @@ export function useCommitGraph(
   repositoryId: RepositoryId,
   options?: GraphOptions,
 ) {
-  const graphResult = useAtomValue(commitGraphAtom({ repositoryId, options }));
-  const refresh = useAtomRefresh(commitGraphAtom({ repositoryId, options }));
+  // Memoize params to prevent atom family from creating new subscriptions on every render
+  const params = useMemo(
+    () => ({ repositoryId, options }),
+    [repositoryId.value, options]
+  );
+
+  const graphResult = useAtomValue(commitGraphAtom(params));
+  const refresh = useAtomRefresh(commitGraphAtom(params));
 
   const graph = Result.getOrElse(graphResult, () => null);
 
@@ -303,7 +310,13 @@ export function useCommitGraphStatistics(repositoryId: RepositoryId) {
  * Components should handle null with early returns before calling this hook.
  */
 export function useCommit(repositoryId: RepositoryId, commitHash: string) {
-  const commitResult = useAtomValue(commitAtom({ repositoryId, commitHash }));
+  // Memoize params to prevent atom family from creating new subscriptions on every render
+  const params = useMemo(
+    () => ({ repositoryId, commitHash }),
+    [repositoryId.value, commitHash]
+  );
+
+  const commitResult = useAtomValue(commitAtom(params));
 
   const commit = Result.getOrElse(commitResult, () => null);
 
@@ -329,9 +342,13 @@ export function useCommitWithRefs(
   repositoryId: RepositoryId,
   commitHash: string,
 ) {
-  const commitWithRefsResult = useAtomValue(
-    commitWithRefsAtom({ repositoryId, commitHash }),
+  // Memoize params to prevent atom family from creating new subscriptions on every render
+  const params = useMemo(
+    () => ({ repositoryId, commitHash }),
+    [repositoryId.value, commitHash]
   );
+
+  const commitWithRefsResult = useAtomValue(commitWithRefsAtom(params));
 
   const commitWithRefs = Result.getOrElse(commitWithRefsResult, () => null);
 
@@ -359,9 +376,13 @@ export function useCommitHistory(
   branchName: string,
   maxCount?: number,
 ) {
-  const historyResult = useAtomValue(
-    commitHistoryAtom({ repositoryId, branchName, maxCount }),
+  // Memoize params to prevent atom family from creating new subscriptions on every render
+  const params = useMemo(
+    () => ({ repositoryId, branchName, maxCount }),
+    [repositoryId.value, branchName, maxCount]
   );
+
+  const historyResult = useAtomValue(commitHistoryAtom(params));
 
   const history = Result.getOrElse(historyResult, () => []);
 
@@ -501,7 +522,13 @@ export function useDiff(
   repositoryId: RepositoryId,
   options: { path: string; staged?: boolean },
 ) {
-  const diffResult = useAtomValue(diffAtom({ repositoryId, options }));
+  // Memoize params to prevent atom family from creating new subscriptions on every render
+  const params = useMemo(
+    () => ({ repositoryId, options }),
+    [repositoryId.value, options.path, options.staged]
+  );
+
+  const diffResult = useAtomValue(diffAtom(params));
 
   const diff = Result.getOrElse(diffResult, () => null);
 
