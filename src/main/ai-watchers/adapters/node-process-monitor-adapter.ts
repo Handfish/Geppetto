@@ -67,6 +67,9 @@ const ACTIVITY_CHECK_INTERVAL = Duration.seconds(5)
 export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitorAdapter>()(
   'NodeProcessMonitorAdapter',
   {
+    dependencies: [
+      Path.layer,
+    ],
     effect: Effect.gen(function* () {
       // Inject Path service from @effect/platform
       const path = yield* Path.Path
@@ -781,6 +784,5 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
 
       return implementation
     }),
-    dependencies: [Path.layer],
   }
 ) {}

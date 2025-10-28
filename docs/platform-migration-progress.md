@@ -10,14 +10,14 @@
 
 - [x] Phase 1: Foundation Setup (0.25 hours) ✅
 - [x] Phase 2: Path Migration (0.5 hours) ✅
-- [ ] Phase 3: FileSystem Migration (4-6 hours)
+- [ ] Phase 3: FileSystem Migration (1.5 hours / 4-6 hours target) ⏳ Testing
 - [ ] Phase 4: Git Command Migration (6-8 hours)
 - [ ] Phase 5: Tmux/Process Migration (8-12 hours)
 - [ ] Phase 6: Cleanup & Documentation (2-3 hours)
 
 **Total Estimated Time**: 3-5 days
-**Time Spent**: 0.75 hours (~45 minutes)
-**Progress**: 15%
+**Time Spent**: 2.25 hours (~135 minutes)
+**Progress**: 25%
 
 ---
 
@@ -118,43 +118,59 @@
 
 ## Phase 3: FileSystem Migration ⏳
 
-**Status**: Not Started
-**Duration**: 0 hours
+**Status**: In Progress - Testing
+**Duration**: 1.5 hours (~90 minutes)
 **Target**: 4-6 hours
 
-### 3.1 Update NodeFileSystemAdapter - Core Methods
+### 3.1 Update NodeFileSystemAdapter - Core Methods ✅
 File: `src/main/source-control/adapters/file-system/node-file-system-adapter.ts`
 
-- [ ] Inject `FileSystem.FileSystem` service
-- [ ] Update `readFile` method
-- [ ] Update `fileExists` method
-- [ ] Update `directoryExists` method
-- [ ] Update `readFileBytes` method
-- [ ] Update `listDirectory` method
-- [ ] Update `stat` method
-- [ ] Add error mapping (platform → domain errors)
-- [ ] Add `FileSystem.FileSystem.Default` to dependencies
+- [x] Inject `FileSystem.FileSystem` service
+- [x] Update `readFile` method
+- [x] Update `fileExists` method
+- [x] Update `directoryExists` method
+- [x] Update `readFileBytes` method
+- [x] Update `listDirectory` method
+- [x] Update `stat` method
+- [x] Add error mapping (platform → domain errors)
+- [x] Fixed PlatformLayer to include NodeFileSystem.layer
+- [x] Removed explicit dependencies declarations (provided by CoreInfrastructureLayer)
 
-### 3.2 Handle File Watching
-- [ ] Review current `watchDirectory` implementation
-- [ ] Check if `@effect/platform` has file watching
-- [ ] Decision: Keep chokidar or migrate
-- [ ] Document decision in migration log
+### 3.2 Handle File Watching ✅
+- [x] Review current `watchDirectory` implementation
+- [x] Check if `@effect/platform` has file watching
+- [x] Decision: Keep chokidar (documented below)
+- [x] Document decision in migration log
 
-### 3.3 Update Direct fs Usage - Workspace Service
+**Decision**: Keep chokidar for file watching
+**Rationale**:
+- @effect/platform has `watch()` method but limited options (only `recursive`)
+- Chokidar provides fine-grained control: `ignored` patterns, `persistent`, `ignoreInitial`
+- Current implementation uses regex to ignore dotfiles, which platform doesn't support
+- Proven stability and cross-platform support
+- Migration would require careful testing of edge cases
+- File watching is working well and is isolated to one method
+
+### 3.3 Update Direct fs Usage - Workspace Service ✅
 File: `src/main/workspace/workspace-service.ts`
 
-- [ ] Replace `fs.access` with `fs.exists`
-- [ ] Update other file system operations
-- [ ] Inject FileSystem service
+- [x] Replace `fs.access` with `fs.exists` (2 locations)
+- [x] Remove node:fs import
+- [x] Inject FileSystem service
+- [x] Add dependencies: Path.layer, NodeFileSystem.layer
+- [x] Compile and test successfully
 
-### 3.4 Update Direct fs Usage - AI Watchers
+### 3.4 Update Direct fs Usage - AI Watchers ✅
 File: `src/main/ai-watchers/adapters/node-process-monitor-adapter.ts`
 
-- [ ] Replace `fs.mkdtemp` with `fs.makeTempDirectoryScoped`
-- [ ] Replace `fs.createReadStream` with `fs.stream`
-- [ ] Replace `fs.rm` with scoped cleanup
-- [ ] Update other file operations
+- [x] Reviewed fs operations (3 usages found)
+  - `FsPromises.mkdtemp()` - Creating temp directories for FIFO
+  - `Fs.createReadStream()` - Reading from FIFO pipes
+  - `FsPromises.rm()` - Cleanup temp directories
+- [x] **Decision: Defer to Phase 5** (Tmux/Process Migration)
+- [x] Rationale: These operations are tightly coupled with tmux FIFO handling
+- [x] Phase 5 will comprehensively migrate all tmux/process operations together
+- [x] Added Path.layer dependency (already uses Path service)
 
 ### 3.5 Testing - Unit Tests
 - [ ] Run `pnpm test src/main/source-control`

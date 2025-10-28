@@ -1,8 +1,8 @@
 import { Effect, Schema as S } from 'effect'
-import { Path } from '@effect/platform'
+import { Path, FileSystem } from '@effect/platform'
+import { NodeFileSystem } from '@effect/platform-node'
 import Store from 'electron-store'
 import { dialog } from 'electron'
-import { promises as fs } from 'fs'
 import { randomUUID } from 'crypto'
 import { WorkspaceConfig } from '../../shared/schemas/workspace'
 import { GitCommandService } from '../source-control/git-command-service'
@@ -22,11 +22,13 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
       GitCommandService.Default,
       RepositoryService.Default,
       Path.layer,
+      NodeFileSystem.layer,
     ],
     effect: Effect.gen(function* () {
       const gitCommandService = yield* GitCommandService
       const repositoryService = yield* RepositoryService
       const path = yield* Path.Path
+      const fs = yield* FileSystem.FileSystem
 
       const store = new Store({
         name: 'workspace-config',
@@ -111,17 +113,12 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
             const worktreePath = path.join(repoParentDir, defaultBranch)
 
             // Check if both paths exist, catching errors gracefully
-            const checkPath = (pathToCheck: string) =>
-              Effect.tryPromise({
-                try: () => fs.access(pathToCheck),
-                catch: () => new Error('Path does not exist'),
-              }).pipe(
-                Effect.map(() => true),
-                Effect.catchAll(() => Effect.succeed(false))
-              )
-
-            const bareRepoExists = yield* checkPath(bareRepoPath)
-            const worktreeExists = yield* checkPath(worktreePath)
+            const bareRepoExists = yield* fs.exists(bareRepoPath).pipe(
+              Effect.catchAll(() => Effect.succeed(false))
+            )
+            const worktreeExists = yield* fs.exists(worktreePath).pipe(
+              Effect.catchAll(() => Effect.succeed(false))
+            )
 
             if (bareRepoExists && worktreeExists) {
               return {
@@ -229,11 +226,7 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
             }
 
             // Verify the worktree was created
-            const worktreeExists = yield* Effect.tryPromise({
-              try: () => fs.access(worktreePath),
-              catch: () => new Error('Worktree directory was not created'),
-            }).pipe(
-              Effect.map(() => true),
+            const worktreeExists = yield* fs.exists(worktreePath).pipe(
               Effect.catchAll((error) =>
                 Effect.sync(() => {
                   console.error('[WorkspaceService] Worktree verification failed:', error)

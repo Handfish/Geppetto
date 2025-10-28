@@ -1,14 +1,14 @@
-import { NodeContext } from '@effect/platform-node'
+import { NodeContext, NodeFileSystem, NodePath } from '@effect/platform-node'
 import { Layer } from 'effect'
 
 /**
  * Provides Effect Platform services for cross-platform system operations.
  *
  * Services provided:
- * - FileSystem: File and directory operations with Effect error handling
- * - Path: Cross-platform path manipulation
- * - CommandExecutor: Shell command execution with streaming support
- * - Terminal: Terminal operations (colors, prompts)
+ * - FileSystem: File and directory operations with Effect error handling (NodeFileSystem.layer)
+ * - Path: Cross-platform path manipulation (NodePath.layer)
+ * - CommandExecutor: Shell command execution with streaming support (NodeContext)
+ * - Terminal: Terminal operations (NodeContext)
  *
  * This layer is integrated into CoreInfrastructureLayer to make platform
  * services available throughout the application.
@@ -26,4 +26,8 @@ import { Layer } from 'effect'
  * })
  * ```
  */
-export const PlatformLayer: Layer.Layer<never> = NodeContext.layer
+export const PlatformLayer = Layer.mergeAll(
+  NodeFileSystem.layer,
+  NodePath.layer,
+  NodeContext.layer
+)
