@@ -83,6 +83,21 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
     }
 
     /**
+     * Helper: Refresh timestamps for all cached repositories
+     * This prevents other repos from becoming stale when we cache a single one
+     */
+    const refreshAllCacheTimestamps = () =>
+      Effect.gen(function* () {
+        const now = Date.now()
+        yield* Ref.update(repositoryCache, (cache) => {
+          for (const [path, cached] of cache.entries()) {
+            cache.set(path, { ...cached, timestamp: now })
+          }
+          return cache
+        })
+      })
+
+    /**
      * Helper: Store repository in cache
      */
     const cacheRepository = (repository: Repository) =>
@@ -99,6 +114,9 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
           cache.set(repository.id.value, repository.path)
           return cache
         })
+        // Refresh timestamps for all other cached repositories
+        // This prevents them from becoming stale when we cache a single repository
+        yield* refreshAllCacheTimestamps()
       })
 
     /**

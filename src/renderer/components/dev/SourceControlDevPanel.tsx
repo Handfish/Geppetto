@@ -16,7 +16,6 @@ import {
   StatusBar,
   StatusSummary,
 } from '../source-control'
-import { useRefreshRepository } from '../../hooks/useSourceControl'
 import type {
   Repository,
   RepositoryId,
@@ -29,7 +28,14 @@ export function SourceControlDevPanel() {
   const [activeTab, setActiveTab] = useState<TabType>('repositories')
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const hasLoggedRef = useRef(false)
-  const { refresh: refreshRepository } = useRefreshRepository()
+
+  // Memoize graph options to ensure stable reference for atom family
+  // This prevents creating new atom subscriptions on every render
+  // IMPORTANT: Must be before any early returns to satisfy Rules of Hooks
+  const graphOptions = useMemo(
+    () => ({ maxCommits: 20, layoutAlgorithm: 'topological' as const }),
+    []
+  )
 
   // Log welcome message only once on mount
   useEffect(() => {
@@ -96,13 +102,6 @@ export function SourceControlDevPanel() {
       </button>
     )
   }
-
-  // Memoize graph options to ensure stable reference for atom family
-  // This prevents creating new atom subscriptions on every render
-  const graphOptions = useMemo(
-    () => ({ maxCommits: 20, layoutAlgorithm: 'topological' as const }),
-    []
-  )
 
   const tabs: { id: TabType; label: string; icon: string }[] = [
     { id: 'repositories', label: 'Repositories', icon: '📂' },
@@ -175,10 +174,16 @@ export function SourceControlDevPanel() {
           <RepositoryExplorer
             onRepositorySelect={async (repo) => {
               // Ensure repository is cached in backend before accessing it
-              console.log('[SourceControlDevPanel] Refreshing repository to ensure it\'s cached:', repo.name)
-              await refreshRepository(repo.id)
-              setSelectedRepository(repo)
-              setActiveTab('commits')
+              // Backend will refresh timestamps for all cached repos to keep them fresh
+              console.log('[SourceControlDevPanel] Loading repository to ensure it\'s cached:', repo.name)
+              try {
+                await window.electron.ipcRenderer.invoke('source-control:get-repository', { path: repo.path })
+                console.log('[SourceControlDevPanel] Repository cached successfully')
+                setSelectedRepository(repo)
+                setActiveTab('commits')
+              } catch (error) {
+                console.error('[SourceControlDevPanel] Failed to cache repository:', error)
+              }
             }}
           />
         )}
