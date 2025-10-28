@@ -1,5 +1,8 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useRef, useEffect } from 'react'
 import { Application, extend } from '@pixi/react'
+// Import unsafe-eval polyfill for Electron CSP compatibility (side-effect only)
+import 'pixi.js/unsafe-eval'
+// Import actual PixiJS classes from main package
 import { Container, Graphics, Text } from 'pixi.js'
 import { GraphLayoutEngine } from './GraphLayout'
 import { defaultTheme } from './GraphTheme'
@@ -52,6 +55,9 @@ export function GraphStage({
     scale: 1.0,
   })
 
+  // Ref for the container div to attach native wheel event
+  const containerRef = useRef<HTMLDivElement>(null)
+
   // Calculate layout from backend graph
   // Memoized to avoid recalculation on every render
   const layout = useMemo(() => {
@@ -62,19 +68,32 @@ export function GraphStage({
   /**
    * Handle mouse wheel for zooming
    *
-   * Ctrl+Wheel or trackpad pinch to zoom in/out
+   * Use native event listener with { passive: false } to allow preventDefault()
+   * This is necessary because browsers use passive listeners by default for wheel events
    */
-  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    event.preventDefault()
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
 
-    setViewport((prev) => ({
-      ...prev,
-      scale: Math.max(0.5, Math.min(2.0, prev.scale - event.deltaY * 0.001)),
-    }))
-  }
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault()
+
+      setViewport((prev) => ({
+        ...prev,
+        scale: Math.max(0.5, Math.min(2.0, prev.scale - event.deltaY * 0.001)),
+      }))
+    }
+
+    // Register with passive: false to allow preventDefault()
+    container.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      container.removeEventListener('wheel', handleWheel)
+    }
+  }, [])
 
   return (
-    <div onWheel={handleWheel} className="border border-gray-700 rounded">
+    <div ref={containerRef} className="border border-gray-700 rounded">
       <Application
         width={width}
         height={height}
