@@ -1,9 +1,9 @@
-import { Layer } from 'effect'
-import { SecureStoreService } from './github/store-service'
-import { TierService } from './tier/tier-service'
-import { BrowserAuthService } from './ai/browser/browser-auth-service'
-import { CookieUsagePageAdapter } from './ai/browser/cookie-usage-page-adapter'
-import { ElectronSessionService } from './ai/browser/electron-session-service'
+import { Layer } from "effect";
+import { SecureStoreService } from "./github/store-service";
+import { TierService } from "./tier/tier-service";
+import { BrowserAuthService } from "./ai/browser/browser-auth-service";
+import { CookieUsagePageAdapter } from "./ai/browser/cookie-usage-page-adapter";
+import { ElectronSessionService } from "./ai/browser/electron-session-service";
 
 /**
  * Core Infrastructure Layer - Shared Services
@@ -51,6 +51,12 @@ import { ElectronSessionService } from './ai/browser/electron-session-service'
 
 /**
  * Core infrastructure services shared across all domains.
+ * SecureStoreService is separated out to allow other layers to depend on it individually.
+ */
+export const CoreSecureStoreLayer = SecureStoreService.Default;
+
+/**
+ * Core infrastructure services shared across all domains.
  * These are constructed ONCE and shared throughout the application.
  *
  * Services included:
@@ -64,6 +70,6 @@ export const CoreInfrastructureLayer = Layer.mergeAll(
   ElectronSessionService.Default,
   BrowserAuthService.Default,
   CookieUsagePageAdapter.Default,
-  SecureStoreService.Default,
-  TierService.Default
-)
+  CoreSecureStoreLayer,
+  TierService.Default,
+);

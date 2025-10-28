@@ -5,10 +5,8 @@ import { Effect, Layer } from 'effect'
 import { GitHubAuthService } from './github/auth-service'
 import { GitHubApiService } from './github/api-service'
 import { GitHubHttpService } from './github/http-service'
-import { SecureStoreService } from './github/store-service'
 import { VcsAdaptersLayer } from './vcs/adapters-layer'
 import { VcsSourceControlAdaptersLayer } from './vcs/adapters/source-control'
-import { TierService } from './tier/tier-service'
 import { AccountContextService } from './account/account-context-service'
 import { setupAccountIpcHandlers } from './ipc/account-handlers'
 import { registerRoute } from '../lib/electron-router-dom'
@@ -22,9 +20,6 @@ import { AiProviderRegistryService } from './ai/registry'
 import { AiProviderService } from './ai/ai-provider-service'
 import { setupAiProviderIpcHandlers } from './ipc/ai-provider-handlers'
 import { setupAiWatcherIpcHandlers } from './ipc/ai-watcher-handlers'
-import { ElectronSessionService } from './ai/browser/electron-session-service'
-import { BrowserAuthService } from './ai/browser/browser-auth-service'
-import { CookieUsagePageAdapter } from './ai/browser/cookie-usage-page-adapter'
 import {
   GitCommandService,
   RepositoryService,
@@ -36,7 +31,10 @@ import { setupSourceControlIpcHandlers } from './ipc/source-control-handlers'
 import { WorkspaceDomainLayer } from './workspace/workspace-layer'
 import { setupWorkspaceIpcHandlers } from './ipc/workspace-handlers'
 import { AiWatchersLayer } from './ai-watchers'
-import { CoreInfrastructureLayer } from './core-infrastructure-layer'
+import {
+  CoreInfrastructureLayer,
+  CoreSecureStoreLayer,
+} from "./core-infrastructure-layer"
 import { BroadcastService } from './broadcast/broadcast-service'
 
 // Protocol scheme for OAuth callbacks
@@ -49,13 +47,11 @@ const GitHubServicesLayer = Layer.mergeAll(
   GitHubApiService.Default
 )
 
+// Protocol scheme for OAuth callbacks
 // VCS adapter layer with dependencies already provided
 const VcsSourceControlAdaptersWithDeps = Layer.provide(
   VcsSourceControlAdaptersLayer,
-  Layer.mergeAll(
-    GitHubServicesLayer,
-    SecureStoreService.Default
-  )
+  Layer.mergeAll(GitHubServicesLayer, CoreSecureStoreLayer),
 )
 
 /**
