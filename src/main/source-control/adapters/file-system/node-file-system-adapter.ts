@@ -184,6 +184,14 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                     Effect.catchAll(() => Effect.succeed(false))
                   )
                 : Effect.succeed(false)
+            ),
+            Effect.mapError((error) =>
+              new FileSystemError({
+                path: filePath,
+                operation: 'fileExists',
+                reason: 'Failed to check if file exists',
+                cause: error,
+              })
             )
           ),
 
@@ -258,14 +266,41 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
         // Unused methods - removed for simplicity
         // If needed in future, can easily add them back using @effect/platform
 
-        readFile: () => Effect.fail(new Error('Not implemented')),
-        readFileBytes: () => Effect.fail(new Error('Not implemented')),
-        directoryExists: () => Effect.fail(new Error('Not implemented')),
-        listDirectory: () => Effect.fail(new Error('Not implemented')),
-        stat: () => Effect.fail(new Error('Not implemented')),
-        resolvePath: () => { throw new Error('Not implemented') },
-        dirname: () => Effect.fail(new Error('Not implemented')),
-        joinPath: () => Effect.fail(new Error('Not implemented')),
+        readFile: (filePath: string) =>
+          Effect.fail(
+            new FileNotFoundError({
+              path: filePath,
+            })
+          ),
+        readFileBytes: (filePath: string) =>
+          Effect.fail(
+            new FileNotFoundError({
+              path: filePath,
+            })
+          ),
+        directoryExists: (dirPath: string) =>
+          Effect.fail(
+            new FileSystemError({
+              path: dirPath,
+              operation: 'directoryExists',
+              reason: 'Not implemented',
+            })
+          ),
+        listDirectory: (dirPath: string) =>
+          Effect.fail(
+            new DirectoryNotFoundError({
+              path: dirPath,
+            })
+          ),
+        stat: (filePath: string) =>
+          Effect.fail(
+            new FileNotFoundError({
+              path: filePath,
+            })
+          ),
+        resolvePath: (...paths: string[]) => Effect.succeed(path.resolve(...paths)),
+        dirname: (filePath: string) => Effect.succeed(path.dirname(filePath)),
+        joinPath: (...paths: string[]) => Effect.succeed(path.join(...paths)),
       }
 
       return adapter

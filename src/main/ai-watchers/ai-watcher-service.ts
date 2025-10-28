@@ -251,27 +251,36 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
 
             let processHandle: ProcessHandle | undefined = baseConfig.processHandle
 
+            // Create a dedicated scope for this watcher's lifecycle
+            // This scope will live until the watcher is explicitly stopped
+            const watcherScope = yield* Scope.make()
+
             // If no process handle provided, create a new tmux session
             if (!processHandle) {
               const sessionName = `ai-${baseConfig.type}-${watcherId.slice(0, 8)}`
               const { command, args } = getAiAgentCommand(baseConfig)
 
-              processHandle = yield* tmuxManager.createSession(
-                sessionName,
-                command,
-                args,
-                baseConfig.workingDirectory
-              ).pipe(
-                Effect.mapError((error: unknown) =>
-                  new AiWatcherCreateError({
-                    message: `Failed to create tmux session: ${error instanceof Error ? error.message : String(error)}`,
-                    config: {
-                      type: baseConfig.type,
-                      name: baseConfig.name,
-                    },
-                    cause: error,
-                  })
-                )
+              // Extend the createSession scope into the watcher's scope
+              // This ensures tmux lifecycle is bound to watcher lifecycle
+              processHandle = yield* Scope.extend(
+                tmuxManager.createSession(
+                  sessionName,
+                  command,
+                  args,
+                  baseConfig.workingDirectory
+                ).pipe(
+                  Effect.mapError((error: unknown) =>
+                    new AiWatcherCreateError({
+                      message: `Failed to create tmux session: ${error instanceof Error ? error.message : String(error)}`,
+                      config: {
+                        type: baseConfig.type,
+                        name: baseConfig.name,
+                      },
+                      cause: error,
+                    })
+                  )
+                ),
+                watcherScope
               )
             }
 
@@ -312,10 +321,6 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
             const logQueue = yield* Queue.unbounded<LogEntry>()
             const statusRef = yield* Ref.make<AiWatcherStatus>('starting')
             const lastActivityRef = yield* Ref.make(new Date())
-
-            // Create a dedicated scope for this watcher's lifecycle
-            // This scope will live until the watcher is explicitly stopped
-            const watcherScope = yield* Scope.make()
 
             // Start monitoring in the watcher's scope
             const fiber = yield* startMonitoring(watcherId, watcher, watcherScope)

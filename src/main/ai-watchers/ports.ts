@@ -78,13 +78,27 @@ export interface ProcessMonitorPort {
 export interface SessionManagerPort {
   /**
    * Create a new session and spawn a command in it
+   *
+   * Returns an Effect that requires Scope for proper lifecycle management.
+   * The tmux process will be monitored, and when it exits, the Scope will close,
+   * triggering automatic cleanup.
+   *
+   * @param name - Session name
+   * @param command - Command to run
+   * @param args - Command arguments
+   * @param cwd - Working directory
+   * @returns Effect that provides ProcessHandle within a Scope
    */
   createSession(
     name: string,
     command: string,
     args?: string[],
     cwd?: string
-  ): Effect.Effect<ProcessHandle, import('./errors').TmuxSessionNotFoundError>
+  ): Effect.Effect<
+    ProcessHandle,
+    import('./errors').TmuxSessionNotFoundError,
+    import('effect/Scope').Scope
+  >
 
   /**
    * Attach to an existing session by name

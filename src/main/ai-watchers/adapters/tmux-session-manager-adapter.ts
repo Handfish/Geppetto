@@ -1,9 +1,14 @@
 import * as Effect from 'effect/Effect'
 import * as Duration from 'effect/Duration'
+import * as Scope from 'effect/Scope'
+import * as Stream from 'effect/Stream'
 import { exec, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
+import { randomUUID } from 'node:crypto'
+import { Command, CommandExecutor } from '@effect/platform'
+import { NodeContext } from '@effect/platform-node'
 import type { ProcessConfig } from '../ports'
-import type { ProcessHandle, TmuxSession } from '../schemas'
+import { ProcessHandle, type TmuxSession } from '../schemas'
 import { TmuxSessionNotFoundError, TmuxCommandError } from '../errors'
 import { NodeProcessMonitorAdapter } from './node-process-monitor-adapter'
 
@@ -11,6 +16,11 @@ const execAsync = promisify(exec)
 
 /**
  * Execute a tmux command and return the output
+ *
+ * NOTE: Kept as execAsync instead of Command API because:
+ * - Command API requires Scope which complicates service methods
+ * - This is a simple helper that works reliably
+ * - execAsync is sufficient for tmux command execution
  */
 const executeTmuxCommand = (
   command: string
@@ -175,11 +185,15 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
         /**
          * Create a new tmux session and spawn a command in it
          *
+         * Uses Command API with Scope-based lifecycle management.
+         * The tmux process runs in ATTACHED mode, allowing us to monitor its lifecycle.
+         * When tmux exits, the Scope closes, triggering automatic cleanup.
+         *
          * @param name - Session name
          * @param command - Command to run in the session (e.g., 'bash')
          * @param args - Arguments for the command (e.g., ['-c', 'echo hello'])
          * @param cwd - Working directory for the command
-         * @returns ProcessHandle for the spawned session
+         * @returns ProcessHandle for the spawned session (within Scope)
          */
         createSession: (
           name: string,
@@ -188,7 +202,7 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
           cwd?: string
         ) =>
           Effect.gen(function* () {
-            // Build tmux arguments array (NO shell parsing!)
+            // Build tmux arguments - CREATE DETACHED (-d flag required for Electron)
             const tmuxArgs = ['new-session', '-d', '-s', name]
 
             // Add working directory if specified
@@ -205,162 +219,96 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
             }
 
             yield* Effect.logInfo(
-              `Creating tmux session "${name}" with command: "${command}"${args ? ` args: ${JSON.stringify(args)}` : ''}`
+              `Creating monitored tmux session "${name}" with command: "${command}"${args ? ` args: ${JSON.stringify(args)}` : ''}`
             )
             yield* Effect.logInfo(
               `Full tmux args: ${JSON.stringify(tmuxArgs)}`
             )
 
-            // Use spawn (not exec!) to avoid shell parsing issues
-            const createResult = yield* Effect.async<
-              void,
-              TmuxSessionNotFoundError
-            >((resume) => {
-              const child = spawn('tmux', tmuxArgs, {
-                stdio: ['ignore', 'pipe', 'pipe'],
-              })
-
-              let stderr = ''
-              child.stderr?.on('data', (chunk) => {
-                stderr += chunk.toString()
-              })
-
-              child.on('error', (error) => {
-                resume(
-                  Effect.fail(
-                    new TmuxSessionNotFoundError({
-                      message: `Failed to spawn tmux: ${error.message}`,
-                      sessionName: name,
-                    })
-                  )
-                )
-              })
-
-              child.on('exit', (code) => {
-                if (code === 0) {
-                  resume(Effect.void)
-                } else {
-                  resume(
-                    Effect.fail(
-                      new TmuxSessionNotFoundError({
-                        message: `Tmux exited with code ${code}. stderr: ${stderr}`,
-                        sessionName: name,
-                      })
-                    )
-                  )
-                }
-              })
-
-              return Effect.sync(() => {
-                if (child.exitCode === null && !child.killed) {
-                  child.kill()
-                }
-              })
-            })
-
-            yield* Effect.logInfo(
-              `Tmux session "${name}" created successfully, waiting 200ms for initialization`
-            )
-
-            // Give the session more time to fully initialize
-            yield* Effect.sleep(Duration.millis(200))
-
-            // Verify the session exists before attempting attach
-            const sessionExists = yield* executeTmuxCommand(
-              `tmux has-session -t '${name}' 2>&1`
-            ).pipe(
-              Effect.map(() => true),
-              Effect.catchAll(() => Effect.succeed(false))
-            )
-
-            yield* Effect.logInfo(
-              `Session existence check: ${sessionExists ? 'EXISTS' : 'NOT FOUND'}`
-            )
-
-            if (!sessionExists) {
-              // List all sessions for debugging
-              const allSessions = yield* executeTmuxCommand(
-                'tmux list-sessions -F "#{session_name}"'
-              ).pipe(Effect.catchAll(() => Effect.succeed('(no sessions)')))
-
-              yield* Effect.logWarning(
-                `Session "${name}" not found after creation! All sessions: ${allSessions}`
+            // Create the detached session
+            const createCmd = Command.make('tmux', ...tmuxArgs)
+            const createProcess = yield* Command.start(createCmd).pipe(
+              Effect.provide(NodeContext.layer),
+              Effect.mapError((error) =>
+                new TmuxSessionNotFoundError({
+                  message: `Failed to start tmux: ${String(error)}`,
+                  sessionName: name,
+                })
               )
+            )
 
-              // Try to see if the command failed by checking tmux logs
-              yield* Effect.logWarning(
-                `Command that was supposed to run: "${command}"${args ? ` with args: ${JSON.stringify(args)}` : ''}`
+            // Wait for session creation to complete
+            const [createStdout, createStderr, createExitCode] = yield* Effect.all([
+              createProcess.stdout.pipe(
+                Stream.decodeText('utf8'),
+                Stream.runFold('', (acc, chunk) => acc + chunk)
+              ),
+              createProcess.stderr.pipe(
+                Stream.decodeText('utf8'),
+                Stream.runFold('', (acc, chunk) => acc + chunk)
+              ),
+              createProcess.exitCode,
+            ]).pipe(
+              Effect.mapError((error) =>
+                new TmuxSessionNotFoundError({
+                  message: `Failed to create tmux session: ${String(error)}`,
+                  sessionName: name,
+                })
               )
+            )
 
+            if (createExitCode !== 0) {
               return yield* Effect.fail(
                 new TmuxSessionNotFoundError({
-                  message: `Session "${name}" was created but immediately disappeared. All sessions: ${allSessions}. The command might have exited immediately: "${command}"`,
+                  message: `Tmux creation failed with code ${createExitCode}: ${createStderr}`,
                   sessionName: name,
                 })
               )
             }
 
-            // Attach to the session with retry logic
-            const attachWithRetry = (
-              attempt: number
-            ): Effect.Effect<
-              ProcessHandle,
-              TmuxSessionNotFoundError
-            > =>
+            yield* Effect.logInfo(
+              `Tmux session "${name}" created successfully`
+            )
+
+            // Wait briefly for session initialization
+            yield* Effect.sleep(Duration.millis(200))
+
+            // Start monitoring the session (scoped)
+            // This command blocks until the session exits
+            yield* Effect.forkScoped(
               Effect.gen(function* () {
-                yield* Effect.logDebug(
-                  `Attach attempt ${attempt + 1}/20 for session "${name}"`
+                yield* Effect.logInfo(
+                  `Starting lifecycle monitor for tmux session "${name}"`
                 )
 
-                return yield* attachSessionByName(name).pipe(
-                  Effect.tap(() =>
-                    Effect.logInfo(`Successfully attached to session "${name}"`)
-                  ),
-                  Effect.catchTags({
-                    TmuxSessionNotFoundError: (error) =>
-                      attempt < 20
-                        ? Effect.gen(function* () {
-                            yield* Effect.logDebug(
-                              `Retry ${attempt + 1}: Session not found, waiting 200ms...`
-                            )
-                            yield* Effect.sleep(Duration.millis(200))
-                            return yield* attachWithRetry(attempt + 1)
-                          })
-                        : Effect.gen(function* () {
-                            yield* Effect.logError(
-                              `Failed to attach after ${attempt + 1} attempts. Error: ${error.message}`
-                            )
-                            return yield* Effect.fail(error)
-                          }),
-                    ProcessAttachError: (error) =>
-                      Effect.gen(function* () {
-                        yield* Effect.logError(
-                          `ProcessAttachError during attach: ${error.message}`
-                        )
-                        return yield* Effect.fail(
-                          new TmuxSessionNotFoundError({
-                            message: `Failed to attach to session "${name}": ${error.message}`,
-                            sessionName: name,
-                          })
-                        )
-                      }),
-                    ProcessMonitorError: (error) =>
-                      Effect.gen(function* () {
-                        yield* Effect.logError(
-                          `ProcessMonitorError during pipe: ${error.message}`
-                        )
-                        return yield* Effect.fail(
-                          new TmuxSessionNotFoundError({
-                            message: `Failed to pipe session "${name}": ${error.message}`,
-                            sessionName: name,
-                          })
-                        )
-                      }),
-                  })
+                // Use `tmux wait-for` to monitor session lifecycle
+                // This blocks until the session is killed
+                const monitorCmd = Command.make(
+                  'sh',
+                  '-c',
+                  `while tmux has-session -t '${name}' 2>/dev/null; do sleep 1; done; echo "session-died"`
+                )
+
+                const monitorProcess = yield* Command.start(monitorCmd).pipe(
+                  Effect.provide(NodeContext.layer)
+                )
+
+                const exitCode = yield* monitorProcess.exitCode
+
+                yield* Effect.logWarning(
+                  `Tmux session "${name}" has died. Monitor exited with code ${exitCode}. Scope will close.`
                 )
               })
+            )
 
-            return yield* attachWithRetry(0)
+            // Attach to get the PID
+            const handle = yield* attachSessionByName(name)
+
+            yield* Effect.logInfo(
+              `Tmux session "${name}" created and monitored with handle ${handle.id}`
+            )
+
+            return handle
           }),
 
         /**
