@@ -1,8 +1,8 @@
 import { Effect, Schema as S } from 'effect'
+import { Path } from '@effect/platform'
 import Store from 'electron-store'
 import { dialog } from 'electron'
 import { promises as fs } from 'fs'
-import path from 'path'
 import { randomUUID } from 'crypto'
 import { WorkspaceConfig } from '../../shared/schemas/workspace'
 import { GitCommandService } from '../source-control/git-command-service'
@@ -18,10 +18,15 @@ import { RepositoryService } from '../source-control/services/repository-service
 export class WorkspaceService extends Effect.Service<WorkspaceService>()(
   'WorkspaceService',
   {
-    dependencies: [GitCommandService.Default, RepositoryService.Default],
+    dependencies: [
+      GitCommandService.Default,
+      RepositoryService.Default,
+      Path.layer,
+    ],
     effect: Effect.gen(function* () {
       const gitCommandService = yield* GitCommandService
       const repositoryService = yield* RepositoryService
+      const path = yield* Path.Path
 
       const store = new Store({
         name: 'workspace-config',

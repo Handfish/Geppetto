@@ -1,7 +1,7 @@
 import { Effect, Stream, Scope } from 'effect'
+import { Path } from '@effect/platform'
 import * as fs from 'node:fs/promises'
 import * as fsSync from 'node:fs'
-import * as path from 'node:path'
 import { watch, type FSWatcher } from 'chokidar'
 import {
   FileSystemPort,
@@ -15,13 +15,16 @@ import {
 /**
  * NodeFileSystemAdapter - Node.js implementation of FileSystemPort
  *
- * Uses Node.js fs module and chokidar for file watching.
+ * Uses @effect/platform for path operations and chokidar for file watching.
  * Provides all file system operations needed by the source control domain.
  */
 export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>()(
   'NodeFileSystemAdapter',
   {
-    effect: Effect.sync(() => {
+    effect: Effect.gen(function* () {
+      // Inject Path service from @effect/platform
+      const path = yield* Path.Path
+
       const adapter: FileSystemPort = {
         /**
          * Find all Git repositories in the given base path
@@ -405,28 +408,29 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
           }),
 
         /**
-         * Resolve absolute path
+         * Resolve absolute path (using @effect/platform/Path)
          */
-        resolvePath: (filePath: string) => Effect.succeed(path.resolve(filePath)),
+        resolvePath: (filePath: string) => path.resolve(filePath),
 
         /**
-         * Get parent directory path
+         * Get parent directory path (using @effect/platform/Path)
          */
         dirname: (filePath: string) => Effect.succeed(path.dirname(filePath)),
 
         /**
-         * Get file name from path
+         * Get file name from path (using @effect/platform/Path)
          */
         basename: (filePath: string) => Effect.succeed(path.basename(filePath)),
 
         /**
-         * Join path components
+         * Join path components (using @effect/platform/Path)
          */
         joinPath: (...components: string[]) => Effect.succeed(path.join(...components)),
       }
 
       return adapter
     }),
+    dependencies: [Path.layer],
   }
 ) {}
 

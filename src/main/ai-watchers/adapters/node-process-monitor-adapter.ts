@@ -7,11 +7,11 @@ import * as Schedule from 'effect/Schedule'
 import * as Duration from 'effect/Duration'
 import * as Scope from 'effect/Scope'
 import * as Exit from 'effect/Exit'
+import { Path } from '@effect/platform'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { promises as FsPromises } from 'node:fs'
 import * as Fs from 'node:fs'
-import * as Path from 'node:path'
 import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 import { exec } from 'node:child_process'
@@ -68,6 +68,9 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
   'NodeProcessMonitorAdapter',
   {
     effect: Effect.gen(function* () {
+      // Inject Path service from @effect/platform
+      const path = yield* Path.Path
+
       // Map of process ID to process information
       const processes = new Map<string, ProcessInfo>()
 
@@ -686,7 +689,7 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
 
             // Create temp directory for FIFO
             const tempDir = yield* Effect.tryPromise({
-              try: () => FsPromises.mkdtemp(Path.join(tmpdir(), 'tmux-pipe-')),
+              try: () => FsPromises.mkdtemp(path.join(tmpdir(), 'tmux-pipe-')),
               catch: (error) =>
                 new ProcessMonitorError({
                   message: 'Failed to create temp directory for tmux pipe',
@@ -695,7 +698,7 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
                 }),
             })
 
-            const fifoPath = Path.join(tempDir, 'pane.fifo')
+            const fifoPath = path.join(tempDir, 'pane.fifo')
 
             // Create FIFO
             yield* Effect.tryPromise({
@@ -778,5 +781,6 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
 
       return implementation
     }),
+    dependencies: [Path.layer],
   }
 ) {}
