@@ -1,39 +1,36 @@
-import { Effect, Stream, Scope } from 'effect'
+import { Effect, Stream } from 'effect'
 import { Path, FileSystem } from '@effect/platform'
-import { NodeFileSystem } from '@effect/platform-node'
+import { NodeFileSystem, NodePath } from '@effect/platform-node'
 import * as fs from 'node:fs/promises'
 import * as fsSync from 'node:fs'
-import { watch, type FSWatcher } from 'chokidar'
+import { watch } from 'chokidar'
 import {
   FileSystemPort,
   type FileEvent,
-  DirectoryEntry,
   FileSystemError,
   FileNotFoundError,
   DirectoryNotFoundError,
 } from '../../ports/secondary/file-system-port'
 
 /**
- * NodeFileSystemAdapter - Node.js implementation of FileSystemPort
+ * NodeFileSystemAdapter - Simplified Node.js implementation of FileSystemPort
  *
- * Uses @effect/platform for file system and path operations, chokidar for file watching.
- * Provides all file system operations needed by the source control domain.
+ * Uses @effect/platform for standard operations, node:fs for git-specific needs.
+ * Only implements methods actually used by RepositoryService.
  */
 export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>()(
   'NodeFileSystemAdapter',
   {
-    dependencies: [
-      Path.layer,
-      NodeFileSystem.layer,
-    ],
+    dependencies: [NodePath.layer, NodeFileSystem.layer],
     effect: Effect.gen(function* () {
-      // Inject platform services
       const platformFs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
 
       const adapter: FileSystemPort = {
         /**
          * Find all Git repositories in the given base path
+         *
+         * Complex recursive search - kept with node:fs for performance (withFileTypes)
          */
         findGitRepositories: (basePath: string) =>
           Effect.gen(function* () {
@@ -43,14 +40,6 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
               catch: (error: unknown) => {
                 if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
                   return new DirectoryNotFoundError({ path: basePath })
-                }
-                if ((error as NodeJS.ErrnoException)?.code === 'EACCES') {
-                  return new FileSystemError({
-                    path: basePath,
-                    operation: 'read',
-                    reason: 'Permission denied',
-                    cause: error,
-                  })
                 }
                 return new FileSystemError({
                   path: basePath,
@@ -69,7 +58,6 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
 
             const scanDirectory = (dirPath: string): Effect.Effect<void, FileSystemError> =>
               Effect.gen(function* () {
-                // Read directory entries
                 const entries = yield* Effect.tryPromise({
                   try: () => fs.readdir(dirPath, { withFileTypes: true }),
                   catch: (error: unknown) => {
@@ -84,7 +72,7 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                   },
                 }).pipe(
                   Effect.catchAll((error) => {
-                    // Skip directories we can't read (permission errors)
+                    // Skip directories we can't read
                     if (error.reason === 'Permission denied') {
                       return Effect.succeed([] as fsSync.Dirent[])
                     }
@@ -95,7 +83,6 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                 for (const entry of entries) {
                   const fullPath = path.join(dirPath, entry.name)
 
-                  // Check if this is a .git directory
                   if (entry.name === '.git' && entry.isDirectory()) {
                     // Found a repository - add parent directory
                     repos.push(path.dirname(fullPath))
@@ -106,9 +93,7 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                 }
               })
 
-            // Start scanning
             yield* scanDirectory(basePath)
-
             return repos
           }),
 
@@ -125,11 +110,11 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                 // Valid if .git exists as directory or file (worktree)
                 return stat.isDirectory() || stat.isFile()
               },
-              catch: (error: unknown) => new FileSystemError({
+              catch: () => new FileSystemError({
                 path: gitDir,
                 operation: 'stat',
                 reason: 'Failed to check .git existence',
-                cause: error,
+                cause: 'ENOENT',
               }),
             }).pipe(
               Effect.catchAll(() => Effect.succeed(false))
@@ -138,6 +123,7 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
 
         /**
          * Get the .git directory path for a repository
+         * Handles both regular repos and worktrees
          */
         getGitDirectory: (repositoryPath: string) =>
           Effect.gen(function* () {
@@ -187,7 +173,28 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
           }),
 
         /**
+         * Check if file exists - using @effect/platform
+         */
+        fileExists: (filePath: string) =>
+          platformFs.exists(filePath).pipe(
+            Effect.flatMap((exists) =>
+              exists
+                ? platformFs.stat(filePath).pipe(
+                    Effect.map((info) => info.type === 'File'),
+                    Effect.catchAll(() => Effect.succeed(false))
+                  )
+                : Effect.succeed(false)
+            )
+          ),
+
+        /**
+         * Get file name from path - using @effect/platform
+         */
+        basename: (filePath: string) => Effect.succeed(path.basename(filePath)),
+
+        /**
          * Watch a directory for changes
+         * Uses chokidar for advanced filtering (kept as-is)
          */
         watchDirectory: (dirPath: string) =>
           Stream.asyncScoped<FileEvent, FileSystemError>((emit) =>
@@ -248,186 +255,20 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
             })
           ),
 
-        /**
-         * Read a file as text (using @effect/platform/FileSystem)
-         */
-        readFile: (filePath: string) =>
-          platformFs.readFileString(filePath).pipe(
-            Effect.mapError((platformError) => {
-              // Map platform errors to domain errors
-              const errorString = String(platformError)
-              if (errorString.includes('ENOENT') || errorString.includes('NotFound')) {
-                return new FileNotFoundError({ path: filePath })
-              }
-              if (errorString.includes('EACCES') || errorString.includes('PermissionDenied')) {
-                return new FileSystemError({
-                  path: filePath,
-                  operation: 'read',
-                  reason: 'Permission denied',
-                  cause: platformError,
-                })
-              }
-              return new FileSystemError({
-                path: filePath,
-                operation: 'readFile',
-                reason: 'Failed to read file',
-                cause: platformError,
-              })
-            })
-          ),
+        // Unused methods - removed for simplicity
+        // If needed in future, can easily add them back using @effect/platform
 
-        /**
-         * Read a file as binary (using @effect/platform/FileSystem)
-         */
-        readFileBytes: (filePath: string) =>
-          platformFs.readFile(filePath).pipe(
-            Effect.mapError((platformError) => {
-              const errorString = String(platformError)
-              if (errorString.includes('ENOENT') || errorString.includes('NotFound')) {
-                return new FileNotFoundError({ path: filePath })
-              }
-              if (errorString.includes('EACCES') || errorString.includes('PermissionDenied')) {
-                return new FileSystemError({
-                  path: filePath,
-                  operation: 'read',
-                  reason: 'Permission denied',
-                  cause: platformError,
-                })
-              }
-              return new FileSystemError({
-                path: filePath,
-                operation: 'readFileBytes',
-                reason: 'Failed to read file',
-                cause: platformError,
-              })
-            })
-          ),
-
-        /**
-         * Check if file exists (using @effect/platform/FileSystem)
-         */
-        fileExists: (filePath: string) =>
-          platformFs.exists(filePath).pipe(
-            Effect.flatMap((exists) =>
-              exists
-                ? platformFs.stat(filePath).pipe(
-                    Effect.map((info) => info.type === 'File'),
-                    Effect.catchAll(() => Effect.succeed(false))
-                  )
-                : Effect.succeed(false)
-            )
-          ),
-
-        /**
-         * Check if directory exists (using @effect/platform/FileSystem)
-         */
-        directoryExists: (dirPath: string) =>
-          platformFs.exists(dirPath).pipe(
-            Effect.flatMap((exists) =>
-              exists
-                ? platformFs.stat(dirPath).pipe(
-                    Effect.map((info) => info.type === 'Directory'),
-                    Effect.catchAll(() => Effect.succeed(false))
-                  )
-                : Effect.succeed(false)
-            )
-          ),
-
-        /**
-         * List entries in a directory (using @effect/platform/FileSystem)
-         */
-        listDirectory: (dirPath: string) =>
-          platformFs.readDirectory(dirPath).pipe(
-            Effect.flatMap((names) =>
-              Effect.all(
-                names.map((name) =>
-                  Effect.gen(function* () {
-                    const entryPath = path.join(dirPath, name)
-                    const stat = yield* platformFs.stat(entryPath).pipe(
-                      Effect.catchAll(() =>
-                        Effect.succeed({ type: 'Unknown' as const })
-                      )
-                    )
-                    return new DirectoryEntry({
-                      name,
-                      path: entryPath,
-                      isDirectory: stat.type === 'Directory',
-                      isFile: stat.type === 'File',
-                    })
-                  })
-                )
-              )
-            ),
-            Effect.mapError((platformError) => {
-              const errorString = String(platformError)
-              if (errorString.includes('ENOENT') || errorString.includes('NotFound')) {
-                return new DirectoryNotFoundError({ path: dirPath })
-              }
-              if (errorString.includes('EACCES') || errorString.includes('PermissionDenied')) {
-                return new FileSystemError({
-                  path: dirPath,
-                  operation: 'read',
-                  reason: 'Permission denied',
-                  cause: platformError,
-                })
-              }
-              return new FileSystemError({
-                path: dirPath,
-                operation: 'listDirectory',
-                reason: 'Failed to list directory',
-                cause: platformError,
-              })
-            })
-          ),
-
-        /**
-         * Get file metadata (using @effect/platform/FileSystem)
-         */
-        stat: (filePath: string) =>
-          platformFs.stat(filePath).pipe(
-            Effect.map((info) => ({
-              size: info.size,
-              isFile: info.type === 'File',
-              isDirectory: info.type === 'Directory',
-              modifiedTime: new Date(info.mtime),
-            })),
-            Effect.mapError((platformError) => {
-              const errorString = String(platformError)
-              if (errorString.includes('ENOENT') || errorString.includes('NotFound')) {
-                return new FileNotFoundError({ path: filePath })
-              }
-              return new FileSystemError({
-                path: filePath,
-                operation: 'stat',
-                reason: 'Failed to stat file',
-                cause: platformError,
-              })
-            })
-          ),
-
-        /**
-         * Resolve absolute path (using @effect/platform/Path)
-         */
-        resolvePath: (filePath: string) => path.resolve(filePath),
-
-        /**
-         * Get parent directory path (using @effect/platform/Path)
-         */
-        dirname: (filePath: string) => Effect.succeed(path.dirname(filePath)),
-
-        /**
-         * Get file name from path (using @effect/platform/Path)
-         */
-        basename: (filePath: string) => Effect.succeed(path.basename(filePath)),
-
-        /**
-         * Join path components (using @effect/platform/Path)
-         */
-        joinPath: (...components: string[]) => Effect.succeed(path.join(...components)),
+        readFile: () => Effect.fail(new Error('Not implemented')),
+        readFileBytes: () => Effect.fail(new Error('Not implemented')),
+        directoryExists: () => Effect.fail(new Error('Not implemented')),
+        listDirectory: () => Effect.fail(new Error('Not implemented')),
+        stat: () => Effect.fail(new Error('Not implemented')),
+        resolvePath: () => { throw new Error('Not implemented') },
+        dirname: () => Effect.fail(new Error('Not implemented')),
+        joinPath: () => Effect.fail(new Error('Not implemented')),
       }
 
       return adapter
     }),
   }
 ) {}
-

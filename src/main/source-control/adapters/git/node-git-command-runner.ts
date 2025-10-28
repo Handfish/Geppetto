@@ -1,20 +1,12 @@
-import {
-  Cause,
-  Deferred,
-  Duration,
-  Effect,
-  Queue,
-  Schedule,
-  Schema as S,
-  Stream,
-} from 'effect'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { Effect, Duration, Schema as S, Stream } from 'effect'
+import { Command } from '@effect/platform'
+import type { CommandExecutor } from '@effect/platform'
+import { NodeContext } from '@effect/platform-node'
 import type {
   GitCommandExecutionHandle,
   GitCommandRunnerPort,
 } from '../../ports'
 import {
-  GitCommandEvent,
   GitCommandRequest,
   GitCommandResult,
 } from '../../../../shared/schemas/source-control'
@@ -27,391 +19,171 @@ import {
 } from '../../../../shared/schemas/source-control/errors'
 
 /**
- * Node.js implementation of the GitCommandRunnerPort.
- * Wraps child_process.spawn with Effect primitives for structured concurrency.
+ * Node.js implementation of the GitCommandRunnerPort - Simplified.
+ * Uses @effect/platform Command API with direct stdout/stderr/exitCode collection.
+ * Removed unused event streaming infrastructure.
  */
 export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()(
   'NodeGitCommandRunner',
   {
-    effect: Effect.sync(() => {
+    dependencies: [NodeContext.layer],
+    effect: Effect.gen(function* () {
       const runner: GitCommandRunnerPort = {
         execute: (request: GitCommandRequest) =>
           Effect.gen(function* () {
-              const handleDeferred = yield* Deferred.make<
-                GitCommandExecutionHandle,
-                GitCommandDomainError
-              >()
-
-              yield* Effect.forkScoped(
-                Effect.catchAll(
-                  Effect.gen(function* () {
-                    const normalisedRequest = yield* S.decodeUnknown(
-                      GitCommandRequest
-                    )(request)
-
-                    const {
-                      id,
-                      binary,
-                      args,
-                      worktree,
-                      environment,
-                      allowInteractive,
-                      stdio,
-                      timeoutMs,
-                    } = normalisedRequest
-
-                    const mergedEnv = {
-                      ...process.env,
-                      ...Object.fromEntries(
-                        (environment ?? []).map(variable => [
-                          variable.name,
-                          variable.value,
-                        ])
-                      ),
-                    }
-
-                    const queue = yield* Effect.acquireRelease(
-                      Queue.unbounded<GitCommandEvent>(),
-                      queue => queue.shutdown
-                    )
-
-                    const resultDeferred = yield* Deferred.make<
-                      GitCommandResult,
-                      GitCommandDomainError
-                    >()
-
-                    const emit = (event: GitCommandEvent) => {
-                      Effect.runFork(
-                        queue.offer(event).pipe(
-                          Effect.catchAllCause(cause =>
-                            Effect.logError(
-                              `Failed to emit git command event: ${Cause.pretty(
-                                cause
-                              )}`
-                            ).pipe(Effect.zipRight(queue.shutdown))
-                          )
-                        )
-                      )
-                    }
-
-                    let stdoutBuffer = ''
-                    let stderrBuffer = ''
-                    let completed = false
-                    let terminatedByUser = false
-                    const startedAt = new Date()
-
-                    const markCompleted = (): boolean => {
-                      if (completed) return false
-                      completed = true
-                      return true
-                    }
-
-                    const completeSuccess = (result: GitCommandResult) => {
-                      if (!markCompleted()) return
-
-                      Effect.runFork(
-                        Deferred.succeed(resultDeferred, result).pipe(
-                          Effect.zipRight(queue.shutdown)
-                        )
-                      )
-                    }
-
-                    const completeFailure = (
-                      error: GitCommandDomainError
-                    ) => {
-                      if (!markCompleted()) return
-
-                      Effect.runFork(
-                        Deferred.fail(resultDeferred, error).pipe(
-                          Effect.zipRight(queue.shutdown)
-                        )
-                      )
-                    }
-
-                    const child = yield* Effect.acquireRelease(
-                      Effect.try({
-                        try: () =>
-                          spawn(binary ?? 'git', args, {
-                            cwd: worktree.repositoryPath,
-                            env: mergedEnv,
-                            stdio: allowInteractive ? 'inherit' : stdio,
-                          }),
-                        catch: (error: unknown) => {
-                          const nodeError = error as NodeJS.ErrnoException
-                          const executableName = binary ?? 'git'
-                          if (nodeError?.code === 'ENOENT') {
-                            return new GitExecutableUnavailableError({
-                              binary: executableName,
-                              message: `Executable "${executableName}" was not found in PATH`,
-                            })
-                          }
-
-                          return new GitCommandSpawnError({
-                            commandId: id,
-                            message: `Failed to spawn ${executableName}`,
-                            cause:
-                              error instanceof Error
-                                ? error.message
-                                : String(error),
-                          })
-                        },
-                      }),
-                      (child: ChildProcess) =>
-                        Effect.sync(() => {
-                          child.removeAllListeners()
-                          if (!child.killed) {
-                            child.kill('SIGTERM')
-                          }
-                        })
-                    )
-
-                    if (child.stdout) {
-                      child.stdout.setEncoding('utf8')
-                      child.stdout.on('data', (chunk: string) => {
-                        stdoutBuffer += chunk
-                        emit({
-                          _tag: 'StdoutChunk',
-                          commandId: id,
-                          data: chunk,
-                          timestamp: new Date(),
-                        })
-                      })
-                    }
-
-                    if (child.stderr) {
-                      child.stderr.setEncoding('utf8')
-                      child.stderr.on('data', (chunk: string) => {
-                        stderrBuffer += chunk
-                        emit({
-                          _tag: 'StderrChunk',
-                          commandId: id,
-                          data: chunk,
-                          timestamp: new Date(),
-                        })
-                      })
-                    }
-
-                    child.once('error', error => {
-                      emit({
-                        _tag: 'Failed',
-                        commandId: id,
-                        error: {
-                          message: 'Process error',
-                          cause:
-                            error instanceof Error
-                              ? error.message
-                              : String(error),
-                        },
-                        failedAt: new Date(),
-                      })
-
-                      completeFailure(
-                        new GitCommandSpawnError({
-                          commandId: id,
-                          message: `Process error for ${binary ?? 'git'}`,
-                          cause:
-                            error instanceof Error
-                              ? error.message
-                              : String(error),
-                        })
-                      )
-                    })
-
-                    child.once('exit', (code, signal) => {
-                      const endedAt = new Date()
-                      const exitEvent = {
-                        _tag: 'Exited' as const,
-                        commandId: id,
-                        exitCode: typeof code === 'number' ? code : -1,
-                        endedAt,
-                      }
-
-                      emit(exitEvent)
-
-                      // Check if already completed but don't mark as completed yet
-                      // Let completeSuccess/completeFailure handle that
-                      if (completed) {
-                        return
-                      }
-
-                      const durationMs = endedAt.getTime() - startedAt.getTime()
-
-                      if (signal || terminatedByUser) {
-                        const result = new GitCommandResult({
-                          commandId: id,
-                          exitCode: code ?? undefined,
-                          status: 'cancelled',
-                          startedAt,
-                          completedAt: endedAt,
-                          durationMs,
-                          stdout: stdoutBuffer || undefined,
-                          stderr: stderrBuffer || undefined,
-                        })
-
-                        completeSuccess(result)
-                        return
-                      }
-
-                      if (code === 0) {
-                        const result = new GitCommandResult({
-                          commandId: id,
-                          exitCode: 0,
-                          status: 'success',
-                          startedAt,
-                          completedAt: endedAt,
-                          durationMs,
-                          stdout: stdoutBuffer || undefined,
-                          stderr: stderrBuffer || undefined,
-                        })
-
-                        completeSuccess(result)
-                        return
-                      }
-
-                      emit({
-                        _tag: 'Failed',
-                        commandId: id,
-                        error: {
-                          message: `Git exited with code ${code ?? 'unknown'}`,
-                          cause: stderrBuffer || undefined,
-                        },
-                        failedAt: endedAt,
-                      })
-
-                      completeFailure(
-                        new GitCommandFailedError({
-                          commandId: id,
-                          exitCode: code ?? -1,
-                          stdout: stdoutBuffer || undefined,
-                          stderr: stderrBuffer || undefined,
-                          message: `Git exited with code ${code ?? 'unknown'}`,
-                        })
-                      )
-                    })
-
-                    if (typeof timeoutMs === 'number' && timeoutMs > 0) {
-                      yield* Effect.forkScoped(
-                        Effect.sleep(Duration.millis(timeoutMs)).pipe(
-                          Effect.flatMap(() =>
-                            Effect.sync(() => {
-                              if (completed) {
-                                return
-                              }
-
-                              const timeoutError =
-                                new GitCommandTimeoutError({
-                                  commandId: id,
-                                  timeoutMs,
-                                  message: `Git command timed out after ${timeoutMs}ms`,
-                                })
-
-                              emit({
-                                _tag: 'Failed',
-                                commandId: id,
-                                error: {
-                                  message:
-                                    timeoutError.message ?? 'Command timeout',
-                                },
-                                failedAt: new Date(),
-                              })
-
-                              completeFailure(timeoutError)
-
-                              if (!child.killed) {
-                                child.kill('SIGKILL')
-                              }
-                            })
-                          )
-                        )
-                      )
-                    }
-
-                    yield* Effect.forkScoped(
-                      Effect.repeat(
-                        Effect.suspend(() => {
-                          if (completed) {
-                            return Effect.void
-                          }
-                          return Effect.gen(function* () {
-                            const heartbeat: GitCommandEvent = {
-                              _tag: 'Heartbeat',
-                              commandId: id,
-                              timestamp: new Date(),
-                            }
-                            yield* queue.offer(heartbeat).pipe(
-                              Effect.catchAll(() => Effect.void)
-                            )
-                          })
-                        }),
-                        Schedule.spaced(Duration.seconds(5))
-                      )
-                    )
-
-                    console.log(`[GitCommandRunner] Running: ${binary ?? 'git'} ${args.join(' ')} (cwd: ${worktree.repositoryPath})`)
-
-                    const startedEvent: GitCommandEvent = {
-                      _tag: 'Started',
-                      commandId: id,
-                      startedAt,
-                      binary: binary ?? 'git',
-                      args,
-                      cwd: worktree.repositoryPath,
-                    }
-                    yield* queue.offer(startedEvent)
-
-                    const events = Stream.fromQueue(queue)
-
-                    const handle: GitCommandExecutionHandle = {
-                      request: normalisedRequest,
-                      events,
-                      awaitResult: Deferred.await(resultDeferred),
-                      terminate: Effect.sync(() => {
-                        if (!child.killed) {
-                          terminatedByUser = true
-                          child.kill('SIGTERM')
-                        }
-                      }),
-                    }
-
-                    yield* Deferred.succeed(handleDeferred, handle)
-
-                    yield* Deferred.await(resultDeferred).pipe(
-                      Effect.match({
-                        onFailure: () => Effect.void,
-                        onSuccess: () => Effect.void,
-                      })
-                    )
-                  }),
-                  error => {
-                    // Convert any error (including ParseError) to GitCommandDomainError
-                    const domainError: GitCommandDomainError =
-                      error instanceof GitExecutableUnavailableError ||
-                      error instanceof GitCommandTimeoutError ||
-                      error instanceof GitCommandFailedError ||
-                      error instanceof GitCommandSpawnError
-                        ? error
-                        : new GitCommandSpawnError({
-                            commandId: request.id,
-                            message: `Failed to execute command: ${
-                              error instanceof Error
-                                ? error.message
-                                : String(error)
-                            }`,
-                            cause:
-                              error instanceof Error
-                                ? error.message
-                                : String(error),
-                          })
-
-                    return Deferred.fail(handleDeferred, domainError).pipe(
-                      Effect.zipRight(Effect.fail(domainError))
-                    )
-                  }
-                )
+            const normalisedRequest = yield* S.decodeUnknown(
+              GitCommandRequest
+            )(request).pipe(
+              Effect.mapError((parseError) =>
+                new GitCommandSpawnError({
+                  commandId: request.id,
+                  message: `Invalid git command request: ${parseError.message}`,
+                  cause: String(parseError),
+                })
               )
+            )
 
-              return yield* Deferred.await(handleDeferred)
-            })
+            const {
+              id,
+              binary,
+              args,
+              worktree,
+              environment,
+              allowInteractive,
+              timeoutMs,
+            } = normalisedRequest
+
+            const mergedEnv: Record<string, string> = {
+              ...(globalThis.process.env as Record<string, string>),
+              ...Object.fromEntries(
+                (environment ?? []).map(variable => [
+                  variable.name,
+                  variable.value,
+                ])
+              ),
+            }
+
+            // Build command using @effect/platform
+            const cmd: Command.Command = Command.make(binary ?? 'git', ...args).pipe(
+              Command.workingDirectory(worktree.repositoryPath),
+              Command.env(mergedEnv),
+              allowInteractive
+                ? (cmd) => cmd.pipe(Command.stdin('inherit'), Command.stdout('inherit'), Command.stderr('inherit'))
+                : (cmd) => cmd
+            )
+
+            const startedAt = new Date()
+
+            console.log(`[GitCommandRunner] Running: ${binary ?? 'git'} ${args.join(' ')} (cwd: ${worktree.repositoryPath})`)
+
+            // Start process
+            const process: CommandExecutor.Process = yield* Command.start(cmd).pipe(
+              Effect.mapError((platformError) => {
+                const executableName = binary ?? 'git'
+                const errorString = String(platformError)
+
+                // Check for executable not found
+                if (errorString.includes('ENOENT') || errorString.includes('NotFound') || errorString.includes('not found')) {
+                  return new GitExecutableUnavailableError({
+                    binary: executableName,
+                    message: `Executable "${executableName}" was not found in PATH`,
+                  })
+                }
+
+                return new GitCommandSpawnError({
+                  commandId: id,
+                  message: `Failed to spawn ${executableName}`,
+                  cause: errorString,
+                })
+              })
+            )
+
+            // Collect stdout, stderr, and exit code in parallel
+            const [stdout, stderr, exitCode] = yield* Effect.all([
+              allowInteractive
+                ? Effect.succeed('')
+                : process.stdout.pipe(
+                    Stream.decodeText('utf8'),
+                    Stream.runFold('', (acc, chunk) => acc + chunk),
+                    Effect.catchAll(() => Effect.succeed(''))
+                  ),
+              allowInteractive
+                ? Effect.succeed('')
+                : process.stderr.pipe(
+                    Stream.decodeText('utf8'),
+                    Stream.runFold('', (acc, chunk) => acc + chunk),
+                    Effect.catchAll(() => Effect.succeed(''))
+                  ),
+              process.exitCode,
+            ]).pipe(
+              timeoutMs && timeoutMs > 0
+                ? Effect.timeout(Duration.millis(timeoutMs))
+                : (effect) => effect,
+              Effect.mapError((error): GitCommandDomainError => {
+                if (error._tag === 'TimeoutException') {
+                  return new GitCommandTimeoutError({
+                    commandId: id,
+                    timeoutMs: timeoutMs!,
+                    message: `Git command timed out after ${timeoutMs}ms`,
+                  })
+                }
+                // Check if already a GitCommandDomainError
+                if (
+                  error instanceof GitExecutableUnavailableError ||
+                  error instanceof GitCommandSpawnError ||
+                  error instanceof GitCommandFailedError ||
+                  error instanceof GitCommandTimeoutError
+                ) {
+                  return error
+                }
+                // Wrap any other error
+                return new GitCommandSpawnError({
+                  commandId: id,
+                  message: 'Unexpected error during command execution',
+                  cause: String(error),
+                })
+              })
+            )
+
+            const endedAt = new Date()
+            const code = exitCode as number
+            const durationMs = endedAt.getTime() - startedAt.getTime()
+
+            // Create result based on exit code
+            const result = code === 0
+              ? new GitCommandResult({
+                  commandId: id,
+                  exitCode: 0,
+                  status: 'success',
+                  startedAt,
+                  completedAt: endedAt,
+                  durationMs,
+                  stdout: stdout || undefined,
+                  stderr: stderr || undefined,
+                })
+              : yield* Effect.fail(
+                  new GitCommandFailedError({
+                    commandId: id,
+                    exitCode: code,
+                    stdout: stdout || undefined,
+                    stderr: stderr || undefined,
+                    message: `Git exited with code ${code}`,
+                  })
+                )
+
+            // Return simplified handle
+            // events: empty stream (never consumed anyway)
+            // awaitResult: immediately succeeds with result
+            // terminate: no-op (command already completed)
+            const handle: GitCommandExecutionHandle = {
+              request: normalisedRequest,
+              events: Stream.empty,
+              awaitResult: Effect.succeed(result),
+              terminate: Effect.void,
+            }
+
+            return handle
+          }),
       }
 
       return runner
