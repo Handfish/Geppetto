@@ -2,41 +2,70 @@ import * as Effect from 'effect/Effect'
 import * as Duration from 'effect/Duration'
 import * as Scope from 'effect/Scope'
 import * as Stream from 'effect/Stream'
-import { exec, spawn } from 'node:child_process'
-import { promisify } from 'node:util'
-import { randomUUID } from 'node:crypto'
-import { Command, CommandExecutor } from '@effect/platform'
+import { Command } from '@effect/platform'
 import { NodeContext } from '@effect/platform-node'
 import type { ProcessConfig } from '../ports'
 import { ProcessHandle, type TmuxSession } from '../schemas'
 import { TmuxSessionNotFoundError, TmuxCommandError } from '../errors'
 import { NodeProcessMonitorAdapter } from './node-process-monitor-adapter'
 
-const execAsync = promisify(exec)
-
 /**
  * Execute a tmux command and return the output
  *
- * NOTE: Kept as execAsync instead of Command API because:
- * - Command API requires Scope which complicates service methods
- * - This is a simple helper that works reliably
- * - execAsync is sufficient for tmux command execution
+ * Uses Command API for consistency and structured concurrency.
+ * Effect.scoped() provides the Scope required by Command.start() and
+ * automatically closes it after the command completes.
  */
 const executeTmuxCommand = (
   command: string
 ): Effect.Effect<string, TmuxCommandError> =>
-  Effect.tryPromise({
-    try: async () => {
-      const { stdout } = await execAsync(command)
+  Effect.scoped(
+    Effect.gen(function* () {
+      const cmd = Command.make('sh', '-c', command)
+      const process = yield* Command.start(cmd).pipe(
+        Effect.provide(NodeContext.layer),
+        Effect.mapError(error =>
+          new TmuxCommandError({
+            message: `Failed to start tmux command: ${command}`,
+            command,
+            cause: error,
+          })
+        )
+      )
+
+      const [stdout, stderr, exitCode] = yield* Effect.all([
+        process.stdout.pipe(
+          Stream.decodeText('utf8'),
+          Stream.runFold('', (acc, chunk) => acc + chunk)
+        ),
+        process.stderr.pipe(
+          Stream.decodeText('utf8'),
+          Stream.runFold('', (acc, chunk) => acc + chunk)
+        ),
+        process.exitCode,
+      ]).pipe(
+        Effect.mapError(error =>
+          new TmuxCommandError({
+            message: `Failed to execute tmux command: ${command}`,
+            command,
+            cause: error,
+          })
+        )
+      )
+
+      if (exitCode !== 0) {
+        return yield* Effect.fail(
+          new TmuxCommandError({
+            message: `Tmux command failed with code ${exitCode}: ${stderr.trim()}`,
+            command,
+            cause: stderr.trim() || `Exit code ${exitCode}`,
+          })
+        )
+      }
+
       return stdout.trim()
-    },
-    catch: error =>
-      new TmuxCommandError({
-        message: `Failed to execute tmux command: ${command}`,
-        command,
-        cause: error instanceof Error ? error.message : String(error),
-      }),
-  })
+    })
+  )
 
 /**
  * TmuxSessionManagerAdapter - Tmux implementation of SessionManagerPort
