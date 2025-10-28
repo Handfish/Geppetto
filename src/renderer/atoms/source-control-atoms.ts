@@ -102,7 +102,7 @@ export const repositoryByIdAtom = Atom.family((repositoryId: RepositoryId) =>
     .pipe(
       Atom.withReactivity([
         'source-control:repositories',
-        `source-control:repository:${repositoryId.value}`,
+        `source-control:repository:${repositoryId}`,
       ]),
       Atom.setIdleTTL(Duration.seconds(30))
     )
@@ -119,12 +119,8 @@ export const refreshRepositoryAtom = sourceControlRuntime.fn(
       return yield* client.refreshRepository(repositoryId)
     }),
   {
-    reactivityKeys: (repositoryId: RepositoryId) => [
-      'source-control:repositories',
-      `source-control:repository:${repositoryId.value}`,
-      `source-control:graph:${repositoryId.value}`,
-      `source-control:status:${repositoryId.value}`,
-    ],
+    // Note: Reactivity handled by repository-specific atoms via withReactivity
+    reactivityKeys: ['source-control:repositories'],
   }
 )
 
@@ -156,7 +152,7 @@ export const repositoryMetadataAtom = Atom.family((repositoryId: RepositoryId) =
       })
     )
     .pipe(
-      Atom.withReactivity([`source-control:repository:${repositoryId.value}`]),
+      Atom.withReactivity([`source-control:repository:${repositoryId}`]),
       Atom.setIdleTTL(Duration.minutes(5))
     )
 )
@@ -193,8 +189,8 @@ export const commitGraphAtom = Atom.family(
       )
       .pipe(
         Atom.withReactivity([
-          `source-control:graph:${params.repositoryId.value}`,
-          `source-control:repository:${params.repositoryId.value}`,
+          `source-control:graph:${params.repositoryId}`,
+          `source-control:repository:${params.repositoryId}`,
         ]),
         Atom.setIdleTTL(Duration.seconds(30))
       )
@@ -213,7 +209,7 @@ export const commitGraphStatisticsAtom = Atom.family((repositoryId: RepositoryId
       })
     )
     .pipe(
-      Atom.withReactivity([`source-control:graph:${repositoryId.value}`]),
+      Atom.withReactivity([`source-control:graph:${repositoryId}`]),
       Atom.setIdleTTL(Duration.seconds(30))
     )
 )
@@ -233,7 +229,7 @@ export const commitAtom = Atom.family(
       )
       .pipe(
         Atom.withReactivity([
-          `source-control:commit:${params.repositoryId.value}:${params.commitHash}`,
+          `source-control:commit:${params.repositoryId}:${params.commitHash}`,
         ]),
         Atom.setIdleTTL(Duration.minutes(10))
       )
@@ -254,8 +250,8 @@ export const commitWithRefsAtom = Atom.family(
       )
       .pipe(
         Atom.withReactivity([
-          `source-control:commit:${params.repositoryId.value}:${params.commitHash}`,
-          `source-control:repository:${params.repositoryId.value}`,
+          `source-control:commit:${params.repositoryId}:${params.commitHash}`,
+          `source-control:repository:${params.repositoryId}`,
         ]),
         Atom.setIdleTTL(Duration.minutes(10))
       )
@@ -280,8 +276,8 @@ export const commitHistoryAtom = Atom.family(
       )
       .pipe(
         Atom.withReactivity([
-          `source-control:graph:${params.repositoryId.value}`,
-          `source-control:repository:${params.repositoryId.value}`,
+          `source-control:graph:${params.repositoryId}`,
+          `source-control:repository:${params.repositoryId}`,
         ]),
         Atom.setIdleTTL(Duration.seconds(30))
       )
@@ -303,8 +299,8 @@ export const workingTreeStatusAtom = Atom.family((repositoryId: RepositoryId) =>
     )
     .pipe(
       Atom.withReactivity([
-        `source-control:status:${repositoryId.value}`,
-        `source-control:repository:${repositoryId.value}`,
+        `source-control:status:${repositoryId}`,
+        `source-control:repository:${repositoryId}`,
       ]),
       Atom.setIdleTTL(Duration.seconds(5))
     )
@@ -323,7 +319,7 @@ export const workingTreeStatusSummaryAtom = Atom.family((repositoryId: Repositor
       })
     )
     .pipe(
-      Atom.withReactivity([`source-control:status:${repositoryId.value}`]),
+      Atom.withReactivity([`source-control:status:${repositoryId}`]),
       Atom.setIdleTTL(Duration.seconds(5))
     )
 )
@@ -339,10 +335,8 @@ export const stageFilesAtom = sourceControlRuntime.fn(
       return yield* client.stageFiles(params.repositoryId, params.paths)
     }),
   {
-    reactivityKeys: (params: { repositoryId: RepositoryId; paths: string[] }) => [
-      `source-control:status:${params.repositoryId.value}`,
-      `source-control:repository:${params.repositoryId.value}`,
-    ],
+    // Note: Reactivity handled by status and repository atoms via withReactivity
+    reactivityKeys: ['source-control:repositories'],
   }
 )
 
@@ -357,10 +351,8 @@ export const unstageFilesAtom = sourceControlRuntime.fn(
       return yield* client.unstageFiles(params.repositoryId, params.paths)
     }),
   {
-    reactivityKeys: (params: { repositoryId: RepositoryId; paths: string[] }) => [
-      `source-control:status:${params.repositoryId.value}`,
-      `source-control:repository:${params.repositoryId.value}`,
-    ],
+    // Note: Reactivity handled by status and repository atoms via withReactivity
+    reactivityKeys: ['source-control:repositories'],
   }
 )
 
@@ -375,10 +367,8 @@ export const discardChangesAtom = sourceControlRuntime.fn(
       return yield* client.discardChanges(params.repositoryId, params.paths)
     }),
   {
-    reactivityKeys: (params: { repositoryId: RepositoryId; paths: string[] }) => [
-      `source-control:status:${params.repositoryId.value}`,
-      `source-control:repository:${params.repositoryId.value}`,
-    ],
+    // Note: Reactivity handled by status and repository atoms via withReactivity
+    reactivityKeys: ['source-control:repositories'],
   }
 )
 
@@ -417,14 +407,8 @@ export const createStashAtom = sourceControlRuntime.fn(
       )
     }),
   {
-    reactivityKeys: (params: {
-      repositoryId: RepositoryId
-      message?: string
-      includeUntracked?: boolean
-    }) => [
-      `source-control:status:${params.repositoryId.value}`,
-      `source-control:stash:${params.repositoryId.value}`,
-    ],
+    // Note: Reactivity handled by stash and status atoms via withReactivity
+    reactivityKeys: ['source-control:repositories'],
   }
 )
 
@@ -441,7 +425,7 @@ export const stashesAtom = Atom.family((repositoryId: RepositoryId) =>
       })
     )
     .pipe(
-      Atom.withReactivity([`source-control:stash:${repositoryId.value}`]),
+      Atom.withReactivity([`source-control:stash:${repositoryId}`]),
       Atom.setIdleTTL(Duration.seconds(30))
     )
 )
@@ -457,11 +441,8 @@ export const popStashAtom = sourceControlRuntime.fn(
       return yield* client.popStash(params.repositoryId, params.index)
     }),
   {
-    reactivityKeys: (params: { repositoryId: RepositoryId; index?: number }) => [
-      `source-control:status:${params.repositoryId.value}`,
-      `source-control:stash:${params.repositoryId.value}`,
-      `source-control:repository:${params.repositoryId.value}`,
-    ],
+    // Note: Reactivity handled by stash, status, and repository atoms via withReactivity
+    reactivityKeys: ['source-control:repositories'],
   }
 )
 

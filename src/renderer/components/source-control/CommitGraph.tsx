@@ -170,7 +170,7 @@ export function CommitGraphView({
               <div className="space-y-2">
                 {graph.nodes.map((node) => (
                   <CommitNode
-                    key={node.id.value}
+                    key={node.id}
                     commit={node.commit}
                     refs={node.refs}
                     isHead={node.isHead}
@@ -261,12 +261,12 @@ export function CommitHistoryList({
             <div className="space-y-2">
               {commits.map((commit) => (
                 <CommitNode
-                  key={commit.hash.value}
+                  key={commit.hash}
                   commit={{
-                    hash: commit.hash.value,
+                    hash: commit.hash,
                     subject: commit.subject,
                     author: commit.author,
-                    parents: commit.parents.map((p) => p.value),
+                    parents: commit.parents,
                   }}
                   refs={[]}
                   isHead={false}

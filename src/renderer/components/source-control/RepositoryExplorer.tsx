@@ -15,7 +15,7 @@ interface RepositoryItemProps {
 }
 
 function RepositoryItem({ repository, onSelect }: RepositoryItemProps) {
-  const currentBranch = repository.state.branch?.value ?? 'detached'
+  const currentBranch = repository.state.branch ?? 'detached'
   const remotesCount = repository.remotes.length
   const branchesCount = repository.branches.length
 
@@ -156,7 +156,7 @@ export function RepositoryExplorer({
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {repositories.map((repo) => (
                   <RepositoryItem
-                    key={repo.id.value}
+                    key={repo.id}
                     repository={repo}
                     onSelect={onRepositorySelect}
                   />

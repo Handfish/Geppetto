@@ -13,6 +13,7 @@ A comprehensive guide to understanding how `@effect-atom/atom-react` integrates 
 - [Architecture Diagram](#architecture-diagram)
 - [Data Flow](#data-flow)
 - [Core Concepts](#core-concepts)
+- [Result Error Handling](#result-error-handling)
 - [Code Examples](#code-examples)
 - [Advanced Patterns](#advanced-patterns)
 
@@ -436,6 +437,84 @@ const data = Result.getOrElse(repos, () => [])
 
 ---
 
+## Result Error Handling
+
+The `Result<T, E>` type from `@effect-atom/atom-react` provides type-safe error handling with pattern matching. For comprehensive error handling patterns and best practices, see **[Result Error Handling Patterns](./RESULT_ERROR_HANDLING_PATTERNS.md)**.
+
+### Quick Reference
+
+**Pattern 1: Side Effects with `Result.matchWithError` (Recommended for useEffect)**
+
+```typescript
+import { Result } from '@effect-atom/atom-react'
+
+React.useEffect(() => {
+  if (result.waiting) return
+
+  Result.matchWithError(result, {
+    onInitial: () => {
+      // Handle initial state
+    },
+    onError: (error: MyErrorUnion) => {
+      // TypeScript knows the exact error union type!
+      if (error._tag === 'AuthenticationError') {
+        setErrorMessage(error.message)
+      } else if (error._tag === 'NetworkError') {
+        setRetryable(true)
+      }
+    },
+    onDefect: (defect: unknown) => {
+      console.error('Unexpected error:', defect)
+    },
+    onSuccess: (data) => {
+      setData(data)
+    },
+  })
+}, [result])
+```
+
+**Benefits:**
+- ✅ Direct error access without Option unwrapping
+- ✅ Full TypeScript type narrowing with `error._tag` checks
+- ✅ Separates expected errors (onError) from unexpected errors (onDefect)
+- ✅ No type assertions needed
+
+**Pattern 2: UI Rendering with `Result.builder` (Recommended for JSX)**
+
+```typescript
+{Result.builder(dataResult)
+  .onInitial(() => <LoadingSpinner />)
+  .onErrorTag('NetworkError', (error: NetworkError) => (
+    <ErrorAlert message={error.message} action={<RetryButton />} />
+  ))
+  .onErrorTag('NotFoundError', (error: NotFoundError) => (
+    <ErrorAlert message={error.message} />
+  ))
+  .onDefect((defect: unknown) => (
+    <ErrorAlert message={`Unexpected: ${String(defect)}`} />
+  ))
+  .onSuccess((data) => (
+    <DataDisplay data={data} />
+  ))
+  .render()}
+```
+
+**Benefits:**
+- ✅ Type-safe error tag matching with `.onErrorTag()`
+- ✅ Exhaustive error handling - TypeScript ensures all error tags are handled
+- ✅ Clean separation of error types in UI
+- ✅ Explicit type annotations for clarity
+
+**For complete documentation including:**
+- Anti-patterns to avoid
+- Type narrowing strategies
+- Real-world examples
+- Common pitfalls
+
+See **[Result Error Handling Patterns](./RESULT_ERROR_HANDLING_PATTERNS.md)**
+
+---
+
 ## Code Examples
 
 ### Example 1: Simple Data Fetching
@@ -489,13 +568,15 @@ export function RepositoryList() {
 
       {Result.builder(repos)
         .onInitial(() => <div>Loading...</div>)
-        .onError((error) => {
-          if (error._tag === 'NetworkError') {
-            return <div>Network error: {error.message}</div>
-          }
-          return <div>Error occurred</div>
-        })
-        .onDefect(() => <div>Unexpected error</div>)
+        .onErrorTag('NetworkError', (error: NetworkError) => (
+          <div>Network error: {error.message}</div>
+        ))
+        .onErrorTag('AuthenticationError', (error: AuthenticationError) => (
+          <div>Please sign in to view repositories</div>
+        ))
+        .onDefect((defect: unknown) => (
+          <div>Unexpected error: {String(defect)}</div>
+        ))
         .onSuccess((repositories) => (
           <ul>
             {repositories.map(repo => (
@@ -585,22 +666,45 @@ export function AuthCard() {
     signIn()  // ← Triggers Effect, invalidates 'github:auth' on success
   }
 
+  // Example: Side effect to show toast notification on error
+  React.useEffect(() => {
+    if (signInResult.waiting) return
+
+    Result.matchWithError(signInResult, {
+      onInitial: () => {},
+      onError: (error: AuthError) => {
+        if (error._tag === 'AuthenticationError') {
+          showToast({ type: 'error', message: `Auth failed: ${error.message}` })
+        }
+      },
+      onDefect: (defect: unknown) => {
+        console.error('Sign in defect:', defect)
+      },
+      onSuccess: (data) => {
+        showToast({ type: 'success', message: `Signed in as ${data.user.login}` })
+      },
+    })
+  }, [signInResult])
+
   return (
     <div>
       {Result.builder(signInResult)
         .onInitial(() => <button onClick={handleSignIn}>Sign In</button>)
-        .onError((error) => {
-          if (error._tag === 'AuthenticationError') {
-            return (
-              <div>
-                <div>Auth failed: {error.message}</div>
-                <button onClick={handleSignIn}>Retry</button>
-              </div>
-            )
-          }
-          return <div>Error: {JSON.stringify(error)}</div>
-        })
-        .onDefect(() => <div>Unexpected error</div>)
+        .onErrorTag('AuthenticationError', (error: AuthenticationError) => (
+          <div>
+            <div>Auth failed: {error.message}</div>
+            <button onClick={handleSignIn}>Retry</button>
+          </div>
+        ))
+        .onErrorTag('NetworkError', (error: NetworkError) => (
+          <div>
+            <div>Network error: {error.message}</div>
+            <button onClick={handleSignIn}>Retry</button>
+          </div>
+        ))
+        .onDefect((defect: unknown) => (
+          <div>Unexpected error: {String(defect)}</div>
+        ))
         .onSuccess((data) => (
           <div>Signed in as {data.user.login}</div>
         ))
@@ -661,22 +765,20 @@ export const GitHubIpcContracts = {
   },
 }
 
-// Component handles each error differently
+// Component handles each error type-safely with onErrorTag
 Result.builder(repoResult)
-  .onError((error) => {
-    if (error._tag === 'AuthenticationError') {
-      return <div>Please sign in to view this repository</div>
-    }
-    if (error._tag === 'NetworkError') {
-      return <div>Connection failed: {error.message}</div>
-    }
-    if (error._tag === 'NotFoundError') {
-      return <div>Repository not found</div>
-    }
-    return <div>Error: {JSON.stringify(error)}</div>
-  })
-  .onDefect(() => (
-    <div>Unexpected error occurred</div>
+  .onInitial(() => <LoadingSpinner />)
+  .onErrorTag('AuthenticationError', (error: AuthenticationError) => (
+    <div>Please sign in to view this repository</div>
+  ))
+  .onErrorTag('NetworkError', (error: NetworkError) => (
+    <div>Connection failed: {error.message}</div>
+  ))
+  .onErrorTag('NotFoundError', (error: NotFoundError) => (
+    <div>Repository not found</div>
+  ))
+  .onDefect((defect: unknown) => (
+    <div>Unexpected error occurred: {String(defect)}</div>
   ))
   .onSuccess((repo) => <RepoDetails repo={repo} />)
   .render()

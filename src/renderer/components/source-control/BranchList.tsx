@@ -21,7 +21,7 @@ interface BranchItemProps {
 function BranchItem({ branch, isCurrent, onClick }: BranchItemProps) {
   const isLocal = branch.type === 'local'
   const isRemote = branch.type === 'remote'
-  const shortCommit = branch.commit.value.slice(0, 7)
+  const shortCommit = branch.commit.slice(0, 7)
 
   return (
     <div
@@ -38,7 +38,7 @@ function BranchItem({ branch, isCurrent, onClick }: BranchItemProps) {
               <span className="w-2 h-2 bg-green-500 rounded-full" title="Current branch"></span>
             )}
             <span className="text-sm font-medium text-white truncate">
-              {branch.name.value}
+              {branch.name}
             </span>
             {isLocal && (
               <span className="px-2 py-0.5 text-xs bg-blue-900 text-blue-200 rounded">
@@ -55,8 +55,8 @@ function BranchItem({ branch, isCurrent, onClick }: BranchItemProps) {
           <div className="flex items-center gap-3 text-xs text-gray-400">
             <code className="font-mono">{shortCommit}</code>
             {branch.upstream && (
-              <span className="truncate" title={`Tracking ${branch.upstream.value}`}>
-                → {branch.upstream.value}
+              <span className="truncate" title={`Tracking ${branch.upstream}`}>
+                → {branch.upstream}
               </span>
             )}
           </div>
@@ -180,7 +180,7 @@ export function BranchList({
             )
           }
 
-          const currentBranchName = repository.state.branch?.value
+          const currentBranchName = repository.state.branch
 
           return (
             <div className="space-y-3">
@@ -191,9 +191,9 @@ export function BranchList({
               <div className="space-y-2">
                 {branches.map((branch) => (
                   <BranchItem
-                    key={branch.name.value}
+                    key={branch.name}
                     branch={branch}
-                    isCurrent={branch.name.value === currentBranchName}
+                    isCurrent={branch.name === currentBranchName}
                     onClick={onBranchSelect}
                   />
                 ))}

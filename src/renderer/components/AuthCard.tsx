@@ -83,7 +83,7 @@ export function AuthCard() {
       <button
         className="px-6 py-2 bg-gray-900 text-white rounded-md border border-gray-600 hover:bg-gray-700 transition-colors disabled:opacity-50"
         disabled={isSigningIn || isLoading}
-        onClick={signIn}
+        onClick={() => signIn()}
       >
         {isSigningIn || isLoading ? 'Connecting...' : 'Connect GitHub'}
       </button>

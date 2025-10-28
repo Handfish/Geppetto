@@ -149,10 +149,12 @@ export function useRepositoryByPath(path: string) {
 export function useRepositoryById(repositoryId: RepositoryId | null) {
   const atom = repositoryId
     ? repositoryByIdAtom(repositoryId)
-    : emptyRepositoriesAtom
+    : (emptyRepositoriesAtom as unknown as ReturnType<typeof repositoryByIdAtom>)
 
   const repositoryResult = useAtomValue(
-    repositoryId ? repositoryByIdAtom(repositoryId) : emptyRepositoriesAtom
+    repositoryId
+      ? repositoryByIdAtom(repositoryId)
+      : (emptyRepositoriesAtom as unknown as ReturnType<typeof repositoryByIdAtom>)
   )
 
   const refresh = repositoryId
@@ -228,7 +230,7 @@ export function useRepositoryMetadata(repositoryId: RepositoryId | null) {
   const metadataResult = useAtomValue(
     repositoryId
       ? repositoryMetadataAtom(repositoryId)
-      : emptyNullAtom
+      : (emptyNullAtom as unknown as ReturnType<typeof repositoryMetadataAtom>)
   )
 
   const metadata = Result.getOrElse(metadataResult, () => null)
@@ -273,7 +275,7 @@ export function useCommitGraph(
   const graphResult = useAtomValue(
     repositoryId
       ? commitGraphAtom({ repositoryId, options })
-      : emptyCommitGraphAtom
+      : (emptyCommitGraphAtom as unknown as ReturnType<typeof commitGraphAtom>)
   )
 
   const refresh = repositoryId
@@ -306,7 +308,7 @@ export function useCommitGraphStatistics(repositoryId: RepositoryId | null) {
   const statisticsResult = useAtomValue(
     repositoryId
       ? commitGraphStatisticsAtom(repositoryId)
-      : emptyNullAtom
+      : (emptyNullAtom as unknown as ReturnType<typeof commitGraphStatisticsAtom>)
   )
 
   const statistics = Result.getOrElse(statisticsResult, () => null)
@@ -335,7 +337,7 @@ export function useCommit(
   const commitResult = useAtomValue(
     repositoryId && commitHash
       ? commitAtom({ repositoryId, commitHash })
-      : emptyCommitAtom
+      : (emptyCommitAtom as unknown as ReturnType<typeof commitAtom>)
   )
 
   const commit = Result.getOrElse(commitResult, () => null)
@@ -365,7 +367,7 @@ export function useCommitWithRefs(
   const commitWithRefsResult = useAtomValue(
     repositoryId && commitHash
       ? commitWithRefsAtom({ repositoryId, commitHash })
-      : emptyCommitWithRefsAtom
+      : (emptyCommitWithRefsAtom as unknown as ReturnType<typeof commitWithRefsAtom>)
   )
 
   const commitWithRefs = Result.getOrElse(commitWithRefsResult, () => null)
@@ -397,7 +399,7 @@ export function useCommitHistory(
   const historyResult = useAtomValue(
     repositoryId && branchName
       ? commitHistoryAtom({ repositoryId, branchName, maxCount })
-      : emptyCommitsArrayAtom
+      : (emptyCommitsArrayAtom as unknown as ReturnType<typeof commitHistoryAtom>)
   )
 
   const history = Result.getOrElse(historyResult, () => [])
@@ -426,7 +428,7 @@ export function useWorkingTreeStatus(repositoryId: RepositoryId | null) {
   const statusResult = useAtomValue(
     repositoryId
       ? workingTreeStatusAtom(repositoryId)
-      : emptyWorkingTreeAtom
+      : (emptyWorkingTreeAtom as unknown as ReturnType<typeof workingTreeStatusAtom>)
   )
 
   const refresh = repositoryId
@@ -459,7 +461,7 @@ export function useWorkingTreeStatusSummary(repositoryId: RepositoryId | null) {
   const summaryResult = useAtomValue(
     repositoryId
       ? workingTreeStatusSummaryAtom(repositoryId)
-      : emptyNullAtom
+      : (emptyNullAtom as unknown as ReturnType<typeof workingTreeStatusSummaryAtom>)
   )
 
   const summary = Result.getOrElse(summaryResult, () => null)
@@ -543,7 +545,9 @@ export function useDiscardChanges() {
  */
 export function useDiff(repositoryId: RepositoryId | null, options: { path: string; staged?: boolean }) {
   const diffResult = useAtomValue(
-    repositoryId ? diffAtom({ repositoryId, options }) : emptyNullAtom
+    repositoryId
+      ? diffAtom({ repositoryId, options })
+      : (emptyNullAtom as unknown as ReturnType<typeof diffAtom>)
   )
 
   const diff = Result.getOrElse(diffResult, () => null)
@@ -587,7 +591,9 @@ export function useCreateStash() {
  */
 export function useStashes(repositoryId: RepositoryId | null) {
   const stashesResult = useAtomValue(
-    repositoryId ? stashesAtom(repositoryId) : emptyNullAtom
+    repositoryId
+      ? stashesAtom(repositoryId)
+      : (emptyNullAtom as unknown as ReturnType<typeof stashesAtom>)
   )
 
   const stashes = Result.getOrElse(stashesResult, () => [])

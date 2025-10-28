@@ -180,18 +180,44 @@ Uses `@effect-atom/atom-react` for React integration:
 - **TTL caching**: `Atom.setIdleTTL(Duration.minutes(5))`
 - **Result<T, E>** types: Three states (`Initial`, `Success<T>`, `Failure<E>`)
 
-**Result.builder Pattern** for declarative UI rendering:
+**Result Error Handling** - Two recommended patterns:
+
+1. **UI Rendering** with `Result.builder`:
 ```typescript
 {Result.builder(usageResult)
   .onInitial(() => <div>Loading...</div>)
-  .onErrorTag('AuthenticationError', (error) => <div>Auth error: {error.message}</div>)
-  .onErrorTag('NetworkError', (error) => <div>Network error</div>)
-  .onDefect((defect) => <div>Unexpected: {String(defect)}</div>)
+  .onErrorTag('AuthenticationError', (error: AuthenticationError) => (
+    <div>Auth error: {error.message}</div>
+  ))
+  .onErrorTag('NetworkError', (error: NetworkError) => (
+    <div>Network error</div>
+  ))
+  .onDefect((defect: unknown) => <div>Unexpected: {String(defect)}</div>)
   .onSuccess((data) => <div>{/* render data */}</div>)
   .render()}
 ```
 
-**See `docs/RESULT_API_AND_ERROR_HANDLING.md` for complete API details**
+2. **Side Effects** with `Result.matchWithError` (useEffect):
+```typescript
+React.useEffect(() => {
+  if (result.waiting) return
+
+  Result.matchWithError(result, {
+    onInitial: () => {},
+    onError: (error: MyError) => {
+      if (error._tag === 'AuthenticationError') {
+        setErrorMessage(error.message)
+      }
+    },
+    onDefect: (defect: unknown) => console.error(defect),
+    onSuccess: (data) => setData(data),
+  })
+}, [result])
+```
+
+**See comprehensive documentation:**
+- `docs/RESULT_ERROR_HANDLING_PATTERNS.md`: Best practices and type-safe patterns
+- `docs/RESULT_API_AND_ERROR_HANDLING.md`: Complete API reference
 
 ### Shared Schemas (`src/shared/schemas/`)
 
@@ -352,7 +378,13 @@ src/
 ## Architecture Documentation
 
 **See comprehensive docs** for detailed patterns and rationale:
+
+### Core Architecture
+- `docs/EFFECT_ATOM_IPC_GUIDE.md`: Complete guide to Effect Atom + IPC integration, data flow, and patterns
+- `docs/RESULT_ERROR_HANDLING_PATTERNS.md`: Type-safe error handling with Result.matchWithError and Result.builder
+- `docs/RESULT_API_AND_ERROR_HANDLING.md`: Result.builder API reference and advanced error handling
+
+### Hexagonal Architecture & Multi-Provider Patterns
 - `docs/AI_ADAPTERS_HEXAGONAL_ARCHITECTURE.md`: Hexagonal architecture deep dive
 - `docs/AI_PROVIDER_LIFECYCLE.md`: Provider lifecycle and memoization
-- `docs/AI_LAYERS_HEXAGONAL_AGENTS_BENEFIT.md`: Multi-provider agent patterns
-- `docs/RESULT_API_AND_ERROR_HANDLING.md`: Result.builder API and error handling
+- `docs/AI_LAYERS_HEXAGONAL_AGENTS_BENEFIT.md`: Multi-provider patterns for AI agents

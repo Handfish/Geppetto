@@ -1,6 +1,5 @@
 import React from 'react'
 import { Result, useAtomValue } from '@effect-atom/atom-react'
-import { Option } from 'effect'
 import { useAiProviderAuth } from '../hooks/useAiProviderAtoms'
 import type {
   AiProviderType,
@@ -154,19 +153,18 @@ function ProviderUsageSection({
       return
     }
 
-    if (Result.isFailure(signInResult)) {
-      const errorOption = Result.error(signInResult)
-
-      if (Option.isSome(errorOption)) {
-        const error = errorOption.value as SignInError
-
+    Result.matchWithError(signInResult, {
+      onInitial: () => {},
+      onError: (error: SignInError) => {
         if (error._tag === 'AiFeatureUnavailableError') {
           const message = error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
           setFeatureLockMessage(message)
           signInFeatureToastShownRef.current = true
         }
-      }
-    }
+      },
+      onDefect: () => {},
+      onSuccess: () => {},
+    })
   }, [signInResult])
 
   React.useEffect(() => {
@@ -175,12 +173,9 @@ function ProviderUsageSection({
       return
     }
 
-    if (Result.isFailure(usageResult)) {
-      const errorOption = Result.error(usageResult)
-
-      if (Option.isSome(errorOption)) {
-        const error = errorOption.value as UsageError
-
+    Result.matchWithError(usageResult, {
+      onInitial: () => {},
+      onError: (error: UsageError) => {
         if (error._tag === 'AiFeatureUnavailableError') {
           const message = error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
           setFeatureLockMessage(message)
@@ -193,8 +188,10 @@ function ProviderUsageSection({
             usageFeatureToastShownRef.current = true
           }
         }
-      }
-    }
+      },
+      onDefect: () => {},
+      onSuccess: () => {},
+    })
   }, [usageResult])
 
   const lastLoggedUsageRef = React.useRef<string | null>(null)
