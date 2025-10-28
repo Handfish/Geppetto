@@ -5,7 +5,14 @@ import { ErrorAlert, LoadingSpinner } from '../ui/ErrorAlert'
 import type {
   RepositoryId,
   Branch,
+  Repository,
+  Remote,
 } from '../../../shared/schemas/source-control'
+import type {
+  NetworkError,
+  GitOperationError,
+  ValidationError,
+} from '../../../shared/schemas/errors'
 
 /**
  * BranchItem Component
@@ -147,27 +154,26 @@ export function BranchList({
             <LoadingSpinner size="md" />
           </div>
         ))
-        .onErrorTag('NetworkError', (error) => (
+        .onErrorTag('NetworkError', (error: NetworkError) => (
           <ErrorAlert error={error} message="Failed to load branches" />
         ))
-        .onErrorTag('GitOperationError', (error) => (
+        .onErrorTag('GitOperationError', (error: GitOperationError) => (
           <ErrorAlert error={error} message="Git operation failed" />
         ))
-        .onErrorTag('ValidationError', (error) => (
+        .onErrorTag('ValidationError', (error: ValidationError) => (
           <ErrorAlert error={error} message="Invalid repository data" />
         ))
-        .onDefect((defect) => (
+        .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
         ))
-        .onSuccess((data) => {
-          const repository = data.value
+        .onSuccess((repository: Repository) => {
           let branches = repository.branches
 
           // Apply filter
           if (filterState === 'local') {
-            branches = branches.filter((b) => b.type === 'local')
+            branches = branches.filter((b: Branch) => b.type === 'local')
           } else if (filterState === 'remote') {
-            branches = branches.filter((b) => b.type === 'remote')
+            branches = branches.filter((b: Branch) => b.type === 'remote')
           }
 
           if (branches.length === 0) {
@@ -189,7 +195,7 @@ export function BranchList({
               </p>
 
               <div className="space-y-2">
-                {branches.map((branch) => (
+                {branches.map((branch: Branch) => (
                   <BranchItem
                     key={branch.name}
                     branch={branch}
@@ -233,20 +239,19 @@ export function RemoteList({ repositoryId }: RemoteListProps) {
             <LoadingSpinner size="sm" />
           </div>
         ))
-        .onErrorTag('NetworkError', (error) => (
+        .onErrorTag('NetworkError', (error: NetworkError) => (
           <ErrorAlert error={error} message="Failed to load remotes" />
         ))
-        .onErrorTag('GitOperationError', (error) => (
+        .onErrorTag('GitOperationError', (error: GitOperationError) => (
           <ErrorAlert error={error} message="Git operation failed" />
         ))
-        .onErrorTag('ValidationError', (error) => (
+        .onErrorTag('ValidationError', (error: ValidationError) => (
           <ErrorAlert error={error} message="Invalid repository data" />
         ))
-        .onDefect((defect) => (
+        .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
         ))
-        .onSuccess((data) => {
-          const repository = data.value
+        .onSuccess((repository: Repository) => {
           const remotes = repository.remotes
 
           if (remotes.length === 0) {
@@ -259,23 +264,23 @@ export function RemoteList({ repositoryId }: RemoteListProps) {
 
           return (
             <div className="space-y-2">
-              {remotes.map((remote) => (
+              {remotes.map((remote: Remote) => (
                 <div
-                  key={remote.name.value}
+                  key={remote.name}
                   className="bg-gray-800 rounded-lg p-3 border border-gray-700"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <h4 className="text-sm font-medium text-white mb-1">
-                        {remote.name.value}
+                        {remote.name}
                       </h4>
                       <div className="space-y-1 text-xs text-gray-400">
-                        <p className="truncate" title={remote.fetchUrl.value}>
-                          Fetch: {remote.fetchUrl.value}
+                        <p className="truncate" title={remote.fetchUrl}>
+                          Fetch: {remote.fetchUrl}
                         </p>
                         {remote.pushUrl && (
-                          <p className="truncate" title={remote.pushUrl.value}>
-                            Push: {remote.pushUrl.value}
+                          <p className="truncate" title={remote.pushUrl}>
+                            Push: {remote.pushUrl}
                           </p>
                         )}
                       </div>

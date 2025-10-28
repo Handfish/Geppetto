@@ -12,7 +12,14 @@ import type {
   RepositoryId,
   WorkingTree,
   FileChange,
+  MergeConflict,
+  WorkingTreeStatus,
 } from '../../../shared/schemas/source-control'
+import type {
+  NetworkError,
+  GitOperationError,
+  ValidationError,
+} from '../../../shared/schemas/errors'
 
 /**
  * FileChangeItem Component
@@ -191,20 +198,19 @@ export function StatusBar({
             <LoadingSpinner size="md" />
           </div>
         ))
-        .onErrorTag('NetworkError', (error) => (
+        .onErrorTag('NetworkError', (error: NetworkError) => (
           <ErrorAlert error={error} message="Failed to load status" />
         ))
-        .onErrorTag('GitOperationError', (error) => (
+        .onErrorTag('GitOperationError', (error: GitOperationError) => (
           <ErrorAlert error={error} message="Git operation failed" />
         ))
-        .onErrorTag('ValidationError', (error) => (
+        .onErrorTag('ValidationError', (error: ValidationError) => (
           <ErrorAlert error={error} message="Invalid status data" />
         ))
-        .onDefect((defect) => (
+        .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
         ))
-        .onSuccess((data) => {
-          const workingTree = data.value
+        .onSuccess((workingTree: WorkingTree) => {
 
           if (!workingTree) {
             return (
@@ -214,8 +220,8 @@ export function StatusBar({
             )
           }
 
-          const stagedChanges = workingTree.changes.filter((c) => c.staged)
-          const unstagedChanges = workingTree.changes.filter((c) => !c.staged)
+          const stagedChanges = workingTree.changes.filter((c: FileChange) => c.staged)
+          const unstagedChanges = workingTree.changes.filter((c: FileChange) => !c.staged)
           const conflicts = workingTree.conflicts
 
           const isClean =
@@ -284,7 +290,7 @@ export function StatusBar({
                         Conflicts ({conflicts.length})
                       </h4>
                       <div className="space-y-1">
-                        {conflicts.map((conflict) => (
+                        {conflicts.map((conflict: MergeConflict) => (
                           <div
                             key={conflict.path}
                             className="bg-red-900 bg-opacity-20 rounded p-2 border border-red-800"
@@ -303,7 +309,7 @@ export function StatusBar({
                         Staged Changes ({stagedChanges.length})
                       </h4>
                       <div className="space-y-1">
-                        {stagedChanges.map((change) => (
+                        {stagedChanges.map((change: FileChange) => (
                           <FileChangeItem
                             key={change.path}
                             change={change}
@@ -321,7 +327,7 @@ export function StatusBar({
                         Changes ({unstagedChanges.length})
                       </h4>
                       <div className="space-y-1">
-                        {unstagedChanges.map((change) => (
+                        {unstagedChanges.map((change: FileChange) => (
                           <FileChangeItem
                             key={change.path}
                             change={change}
@@ -366,18 +372,17 @@ export function StatusSummary({ repositoryId }: StatusSummaryProps) {
         <span>Loading status...</span>
       </div>
     ))
-    .onErrorTag('NetworkError', () => (
+    .onErrorTag('NetworkError', (_error: NetworkError) => (
       <span className="text-sm text-red-400">Status error</span>
     ))
-    .onErrorTag('GitOperationError', () => (
+    .onErrorTag('GitOperationError', (_error: GitOperationError) => (
       <span className="text-sm text-red-400">Git error</span>
     ))
-    .onErrorTag('ValidationError', () => (
+    .onErrorTag('ValidationError', (_error: ValidationError) => (
       <span className="text-sm text-red-400">Invalid status</span>
     ))
-    .onDefect(() => <span className="text-sm text-red-400">Error</span>)
-    .onSuccess((data) => {
-      const summary = data.value
+    .onDefect((_defect: unknown) => <span className="text-sm text-red-400">Error</span>)
+    .onSuccess((summary: WorkingTreeStatus) => {
 
       if (!summary) {
         return <span className="text-sm text-gray-400">No status</span>

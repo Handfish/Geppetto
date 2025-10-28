@@ -3,6 +3,11 @@ import { Result } from '@effect-atom/atom-react'
 import { useWorkspaceRepositories } from '../../hooks/useWorkspace'
 import { ErrorAlert, LoadingSpinner } from '../ui/ErrorAlert'
 import type { Repository } from '../../../shared/schemas/source-control'
+import type {
+  NetworkError,
+  GitOperationError,
+  ValidationError,
+} from '../../../shared/schemas/errors'
 
 /**
  * RepositoryItem Component
@@ -112,29 +117,28 @@ export function RepositoryExplorer({
             <LoadingSpinner size="lg" />
           </div>
         ))
-        .onErrorTag('NetworkError', (error) => (
+        .onErrorTag('NetworkError', (error: NetworkError) => (
           <ErrorAlert
             error={error}
             message="Failed to load repositories"
           />
         ))
-        .onErrorTag('GitOperationError', (error) => (
+        .onErrorTag('GitOperationError', (error: GitOperationError) => (
           <ErrorAlert
             error={error}
             message="Git operation failed"
           />
         ))
-        .onErrorTag('ValidationError', (error) => (
+        .onErrorTag('ValidationError', (error: ValidationError) => (
           <ErrorAlert
             error={error}
             message="Invalid repository data"
           />
         ))
-        .onDefect((defect) => (
+        .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
         ))
-        .onSuccess((data) => {
-          const repositories = data.value
+        .onSuccess((repositories: readonly Repository[]) => {
 
           // Safety check in case data.value is undefined
           if (!repositories || repositories.length === 0) {
@@ -154,7 +158,7 @@ export function RepositoryExplorer({
                 {repositories.length} {repositories.length === 1 ? 'repository' : 'repositories'} found
               </p>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {repositories.map((repo) => (
+                {repositories.map((repo: Repository) => (
                   <RepositoryItem
                     key={repo.id}
                     repository={repo}

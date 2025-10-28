@@ -6,7 +6,13 @@ import type {
   RepositoryId,
   CommitGraph as CommitGraphType,
   GraphOptions,
+  Commit,
 } from '../../../shared/schemas/source-control'
+import type {
+  NetworkError,
+  GitOperationError,
+  ValidationError,
+} from '../../../shared/schemas/errors'
 
 /**
  * CommitNode Component
@@ -135,20 +141,19 @@ export function CommitGraphView({
             <LoadingSpinner size="md" />
           </div>
         ))
-        .onErrorTag('NetworkError', (error) => (
+        .onErrorTag('NetworkError', (error: NetworkError) => (
           <ErrorAlert error={error} message="Failed to load commit graph" />
         ))
-        .onErrorTag('GitOperationError', (error) => (
+        .onErrorTag('GitOperationError', (error: GitOperationError) => (
           <ErrorAlert error={error} message="Git operation failed" />
         ))
-        .onErrorTag('ValidationError', (error) => (
+        .onErrorTag('ValidationError', (error: ValidationError) => (
           <ErrorAlert error={error} message="Invalid graph data" />
         ))
-        .onDefect((defect) => (
+        .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
         ))
-        .onSuccess((data) => {
-          const graph = data.value
+        .onSuccess((graph: CommitGraphType) => {
 
           if (!graph || graph.nodes.length === 0) {
             return (
@@ -168,11 +173,16 @@ export function CommitGraphView({
               </div>
 
               <div className="space-y-2">
-                {graph.nodes.map((node) => (
+                {graph.nodes.map((node: CommitGraphType['nodes'][number]) => (
                   <CommitNode
                     key={node.id}
-                    commit={node.commit}
-                    refs={node.refs}
+                    commit={{
+                      hash: node.commit.hash,
+                      subject: node.commit.subject,
+                      author: node.commit.author,
+                      parents: node.commit.parents as unknown as string[],
+                    }}
+                    refs={node.refs as string[]}
                     isHead={node.isHead}
                     onClick={onCommitSelect}
                   />
@@ -234,20 +244,19 @@ export function CommitHistoryList({
             <LoadingSpinner size="md" />
           </div>
         ))
-        .onErrorTag('NetworkError', (error) => (
+        .onErrorTag('NetworkError', (error: NetworkError) => (
           <ErrorAlert error={error} message="Failed to load commit history" />
         ))
-        .onErrorTag('GitOperationError', (error) => (
+        .onErrorTag('GitOperationError', (error: GitOperationError) => (
           <ErrorAlert error={error} message="Git operation failed" />
         ))
-        .onErrorTag('ValidationError', (error) => (
+        .onErrorTag('ValidationError', (error: ValidationError) => (
           <ErrorAlert error={error} message="Invalid commit data" />
         ))
-        .onDefect((defect) => (
+        .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
         ))
-        .onSuccess((data) => {
-          const commits = data.value
+        .onSuccess((commits: readonly Commit[]) => {
 
           if (commits.length === 0) {
             return (
@@ -259,14 +268,14 @@ export function CommitHistoryList({
 
           return (
             <div className="space-y-2">
-              {commits.map((commit) => (
+              {commits.map((commit: Commit) => (
                 <CommitNode
                   key={commit.hash}
                   commit={{
                     hash: commit.hash,
                     subject: commit.subject,
                     author: commit.author,
-                    parents: commit.parents,
+                    parents: commit.parents as unknown as string[],
                   }}
                   refs={[]}
                   isHead={false}
