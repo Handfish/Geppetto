@@ -513,13 +513,13 @@ export function AiWatcherDevPanel() {
                   command: "bash",
                   args: [
                     "-c",
-                    'for i in {1..100}; do echo "Test output $i"; sleep 2; done',
+                    'for i in {1..10}; do echo "Test output $i"; sleep 2; done; echo "Going idle for 1 minute..."; sleep 60; echo "Done, exiting..."',
                   ],
                 };
                 createWatcher(config);
                 setTimeout(() => refreshWatchers(), 500);
               }}
-              title="Create a test watcher that outputs every 2 seconds"
+              title="Create a test watcher: counts to 10, goes idle for 1 min, then exits"
             >
               Create Test
             </button>
