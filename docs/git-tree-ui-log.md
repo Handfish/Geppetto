@@ -111,131 +111,274 @@ This log tracks detailed implementation notes, decisions, and discoveries during
 
 ## Phase 1.2: Layout Algorithm
 
-### [Date] - Graph Layout Engine
+### 2025-10-28 - Graph Layout Engine
 
 **Files Created**:
-- [ ] `src/renderer/components/source-control/graph/GraphLayout.ts`
+- [x] `src/renderer/components/source-control/graph/GraphLayout.ts`
+
+**Implementation Details**:
+- Created `GraphLayoutEngine` class to transform backend CommitGraph to visual GraphLayout
+- `layout()` method processes nodes and edges from backend
+- Position calculation: x = lane * laneWidth + laneWidth/2, y = row * rowHeight + rowHeight/2
+- Color cycling: Uses modulo to cycle through theme's lane colors
+- Edge generation: Creates visual edges with lane information for curve rendering
+- Performance optimization: Uses Map<CommitHash, GraphNode> for O(1) lookups
+
+**Key Algorithm Steps**:
+1. Process each backend node → create visual node with x/y position
+2. Assign color based on lane using cycling through palette
+3. Process each backend edge → create visual edge with from/to lane info
+4. Calculate metadata (totalLanes, totalHeight)
 
 **Implementation Notes**:
-- Same algorithm as Canvas approach, just coordinates
-- Backend provides column (lane) assignment
-- Frontend calculates visual x/y positions
+- Backend provides column (lane) assignment - we just use it
+- Frontend adds visual positioning and colors
+- Centering: Nodes positioned at lane/row center (not top-left)
+- Edge colors: Use parent (from) node color for consistency
 
-**Challenges**:
+**Challenges**: None - backend data structure aligned well with visual needs
 
-**Solutions**:
+**Solutions**: N/A
 
 **Notes**:
+- Ready for PixiJS component rendering
+- Layout engine is pure transformation (no side effects)
 
 ---
 
 ## Phase 1.3: Graph Theme
 
-### [Date] - Theme Configuration
+### 2025-10-28 - Theme Configuration
 
 **Files Created**:
-- [ ] `src/renderer/components/source-control/graph/GraphTheme.ts`
+- [x] `src/renderer/components/source-control/graph/GraphTheme.ts`
+
+**Implementation Details**:
+- Created `defaultTheme` with 8 distinct, accessible colors
+- Lane colors: blue, green, purple, orange, pink, cyan, yellow, red
+- Special colors: highlightColor (blue-400), headColor (green-400)
+- Dark mode optimized: backgroundColor gray-800 (0x1f2937)
+- Additional themes: `compactTheme` (smaller dimensions), `lightTheme` (light mode)
+- Helper functions: `createTheme()`, `cssToPixiHex()`, `pixiHexToCss()`
+
+**Color Palette (8 colors)**:
+- 0x3b82f6 (blue-500) - Primary
+- 0x22c55e (green-500) - Success
+- 0xa855f7 (purple-500) - Feature
+- 0xf97316 (orange-500) - Warning
+- 0xec4899 (pink-500) - Important
+- 0x06b6d4 (cyan-500) - Info
+- 0xeab308 (yellow-500) - Caution
+- 0xef4444 (red-500) - Critical
 
 **Color Conversion**:
-- Tailwind colors → Hex numbers for PixiJS
+- All Tailwind colors converted to hex numbers for PixiJS
 - Example: gray-800 (#1f2937) → 0x1f2937
+- Documented common conversions for reference
 
-**Challenges**:
+**Design Decisions**:
+- 8 colors chosen for good distinction and accessibility
+- Compact theme for viewing many commits (smaller dimensions)
+- Light theme prepared for future light mode support
+- Utility functions for CSS integration
 
-**Solutions**:
+**Challenges**: None
+
+**Solutions**: N/A
 
 **Notes**:
+- Theme system extensible via `createTheme()`
+- Colors chosen for contrast on dark background
+- Ready for PixiJS rendering
 
 ---
 
 ## Phase 1.4: PixiJS Components
 
-### [Date] - Component Implementation
+### 2025-10-28 - Component Implementation and @pixi/react v8 API Migration
 
 **Files Created**:
-- [ ] `src/renderer/components/source-control/graph/CommitNode.tsx`
-- [ ] `src/renderer/components/source-control/graph/CommitEdge.tsx`
-- [ ] `src/renderer/components/source-control/graph/RefLabel.tsx`
+- [x] `src/renderer/components/source-control/graph/CommitNode.tsx`
+- [x] `src/renderer/components/source-control/graph/CommitEdge.tsx`
+- [x] `src/renderer/components/source-control/graph/RefLabel.tsx`
 
-**Rendering Strategy**:
-1. CommitNode: Graphics.draw callback with circle, selection ring, HEAD indicator
-2. CommitEdge: Graphics.draw callback with lines/curves
-3. RefLabel: Container with Graphics background + Text component
+**Initial Implementation**:
+- Created CommitNode with Graphics.draw callback for circles and selection ring
+- Created CommitEdge with Graphics.draw callback for bezier curves
+- Created RefLabel with Container, Graphics background, and Text
+- Implemented interaction events with g.eventMode = 'static' and g.on('pointerdown')
 
-**PixiJS Patterns**:
-- Always call g.clear() at start of draw callbacks
-- Use g.interactive = true for clickable elements
-- Use g.on('pointerdown', handler) for click events
-- Use beginFill/endFill for filled shapes
-- Use lineStyle for strokes
+**Critical Discovery - @pixi/react v8 API Change**:
+When testing TypeScript compilation, discovered that @pixi/react v8 has a fundamentally different API than v7:
+
+**❌ Old API (v7 - what we initially used)**:
+```typescript
+import { Graphics, Stage, Container, Text } from '@pixi/react'
+<Stage>
+  <Container>
+    <Graphics draw={drawCallback} />
+  </Container>
+</Stage>
+```
+
+**✅ New API (v8 - correct)**:
+```typescript
+import { Application, extend } from '@pixi/react'
+import { Container, Graphics, Text } from 'pixi.js'
+
+extend({ Container, Graphics, Text })
+
+<Application>
+  <pixiContainer>
+    <pixiGraphics draw={drawCallback} />
+  </pixiContainer>
+</Application>
+```
+
+**Migration Steps**:
+1. Changed all imports: `@pixi/react` → only `Application, extend`
+2. Added imports from `pixi.js` for PixiJS components
+3. Added `extend()` call to register components in GraphStage.tsx
+4. Updated all JSX elements to lowercase prefixed versions:
+   - `<Graphics>` → `<pixiGraphics>`
+   - `<Container>` → `<pixiContainer>`
+   - `<Text>` → `<pixiText>`
+5. Changed `Stage` to `Application`
+6. Fixed Application props: removed `options` prop, passed props directly
+7. Wrapped Application in div for wheel event handling (onWheel not supported on Application)
+
+**Additional Fixes**:
+- Fixed readonly refs array type issue in GraphLayout.ts (used spread operator)
+- Fixed React.WheelEvent type for handleWheel function
+- All TypeScript errors resolved (except 1 unrelated error in RepositoryDropdown)
+
+**PixiJS Patterns Confirmed**:
+- Always call g.clear() at start of draw callbacks ✅
+- Use g.eventMode = 'static' for clickable elements ✅
+- Use g.on('pointerdown', handler) for click events ✅
+- Use beginFill/endFill for filled shapes ✅
+- Use lineStyle for strokes ✅
 
 **Challenges**:
+1. **@pixi/react v8 API breaking changes**: Components not exported as named exports
+2. **Type safety**: Event handler types need to match React's expectations
+3. **Application props**: `options` object not supported, props passed directly
 
 **Solutions**:
+1. Read @pixi/react README to discover extend() pattern
+2. Updated all components to use v8 API systematically
+3. Wrapped Application in div for event handling
+4. Used React.WheelEvent type for event handlers
 
 **Notes**:
+- @pixi/react v8 is more aligned with PixiJS v8 architecture
+- The extend() pattern allows tree-shaking unused PixiJS features
+- Lowercase prefixed JSX maintains clear distinction between React and PixiJS components
 
 ---
 
 ## Phase 1.5: GraphStage Component
 
-### [Date] - Main Stage Integration
+### 2025-10-28 - Main Stage Integration
 
 **Files Created**:
-- [ ] `src/renderer/components/source-control/graph/GraphStage.tsx`
+- [x] `src/renderer/components/source-control/graph/GraphStage.tsx`
+- [x] `src/renderer/components/source-control/graph/index.ts` (exports)
 
 **PixiJS Setup**:
-- Stage component as root (width, height, backgroundColor)
-- Container for viewport transform (x, y, scale)
-- Map layout data to PixiJS components
+- Application component as root with direct props (width, height, backgroundColor, antialias, resolution)
+- pixiContainer for viewport transform (x, y, scale)
+- useMemo for layout calculation optimization
+- Map layout data to PixiJS components (edges, nodes, labels)
 
 **Event Handling**:
-- Wheel: Zoom via viewport scale
-- Click: Handled in CommitNode component (pointerdown)
+- Wheel: Wrapped Application in div for zoom via viewport scale
+- Click: Handled in CommitNode component via PixiJS pointerdown events
+- Zoom limits: 0.5x to 2.0x scale
 
 **State Management**:
-- Viewport state (x, y, scale)
-- Layout calculation with useMemo
-- selectedCommit passed to CommitNode
+- Viewport state: `{ x: 0, y: 20, scale: 1.0 }` (initial y offset for padding)
+- Layout calculation with useMemo (recalculates only when graph changes)
+- selectedCommit prop passed down to CommitNode for highlighting
+
+**Integration**:
+- Updated CommitGraph.tsx to use GraphStage instead of list view
+- Added selectedCommit state management
+- Proper callback handling for commit selection
+
+**Rendering Order** (back to front):
+1. Edges (CommitEdge components)
+2. Nodes (CommitNode components)
+3. Labels (RefLabel components)
 
 **Challenges**:
+- Application component doesn't accept onWheel prop
+- Need to wrap in div for wheel event handling
 
 **Solutions**:
+- Wrapped Application in styled div with onWheel handler
+- Maintained className on wrapper div for styling
 
 **Notes**:
+- useMemo prevents unnecessary layout recalculations on viewport changes
+- All PixiJS components properly registered via extend()
+- Ready for visual testing and user interaction
 
 ---
 
 ## Phase 1.6: Testing Phase 1
 
-### [Date] - Phase 1 Verification
+### 2025-10-28 - Phase 1 Verification
 
 **Test Cases**:
-- [ ] PixiJS Stage initializes correctly
-- [ ] Commits render as colored circles
-- [ ] Edges connect parent-child commits (with curves)
-- [ ] Lanes assigned properly
-- [ ] Click selects commit (PixiJS pointerdown events)
-- [ ] Zoom works (mouse wheel)
-- [ ] Colors display correctly (hex format)
-- [ ] Rendering is smooth (60fps)
+- [x] TypeScript compilation passes (graph components)
+- [x] Dev server starts successfully
+- [x] Electron app launches
+- [x] @pixi/react v8 API compatibility verified
+- [x] All PixiJS components properly typed
+- [ ] Visual verification (PixiJS Stage rendering) - *requires manual testing*
+- [ ] Commits render as colored circles - *requires manual testing*
+- [ ] Edges connect parent-child commits (with curves) - *requires manual testing*
+- [ ] Click selects commit (PixiJS pointerdown events) - *requires manual testing*
+- [ ] Zoom works (mouse wheel) - *requires manual testing*
 
-**PixiJS Verification**:
+**TypeScript Verification**:
+- ✅ All graph component TypeScript errors resolved
+- ✅ Only 1 unrelated error remaining (RepositoryDropdown.tsx)
+- ✅ @pixi/react v8 API properly integrated
+- ✅ Type safety maintained throughout
+
+**Dev Server Status**:
+- ✅ Vite dev server running at http://localhost:4928/
+- ✅ Electron app launched successfully
+- ✅ Main process initialized (GitHubHttpService loaded)
+- ✅ No runtime errors in build output
+
+**PixiJS Verification** (requires manual testing):
+- Need to open application and navigate to commit graph
 - Check browser console for PixiJS initialization
-- PixiJS.utils.sayHello() should show WebGL renderer info
-- Verify Stage background color is visible
+- Verify Application background color is visible
+- Test commit selection and zoom
 
-**Performance**:
-- Render time for 100 commits: ___ ms
-- Render time for 1000 commits: ___ ms
-- Memory usage: ___ MB
-- FPS during interactions: ___ fps
+**Performance** (to be measured with real data):
+- Render time for 100 commits: *pending measurement*
+- Render time for 1000 commits: *pending measurement*
+- Memory usage: *pending measurement*
+- FPS during interactions: *pending measurement*
 
 **Issues Found**:
+1. ❌ @pixi/react v8 API breaking changes (Components not exported)
+2. ❌ Application props structure different from v7
+3. ❌ Event handler type mismatches
+4. ❌ Readonly array type issue in GraphLayout
 
 **Resolutions**:
+1. ✅ Migrated to extend() pattern with lowercase prefixed JSX
+2. ✅ Updated Application to accept direct props instead of options object
+3. ✅ Fixed React.WheelEvent type, wrapped Application in div for wheel events
+4. ✅ Used spread operator to convert readonly to mutable array
 
-**Phase 1 Status**: ⏳ Not Started
+**Phase 1 Status**: ✅ Complete (compilation and dev server verified, visual testing pending user interaction)
 
 ---
 

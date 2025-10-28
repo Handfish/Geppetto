@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Result } from '@effect-atom/atom-react'
 import { useCommitGraph, useCommitHistory } from '../../hooks/useSourceControl'
 import { ErrorAlert, LoadingSpinner } from '../ui/ErrorAlert'
+import { GraphStage } from './graph'
 import type {
   RepositoryId,
   CommitGraph as CommitGraphType,
@@ -122,11 +123,17 @@ export function CommitGraphView({
   onCommitSelect,
 }: CommitGraphViewProps) {
   const { graphResult, refresh } = useCommitGraph(repositoryId, options)
+  const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
+
+  const handleCommitSelect = (hash: string) => {
+    setSelectedCommit(hash)
+    onCommitSelect?.(hash)
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Commit History</h3>
+        <h3 className="text-lg font-semibold text-white">Commit Graph</h3>
         <button
           onClick={refresh}
           className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
@@ -154,7 +161,6 @@ export function CommitGraphView({
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
         ))
         .onSuccess((graph: CommitGraphType) => {
-
           if (!graph || graph.nodes.length === 0) {
             return (
               <div className="text-center py-12">
@@ -167,27 +173,20 @@ export function CommitGraphView({
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm text-gray-400">
                 <span>
-                  {graph.totalCommits} {graph.totalCommits === 1 ? 'commit' : 'commits'}
+                  {graph.totalCommits}{' '}
+                  {graph.totalCommits === 1 ? 'commit' : 'commits'}
                 </span>
                 <span>{graph.totalBranches} branches</span>
               </div>
 
-              <div className="space-y-2">
-                {graph.nodes.map((node: CommitGraphType['nodes'][number]) => (
-                  <CommitNode
-                    key={node.id}
-                    commit={{
-                      hash: node.commit.hash,
-                      subject: node.commit.subject,
-                      author: node.commit.author,
-                      parents: node.commit.parents as unknown as string[],
-                    }}
-                    refs={node.refs as string[]}
-                    isHead={node.isHead}
-                    onClick={onCommitSelect}
-                  />
-                ))}
-              </div>
+              {/* PixiJS Visual Graph */}
+              <GraphStage
+                graph={graph}
+                selectedCommit={selectedCommit ?? undefined}
+                onCommitSelect={handleCommitSelect}
+                width={800}
+                height={600}
+              />
 
               {graph.nodes.length < graph.totalCommits && (
                 <div className="text-center py-2 text-sm text-gray-500">
