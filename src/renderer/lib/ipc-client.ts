@@ -58,13 +58,26 @@ export class ElectronIpcClient extends Effect.Service<ElectronIpcClient>()(
               `[IPC Client ${channel}] Received error:`,
               'error' in rawResult ? rawResult.error : 'Unknown error'
             )
-            // Type the error properly as it comes from the IPC contract
+
+            // Decode the error using the contract's error schema
+            if ('error' in rawResult && rawResult.error) {
+              const decodedError = yield* S.decodeUnknown(contract.errors as S.Schema.Any)(rawResult.error).pipe(
+                Effect.mapError(
+                  parseError =>
+                    new NetworkError({
+                      message: `Error decoding failed: ${ParseResult.TreeFormatter.formatErrorSync(parseError)}`,
+                    })
+                )
+              )
+              console.log(`[IPC Client ${channel}] Decoded error:`, decodedError)
+              return yield* Effect.fail(decodedError as S.Schema.Type<(typeof IpcContracts)[T]['errors']>)
+            }
+
+            // Fallback to generic error
             return yield* Effect.fail(
-              ('error' in rawResult
-                ? rawResult.error
-                : new NetworkError({
-                    message: 'Unknown error',
-                  })) as S.Schema.Type<(typeof IpcContracts)[T]['errors']>
+              new NetworkError({
+                message: 'Unknown error',
+              }) as S.Schema.Type<(typeof IpcContracts)[T]['errors']>
             )
           }
 

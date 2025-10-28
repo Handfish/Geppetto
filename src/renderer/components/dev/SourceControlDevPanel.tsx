@@ -16,6 +16,7 @@ import {
   StatusBar,
   StatusSummary,
 } from '../source-control'
+import { useRefreshRepository } from '../../hooks/useSourceControl'
 import type {
   Repository,
   RepositoryId,
@@ -28,6 +29,7 @@ export function SourceControlDevPanel() {
   const [activeTab, setActiveTab] = useState<TabType>('repositories')
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const hasLoggedRef = useRef(false)
+  const { refresh: refreshRepository } = useRefreshRepository()
 
   // Log welcome message only once on mount
   useEffect(() => {
@@ -171,7 +173,10 @@ export function SourceControlDevPanel() {
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === 'repositories' && (
           <RepositoryExplorer
-            onRepositorySelect={(repo) => {
+            onRepositorySelect={async (repo) => {
+              // Ensure repository is cached in backend before accessing it
+              console.log('[SourceControlDevPanel] Refreshing repository to ensure it\'s cached:', repo.name)
+              await refreshRepository(repo.id)
               setSelectedRepository(repo)
               setActiveTab('commits')
             }}

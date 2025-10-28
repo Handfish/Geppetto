@@ -252,22 +252,13 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
               cached.graph.options.maxCommits === graphOptions.maxCommits &&
               cached.graph.options.layoutAlgorithm === graphOptions.layoutAlgorithm
             ) {
-              console.log(`[CommitGraphService] Cache HIT for repository: ${repositoryId.value}`)
               return cached.graph
             }
-
-            console.log(`[CommitGraphService] Cache STALE for repository: ${repositoryId.value} (age: ${age}ms)`)
           }
 
-          console.log(`[CommitGraphService] Cache MISS for repository: ${repositoryId.value}`)
           const repo = yield* repoService.getRepositoryById(repositoryId)
-          console.log(`[CommitGraphService] Repository found: ${repo.path}`)
-
           const commits = yield* getCommitsFromRepo(repo.path, graphOptions)
-          console.log(`[CommitGraphService] Parsed ${commits.length} commits`)
-
           const graph = buildGraphFromCommits(repositoryId, commits, graphOptions)
-          console.log(`[CommitGraphService] Built graph with ${graph.nodes.length} nodes, ${graph.edges.length} edges`)
 
           // Cache the graph
           yield* Ref.update(graphCache, (cache) => {
@@ -278,7 +269,6 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
             return cache
           })
 
-          console.log(`[CommitGraphService] Graph cached and returning`)
           return graph
         }),
 

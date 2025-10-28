@@ -2,7 +2,7 @@ import { Effect } from 'effect'
 import {
   AuthenticationError,
   NetworkError,
-  type NotFoundError,
+  NotFoundError,
   TierLimitError,
   GitOperationError,
   ValidationError,
@@ -267,6 +267,14 @@ const isSourceControlDomainError = (error: unknown): error is SourceControlDomai
 export const mapDomainErrorToIpcError = (
   error: unknown
 ): Effect.Effect<IpcErrorResult> => {
+  // DEBUG: Log the error to see what's failing
+  console.error('[ERROR MAPPER] Received error:', error)
+  if (error instanceof Error) {
+    console.error('[ERROR MAPPER] Error name:', error.name)
+    console.error('[ERROR MAPPER] Error message:', error.message)
+    console.error('[ERROR MAPPER] Error stack:', error.stack)
+  }
+
   // Handle AI Watcher errors
   if (isAiWatcherDomainError(error)) {
     // Process errors
@@ -520,11 +528,14 @@ export const mapDomainErrorToIpcError = (
   if (isSourceControlDomainError(error)) {
     // Repository not found errors
     if (error instanceof DomainRepositoryNotFoundError) {
+      const notFoundError = new NotFoundError({
+        message: error.message ?? 'Repository not found',
+        resource: error.path ?? 'repository',
+      })
+      console.error('[ERROR MAPPER] Returning NotFoundError:', notFoundError)
       return Effect.succeed({
         _tag: 'Error' as const,
-        error: new NetworkError({
-          message: error.message ?? 'Repository not found',
-        }),
+        error: notFoundError,
       })
     }
 
@@ -593,13 +604,19 @@ export const mapDomainErrorToIpcError = (
     message.includes('schema') ||
     message.includes('decode') ||
     message.includes('parse') ||
-    message.includes('expected')
+    message.includes('expected') ||
+    message.includes('Brand')
   ) {
+    // Extract more details from schema errors
+    const details = error instanceof Error && 'errors' in error
+      ? JSON.stringify((error as any).errors, null, 2)
+      : message
+
     return Effect.succeed({
       _tag: 'Error' as const,
       error: new ValidationError({
-        message: `Data validation failed: ${message}`,
-        details: message,
+        message: `Schema validation failed: ${message}`,
+        details: details,
       }),
     })
   }

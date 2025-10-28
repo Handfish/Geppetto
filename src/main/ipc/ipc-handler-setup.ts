@@ -114,13 +114,41 @@ export function registerIpcHandler<
     // 3. flatMap(encode): Effect<OutputDecoded> -> Effect<OutputEncoded, ParseError, never>
     // 4. catchAll: Effect<OutputEncoded, ParseError | THandlerError, never> -> Effect<OutputEncoded | IpcErrorResult, never, never>
     //    Note: mapDomainErrorToIpcError converts errors to IpcErrorResult success values
+    //
+    // IMPORTANT: The error handler is wrapped in Effect.sync().pipe(Effect.flatten) to ensure:
+    // - The error mapper runs in proper Effect context
+    // - Any errors in the error mapper itself are caught
+    // - Proper sequential execution of error handling
+    // - The error is then ENCODED through the error schema for proper serialization
     const program: Effect.Effect<OutputEncoded | IpcErrorResult, never, never> =
       S.decodeUnknown(contract.input as unknown as InputSchemaWithTypes)(input).pipe(
         Effect.flatMap((validatedInput: InputDecoded) => handler(validatedInput)),
         Effect.flatMap((result: OutputDecoded) =>
           S.encode(contract.output as unknown as OutputSchemaWithTypes)(result)
         ),
-        Effect.catchAll(mapDomainErrorToIpcError),
+        Effect.catchAll((error) =>
+          Effect.sync(() => mapDomainErrorToIpcError(error)).pipe(
+            Effect.flatten,
+            Effect.flatMap((errorResult) => {
+              // Encode the error through the error schema before sending over IPC
+              if (errorResult._tag === 'Error' && errorResult.error) {
+                console.log('[IPC Handler] Encoding error for channel:', contract.channel)
+                console.log('[IPC Handler] Error before encoding:', errorResult.error)
+                return S.encode(contract.errors as S.Schema.Any)(errorResult.error).pipe(
+                  Effect.map((encodedError) => {
+                    console.log('[IPC Handler] Error after encoding:', encodedError)
+                    return { _tag: 'Error' as const, error: encodedError } as IpcErrorResult
+                  }),
+                  Effect.catchAll((encodeError) => {
+                    console.error('[IPC Handler] Error encoding failed:', encodeError)
+                    return Effect.succeed(errorResult) // Fallback to unencoded error if encoding fails
+                  })
+                ) as Effect.Effect<IpcErrorResult, never, never>
+              }
+              return Effect.succeed(errorResult)
+            })
+          )
+        ),
         Effect.withSpan('ipc-handler', { attributes: { channel: contract.channel } })
       )
 
