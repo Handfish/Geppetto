@@ -18,7 +18,7 @@ interface RepositoryActionsMenuProps {
   repository: ProviderRepository
   isOpen: boolean
   onClose: () => void
-  buttonRef: React.RefObject<HTMLButtonElement>
+  buttonRef: React.RefObject<HTMLButtonElement | null>
 }
 
 export function RepositoryActionsMenu({

@@ -83,6 +83,13 @@ const mapGitHubApiErrorToRepositoryError = (
     })
   }
   if (error instanceof GitHubApiError) {
+    // Check for authentication-related status codes
+    if (error.status === 401 || error.status === 403) {
+      return new ProviderAuthenticationError({
+        provider: PROVIDER,
+        message: error.message,
+      })
+    }
     return new ProviderRepositoryError({
       provider: PROVIDER,
       message: error.message,

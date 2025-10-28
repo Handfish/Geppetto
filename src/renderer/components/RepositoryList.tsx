@@ -8,13 +8,13 @@ import { ErrorAlert, LoadingSpinner } from './ui/ErrorAlert'
 import { RepositoryActionsMenu } from './RepositoryActionsMenu'
 import type { ProviderRepository } from '../../shared/schemas/provider'
 
-export function RepositoryList() {
-  const { accountsResult } = useProviderAuth('github')
+function RepositoryListContent() {
+  const { accountsResult, signIn } = useProviderAuth('github')
   const { repositoriesResult } = useProviderRepositories('github')
   const [openMenuRepoId, setOpenMenuRepoId] = React.useState<string | null>(null)
-  const buttonRefs = React.useRef<Record<string, React.RefObject<HTMLButtonElement>>>({})
+  const buttonRefs = React.useRef<Record<string, React.RefObject<HTMLButtonElement | null>>>({})
 
-  const getButtonRef = (repoId: string) => {
+  const getButtonRef = (repoId: string): React.RefObject<HTMLButtonElement | null> => {
     if (!buttonRefs.current[repoId]) {
       buttonRefs.current[repoId] = React.createRef<HTMLButtonElement>()
     }
@@ -30,7 +30,19 @@ export function RepositoryList() {
       {Result.builder(repositoriesResult)
         .onInitial(() => <LoadingSpinner size="md" />)
         .onErrorTag('AuthenticationError', error => (
-          <ErrorAlert error={error} message="Please authenticate first" />
+          <ErrorAlert
+            error={error}
+            message="Your credentials have expired. Please re-authenticate to continue."
+            action={
+              <button
+                onClick={() => signIn()}
+                type="button"
+                className="px-4 py-2 border border-red-400 rounded-md text-red-100 hover:bg-red-500/20 transition-colors"
+              >
+                Re-authenticate
+              </button>
+            }
+          />
         ))
         .onErrorTag('NetworkError', error => (
           <ErrorAlert error={error} />
@@ -141,4 +153,32 @@ export function RepositoryList() {
         .render()}
     </div>
   )
+}
+
+export function RepositoryList() {
+  const [shouldLoad, setShouldLoad] = React.useState(false)
+
+  if (!shouldLoad) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-white">
+          Your Connected Repositories
+        </h2>
+        <div className="bg-gray-800 rounded-lg p-8 border border-gray-700 text-center">
+          <p className="text-gray-300 mb-4">
+            Ready to load your repositories
+          </p>
+          <button
+            onClick={() => setShouldLoad(true)}
+            type="button"
+            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Load Repositories
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return <RepositoryListContent />
 }
