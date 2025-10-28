@@ -10,8 +10,7 @@ import type {
 } from '../../../shared/schemas/source-control'
 import type {
   NetworkError,
-  GitOperationError,
-  ValidationError,
+  NotFoundError,
 } from '../../../shared/schemas/errors'
 
 /**
@@ -122,8 +121,21 @@ export function BranchList({
   filter = 'all',
   onBranchSelect,
 }: BranchListProps) {
-  const { repositoryResult, refresh } = useRepositoryById(repositoryId)
   const [filterState, setFilterState] = React.useState(filter)
+
+  // Early return if no repository selected
+  if (!repositoryId) {
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-white">Branches</h3>
+        <div className="text-center py-12">
+          <p className="text-gray-400">No repository selected</p>
+        </div>
+      </div>
+    )
+  }
+
+  const { repositoryResult, refresh } = useRepositoryById(repositoryId)
 
   return (
     <div className="space-y-4">
@@ -154,14 +166,11 @@ export function BranchList({
             <LoadingSpinner size="md" />
           </div>
         ))
+        .onErrorTag('NotFoundError', (error: NotFoundError) => (
+          <ErrorAlert error={error} message="Repository not found" />
+        ))
         .onErrorTag('NetworkError', (error: NetworkError) => (
-          <ErrorAlert error={error} message="Failed to load branches" />
-        ))
-        .onErrorTag('GitOperationError', (error: GitOperationError) => (
-          <ErrorAlert error={error} message="Git operation failed" />
-        ))
-        .onErrorTag('ValidationError', (error: ValidationError) => (
-          <ErrorAlert error={error} message="Invalid repository data" />
+          <ErrorAlert error={error} message="Failed to load repository" />
         ))
         .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
@@ -239,14 +248,11 @@ export function RemoteList({ repositoryId }: RemoteListProps) {
             <LoadingSpinner size="sm" />
           </div>
         ))
+        .onErrorTag('NotFoundError', (error: NotFoundError) => (
+          <ErrorAlert error={error} message="Repository not found" />
+        ))
         .onErrorTag('NetworkError', (error: NetworkError) => (
-          <ErrorAlert error={error} message="Failed to load remotes" />
-        ))
-        .onErrorTag('GitOperationError', (error: GitOperationError) => (
-          <ErrorAlert error={error} message="Git operation failed" />
-        ))
-        .onErrorTag('ValidationError', (error: ValidationError) => (
-          <ErrorAlert error={error} message="Invalid repository data" />
+          <ErrorAlert error={error} message="Failed to load repository" />
         ))
         .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />

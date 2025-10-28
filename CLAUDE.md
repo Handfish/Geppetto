@@ -215,9 +215,58 @@ React.useEffect(() => {
 }, [result])
 ```
 
+**Conditional Atoms and Type Safety** - Use the Early Return Pattern to avoid conditional atoms:
+
+```typescript
+// ❌ WRONG - Conditional atoms with type casts lose error types
+const emptyAtom = Atom.make(() => Result.success(null))
+const result = useAtomValue(id ? realAtom(id) : (emptyAtom as any))  // Type cast!
+
+// Result.builder breaks because error type is `never`
+Result.builder(result)
+  .onErrorTag('NotFoundError', ...)  // ❌ TypeScript error: onErrorTag doesn't exist!
+
+// ✅ CORRECT - Early Return Pattern (handle null before calling hooks)
+function RepositoryView({ id }: { id: RepositoryId | null }) {
+  // Handle null case before using atoms
+  if (!id) {
+    return <EmptyState message="No repository selected" />
+  }
+
+  // Now id is guaranteed non-null - use real atom directly
+  const { repositoryResult } = useRepositoryById(id)
+
+  return Result.builder(repositoryResult)
+    .onInitial(() => <LoadingSpinner />)
+    .onErrorTag('NotFoundError', (error) => <NotFound />)
+    .onErrorTag('NetworkError', (error) => <ErrorAlert error={error} />)
+    .onSuccess((repo) => <RepoCard repo={repo} />)
+    .render()
+}
+
+// Hook requires non-null parameter - enforces early return pattern
+export function useRepositoryById(repositoryId: RepositoryId) {
+  const repositoryResult = useAtomValue(repositoryByIdAtom(repositoryId))
+  const refresh = useAtomRefresh(repositoryByIdAtom(repositoryId))
+
+  return {
+    repositoryResult,  // Full Result with proper error types
+    refresh,
+    repository: Result.getOrElse(repositoryResult, () => null),
+    isLoading: repositoryResult._tag === 'Initial' && repositoryResult.waiting,
+  }
+}
+```
+
+**Why Early Return Pattern:**
+- ✅ No conditional atoms - hooks always use same atom type
+- ✅ Full type safety - no type casts needed
+- ✅ Simple logic - clear separation of concerns
+- ✅ Better UX - explicit empty states for invalid inputs
+- ✅ Result.builder has full `.onErrorTag()` API
+
 **See comprehensive documentation:**
-- `docs/RESULT_ERROR_HANDLING_PATTERNS.md`: Best practices and type-safe patterns
-- `docs/RESULT_API_AND_ERROR_HANDLING.md`: Complete API reference
+- `docs/RESULT_API_AND_ERROR_HANDLING.md`: Complete API reference (Pattern 6: Conditional Atoms - Early Return Pattern)
 
 ### Shared Schemas (`src/shared/schemas/`)
 

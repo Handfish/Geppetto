@@ -145,21 +145,13 @@ export function useRepositoryByPath(path: string) {
  * Hook for repository by ID
  *
  * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires a non-null repositoryId.
+ * Components should handle null with early returns before calling this hook.
  */
-export function useRepositoryById(repositoryId: RepositoryId | null) {
-  const atom = repositoryId
-    ? repositoryByIdAtom(repositoryId)
-    : (emptyRepositoriesAtom as unknown as ReturnType<typeof repositoryByIdAtom>)
-
-  const repositoryResult = useAtomValue(
-    repositoryId
-      ? repositoryByIdAtom(repositoryId)
-      : (emptyRepositoriesAtom as unknown as ReturnType<typeof repositoryByIdAtom>)
-  )
-
-  const refresh = repositoryId
-    ? useAtomRefresh(repositoryByIdAtom(repositoryId))
-    : () => {}
+export function useRepositoryById(repositoryId: RepositoryId) {
+  const repositoryResult = useAtomValue(repositoryByIdAtom(repositoryId))
+  const refresh = useAtomRefresh(repositoryByIdAtom(repositoryId))
 
   const repository = Result.match(repositoryResult, {
     onSuccess: (data) =>
@@ -177,9 +169,7 @@ export function useRepositoryById(repositoryId: RepositoryId | null) {
 
     // Computed convenience properties
     repository,
-    isLoading: repositoryId
-      ? repositoryResult._tag === 'Initial' && repositoryResult.waiting
-      : false,
+    isLoading: repositoryResult._tag === 'Initial' && repositoryResult.waiting,
   }
 }
 

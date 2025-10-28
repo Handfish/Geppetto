@@ -11,7 +11,7 @@ import type {
 import type {
   NetworkError,
   GitOperationError,
-  ValidationError,
+  NotFoundError,
 } from '../../../shared/schemas/errors'
 
 /**
@@ -141,14 +141,14 @@ export function CommitGraphView({
             <LoadingSpinner size="md" />
           </div>
         ))
+        .onErrorTag('NotFoundError', (error: NotFoundError) => (
+          <ErrorAlert error={error} message="Repository not found" />
+        ))
         .onErrorTag('NetworkError', (error: NetworkError) => (
           <ErrorAlert error={error} message="Failed to load commit graph" />
         ))
         .onErrorTag('GitOperationError', (error: GitOperationError) => (
           <ErrorAlert error={error} message="Git operation failed" />
-        ))
-        .onErrorTag('ValidationError', (error: ValidationError) => (
-          <ErrorAlert error={error} message="Invalid graph data" />
         ))
         .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
@@ -244,14 +244,14 @@ export function CommitHistoryList({
             <LoadingSpinner size="md" />
           </div>
         ))
+        .onErrorTag('NotFoundError', (error: NotFoundError) => (
+          <ErrorAlert error={error} message="Repository not found" />
+        ))
         .onErrorTag('NetworkError', (error: NetworkError) => (
           <ErrorAlert error={error} message="Failed to load commit history" />
         ))
         .onErrorTag('GitOperationError', (error: GitOperationError) => (
           <ErrorAlert error={error} message="Git operation failed" />
-        ))
-        .onErrorTag('ValidationError', (error: ValidationError) => (
-          <ErrorAlert error={error} message="Invalid commit data" />
         ))
         .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />

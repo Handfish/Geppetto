@@ -454,6 +454,173 @@ export function RepoCount() {
 - ✅ Components receive transformed data
 - ✅ No duplicate error handling needed
 
+### Pattern 6: Conditional Atoms - Early Return Pattern
+
+**The Challenge:** When using atoms conditionally with nullable parameters, TypeScript can lose error type information.
+
+**Problem Example:**
+
+```typescript
+// ❌ PROBLEM - Conditional atoms with type casts lose error types
+const emptyRepositoryAtom = Atom.make(() => Result.success(null))  // Result<null, never>
+
+function useRepositoryById(id: RepositoryId | null) {
+  // When id is null, we use empty atom - but error types don't match!
+  const result = useAtomValue(
+    id ? repositoryByIdAtom(id) : (emptyRepositoryAtom as any)  // ❌ Type cast!
+  )
+
+  // Result.builder can't access .onErrorTag() because TypeScript sees error type as `never`
+  return Result.builder(result)
+    .onErrorTag('NotFoundError', ...)  // ❌ TypeScript error: onErrorTag doesn't exist!
+    .onSuccess(...)
+}
+```
+
+**Root Cause:**
+1. `repositoryByIdAtom(id)` returns `Result<Repository, NotFoundError | NetworkError>`
+2. `emptyRepositoryAtom` returns `Result<null, never>` (error type is `never`)
+3. When we conditionally use them, TypeScript loses the error types
+4. Result.builder doesn't have `.onErrorTag()` for error type `never`
+5. Type casts don't fix the runtime Result object - it still has `never` error type
+
+**Solution: Early Return Pattern (Recommended)**
+
+The cleanest solution is to handle null/undefined parameters **before** calling hooks that use atoms. This avoids conditional atoms entirely.
+
+**Pattern 1: Early Return in Component**
+
+```typescript
+// ✅ BEST PRACTICE - Handle null in component before using hook
+function RepositoryView({ id }: { id: RepositoryId | null }) {
+  // Handle null case before calling hooks
+  if (!id) {
+    return <EmptyState message="No repository selected" />
+  }
+
+  // Now we can use the real atom directly - no conditionals!
+  const { repositoryResult } = useRepositoryById(id)
+
+  return Result.builder(repositoryResult)
+    .onInitial(() => <LoadingSpinner />)
+    .onErrorTag('NotFoundError', () => <NotFound />)
+    .onErrorTag('NetworkError', (error) => <ErrorAlert error={error} />)
+    .onDefect((defect) => <UnexpectedError defect={defect} />)
+    .onSuccess((repo) => <RepoCard repo={repo} />)
+    .render()
+}
+
+// Hook requires non-null parameter
+export function useRepositoryById(repositoryId: RepositoryId) {
+  const repositoryResult = useAtomValue(repositoryByIdAtom(repositoryId))
+  const refresh = useAtomRefresh(repositoryByIdAtom(repositoryId))
+
+  return {
+    repositoryResult,
+    refresh,
+    repository: Result.getOrElse(repositoryResult, () => null),
+    isLoading: repositoryResult._tag === 'Initial' && repositoryResult.waiting,
+  }
+}
+```
+
+**Pattern 2: Early Return in Parent Component**
+
+```typescript
+// ✅ CORRECT - Parent handles null, child always gets valid ID
+function BranchList({ repositoryId }: { repositoryId: RepositoryId | null }) {
+  // Early return if no repository selected
+  if (!repositoryId) {
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-white">Branches</h3>
+        <div className="text-center py-12">
+          <p className="text-gray-400">No repository selected</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Now repositoryId is guaranteed non-null
+  const { repositoryResult, refresh } = useRepositoryById(repositoryId)
+
+  return (
+    <div className="space-y-4">
+      {/* ... use repositoryResult with full Result.builder API ... */}
+    </div>
+  )
+}
+```
+
+**Real Example from Codebase:**
+
+```typescript
+// src/renderer/hooks/useSourceControl.ts
+
+/**
+ * Hook for repository by ID
+ *
+ * **IMPORTANT**: This hook requires a non-null repositoryId.
+ * Components should handle null with early returns before calling this hook.
+ */
+export function useRepositoryById(repositoryId: RepositoryId) {
+  const repositoryResult = useAtomValue(repositoryByIdAtom(repositoryId))
+  const refresh = useAtomRefresh(repositoryByIdAtom(repositoryId))
+
+  const repository = Result.match(repositoryResult, {
+    onSuccess: (data) =>
+      Array.isArray(data.value) ? data.value[0] : data.value,
+    onFailure: () => null,
+    onInitial: () => null,
+  })
+
+  return {
+    repositoryResult,  // Full Result with proper error types
+    refresh,
+    repository,        // Convenience property (nullable)
+    isLoading: repositoryResult._tag === 'Initial' && repositoryResult.waiting,
+  }
+}
+
+// src/renderer/components/source-control/BranchList.tsx
+
+export function BranchList({ repositoryId }: { repositoryId: RepositoryId | null }) {
+  // Early return if no repository selected
+  if (!repositoryId) {
+    return (
+      <div className="space-y-4">
+        <h3>Branches</h3>
+        <p>No repository selected</p>
+      </div>
+    )
+  }
+
+  // Hook called with guaranteed non-null value
+  const { repositoryResult, refresh } = useRepositoryById(repositoryId)
+
+  return Result.builder(repositoryResult)
+    .onErrorTag('NotFoundError', (error) => <ErrorAlert error={error} />)
+    .onErrorTag('NetworkError', (error) => <ErrorAlert error={error} />)
+    .onSuccess((repo) => <BranchTree repo={repo} />)
+    .render()
+}
+```
+
+**Why This Pattern Works:**
+
+✅ **No conditional atoms** - Hook always uses the same atom type
+✅ **Full type safety** - No type casts needed
+✅ **Simple logic** - Clear separation of concerns (UI vs data)
+✅ **Better UX** - Explicit empty states for invalid inputs
+✅ **Easier testing** - Components have clear preconditions
+
+**When to Use This Pattern:**
+
+- ✅ Parameters can be null/undefined (optional selections)
+- ✅ Null represents an invalid/empty state that should show different UI
+- ✅ The component owns the decision about what to show when null
+- ✅ You want to avoid conditional logic in hooks
+
 ---
 
 ## Anti-Patterns
@@ -691,6 +858,65 @@ Result.builder(repos)
 - Should be logged for debugging
 - Should show user-friendly "bug report" message
 - TypeScript enforces handling (if configured correctly)
+
+### ❌ Anti-Pattern 7: Unsafe Type Casts with Conditional Atoms
+
+```typescript
+// ❌ WRONG - Type cast erases error type information
+const emptyAtom = Atom.make(() => Result.success(null))
+
+function useRepositoryById(id: RepositoryId | null) {
+  const result = useAtomValue(
+    id ? repositoryByIdAtom(id) : (emptyAtom as unknown as ReturnType<typeof repositoryByIdAtom>)
+    //                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    //                              Type cast looks safe but loses error types at runtime!
+  )
+
+  // TypeScript accepts this but Result.builder fails at compile time
+  return Result.builder(result)
+    .onErrorTag('NotFoundError', ...)  // ❌ Error: onErrorTag doesn't exist!
+    .onSuccess(...)
+}
+
+// ✅ CORRECT - Use early return pattern instead
+export function useRepositoryById(repositoryId: RepositoryId) {
+  // Hook requires non-null - components handle null before calling
+  const repositoryResult = useAtomValue(repositoryByIdAtom(repositoryId))
+  const refresh = useAtomRefresh(repositoryByIdAtom(repositoryId))
+
+  return {
+    repositoryResult,
+    refresh,
+    repository: Result.getOrElse(repositoryResult, () => null),
+    isLoading: repositoryResult._tag === 'Initial' && repositoryResult.waiting,
+  }
+}
+
+// Component handles null with early return
+function BranchList({ repositoryId }: { repositoryId: RepositoryId | null }) {
+  if (!repositoryId) {
+    return <EmptyState message="No repository selected" />
+  }
+
+  const { repositoryResult } = useRepositoryById(repositoryId)
+
+  return Result.builder(repositoryResult)
+    .onErrorTag('NotFoundError', ...)  // ✅ Works!
+    .onErrorTag('NetworkError', ...)   // ✅ Works!
+    .onSuccess(...)
+    .render()
+}
+```
+
+**Why this matters:**
+- ❌ Type casts bypass TypeScript's type system
+- ❌ Runtime Result object still has `never` error type
+- ❌ Result.builder sees `never` and disables `.onErrorTag()`
+- ✅ With early return: avoid conditional atoms entirely
+- ✅ Hooks use single atom type with proper error types
+- ✅ Components have explicit empty states for invalid inputs
+
+**See Pattern 6: Conditional Atoms - Early Return Pattern for full details.**
 
 ---
 

@@ -131,22 +131,27 @@ export function RepositoryDropdown({
         // Extract error message using Result.match
         const errorMessage = Result.match(cloneResult, {
           onSuccess: () => '',
-          onFailure: (failureData) => {
-            // failureData is { error: E, waiting: boolean }
-            const error = failureData.error
+          onFailure: (failure) => {
+            // failure is the full Failure result object
+            // We need to check if it has the error property
+            if (Result.isFailure(failure)) {
+              const error = (failure as unknown as { error: { _tag: string; message: string; stderr?: string } }).error
 
-            if (!error) {
-              return 'Failed to clone repository to workspace (no error details)'
+              if (!error) {
+                return 'Failed to clone repository to workspace (no error details)'
+              }
+
+              // Handle different error types
+              if (error._tag === 'GitOperationError') {
+                // GitOperationError has stderr with detailed git output
+                return error.stderr?.trim() || error.message
+              }
+
+              // Fallback to generic message field for other error types
+              return error.message || 'Failed to clone repository to workspace'
             }
 
-            // Handle different error types
-            if (error._tag === 'GitOperationError') {
-              // GitOperationError has stderr with detailed git output
-              return error.stderr?.trim() || error.message
-            }
-
-            // Fallback to generic message field for other error types
-            return error.message || 'Failed to clone repository to workspace'
+            return 'Failed to clone repository to workspace'
           },
           onInitial: () => '',
         })
@@ -332,13 +337,15 @@ interface MenuItemProps {
   icon: React.ElementType
   label: string
   badge?: React.ReactNode
+  disabled?: boolean
   onClick?: () => void
 }
 
-function MenuItem({ icon: Icon, label, badge, onClick }: MenuItemProps) {
+function MenuItem({ icon: Icon, label, badge, disabled, onClick }: MenuItemProps) {
   return (
     <button
-      className="w-full px-3 py-2 flex items-center justify-between gap-3 text-sm text-gray-200 hover:bg-gray-700/40 hover:text-white transition-colors cursor-pointer group"
+      className="w-full px-3 py-2 flex items-center justify-between gap-3 text-sm text-gray-200 hover:bg-gray-700/40 hover:text-white transition-colors cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
+      disabled={disabled}
       onClick={onClick}
       type="button"
     >

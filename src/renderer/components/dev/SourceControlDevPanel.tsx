@@ -175,7 +175,7 @@ export function SourceControlDevPanel() {
           <div className="space-y-6">
             <CommitGraphView
               repositoryId={selectedRepository.id}
-              options={{ maxCommits: 20 }}
+              options={{ maxCommits: 20, layoutAlgorithm: 'topological' }}
             />
           </div>
         )}

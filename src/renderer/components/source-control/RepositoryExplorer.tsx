@@ -5,8 +5,6 @@ import { ErrorAlert, LoadingSpinner } from '../ui/ErrorAlert'
 import type { Repository } from '../../../shared/schemas/source-control'
 import type {
   NetworkError,
-  GitOperationError,
-  ValidationError,
 } from '../../../shared/schemas/errors'
 
 /**
@@ -123,18 +121,6 @@ export function RepositoryExplorer({
             message="Failed to load repositories"
           />
         ))
-        .onErrorTag('GitOperationError', (error: GitOperationError) => (
-          <ErrorAlert
-            error={error}
-            message="Git operation failed"
-          />
-        ))
-        .onErrorTag('ValidationError', (error: ValidationError) => (
-          <ErrorAlert
-            error={error}
-            message="Invalid repository data"
-          />
-        ))
         .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
         ))
@@ -160,7 +146,7 @@ export function RepositoryExplorer({
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {repositories.map((repo: Repository) => (
                   <RepositoryItem
-                    key={repo.id}
+                    key={repo.id as unknown as string}
                     repository={repo}
                     onSelect={onRepositorySelect}
                   />

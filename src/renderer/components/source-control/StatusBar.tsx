@@ -18,7 +18,7 @@ import type {
 import type {
   NetworkError,
   GitOperationError,
-  ValidationError,
+  NotFoundError,
 } from '../../../shared/schemas/errors'
 
 /**
@@ -198,14 +198,14 @@ export function StatusBar({
             <LoadingSpinner size="md" />
           </div>
         ))
+        .onErrorTag('NotFoundError', (error: NotFoundError) => (
+          <ErrorAlert error={error} message="Repository not found" />
+        ))
         .onErrorTag('NetworkError', (error: NetworkError) => (
           <ErrorAlert error={error} message="Failed to load status" />
         ))
         .onErrorTag('GitOperationError', (error: GitOperationError) => (
           <ErrorAlert error={error} message="Git operation failed" />
-        ))
-        .onErrorTag('ValidationError', (error: ValidationError) => (
-          <ErrorAlert error={error} message="Invalid status data" />
         ))
         .onDefect((defect: unknown) => (
           <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
@@ -372,14 +372,14 @@ export function StatusSummary({ repositoryId }: StatusSummaryProps) {
         <span>Loading status...</span>
       </div>
     ))
+    .onErrorTag('NotFoundError', (_error: NotFoundError) => (
+      <span className="text-sm text-red-400">Repository not found</span>
+    ))
     .onErrorTag('NetworkError', (_error: NetworkError) => (
       <span className="text-sm text-red-400">Status error</span>
     ))
     .onErrorTag('GitOperationError', (_error: GitOperationError) => (
       <span className="text-sm text-red-400">Git error</span>
-    ))
-    .onErrorTag('ValidationError', (_error: ValidationError) => (
-      <span className="text-sm text-red-400">Invalid status</span>
     ))
     .onDefect((_defect: unknown) => <span className="text-sm text-red-400">Error</span>)
     .onSuccess((summary: WorkingTreeStatus) => {

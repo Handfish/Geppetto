@@ -32,8 +32,8 @@ type StateChangeEvent =
  */
 export function useCrossWindowSync() {
   const refreshAccountContext = useAtomRefresh(accountContextAtom)
-  const refreshAiUsage = useAtomRefresh(selectAiProviderUsageAtom('openai'))
-  const refreshClaudeUsage = useAtomRefresh(selectAiProviderUsageAtom('claude'))
+  const refreshAiUsage = useAtomRefresh(selectAiProviderUsageAtom('openai', true))
+  const refreshClaudeUsage = useAtomRefresh(selectAiProviderUsageAtom('claude', true))
 
   // Refresh provider-level atoms which will cascade to account-specific atoms
   const refreshGitHubAccounts = useAtomRefresh(providerAccountsAtom('github'))

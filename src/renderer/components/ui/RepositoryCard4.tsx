@@ -1,4 +1,4 @@
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion, type Transition } from 'framer-motion'
 import type { ProviderRepository } from '../../../shared/schemas/provider'
 import type { Account } from '../../../shared/schemas/account-context'
 
@@ -22,7 +22,7 @@ export function RepositoryCard4({
     hover: isActive && !shouldReduceMotion ? { scale: 1.02 } : { scale: 1 },
   }
 
-  const hoverTransition = shouldReduceMotion
+  const hoverTransition: Transition = shouldReduceMotion
     ? { duration: 0.15, ease: [0.16, 1, 0.3, 1] }
     : { type: 'spring', stiffness: 400, damping: 25 }
 
