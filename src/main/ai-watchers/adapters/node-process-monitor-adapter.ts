@@ -635,6 +635,7 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
               if (info.child && !info.child.killed) {
                 info.child.kill('SIGKILL')
               }
+              // Exit event will be emitted by child process listener
             } else if (info.isAttached) {
               // For attached processes, use kill command
               yield* Effect.tryPromise({
@@ -651,7 +652,25 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
                     pid: handle.pid,
                     cause: error,
                   }),
+              }).pipe(
+                // Ignore "No such process" errors - process already dead
+                Effect.catchAll((error) => {
+                  if (error.cause && String(error.cause).includes('No such process')) {
+                    return Effect.void
+                  }
+                  return Effect.fail(error)
+                })
+              )
+
+              // For attached processes, manually emit exit event
+              // (spawned processes emit this via child process listener)
+              const exitEvent = new ProcessEvent({
+                type: 'exit',
+                data: 'killed',
+                timestamp: new Date(),
+                processId: handle.id,
               })
+              yield* emitEvent(handle.id, exitEvent)
             }
 
             yield* cleanupProcess(handle.id)
