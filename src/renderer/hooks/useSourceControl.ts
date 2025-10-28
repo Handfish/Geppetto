@@ -4,16 +4,11 @@ import {
   useAtomSet,
   useAtomValue,
   Result,
-} from '@effect-atom/atom-react'
+} from "@effect-atom/atom-react";
 import type {
-  Repository,
   RepositoryId,
-  CommitGraph,
   GraphOptions,
-  WorkingTree,
-  Commit,
-  CommitWithRefs,
-} from '../../shared/schemas/source-control'
+} from "../../shared/schemas/source-control";
 import {
   allRepositoriesAtom,
   discoverRepositoriesAtom,
@@ -37,14 +32,7 @@ import {
   createStashAtom,
   stashesAtom,
   popStashAtom,
-  emptyRepositoriesAtom,
-  emptyCommitGraphAtom,
-  emptyWorkingTreeAtom,
-  emptyNullAtom,
-  emptyCommitAtom,
-  emptyCommitWithRefsAtom,
-  emptyCommitsArrayAtom,
-} from '../atoms/source-control-atoms'
+} from "../atoms/source-control-atoms";
 
 /**
  * Source Control Hooks
@@ -72,10 +60,12 @@ import {
  * Use Result.builder in components to handle all states.
  */
 export function useDiscoverRepositories(searchPaths: string[]) {
-  const repositoriesResult = useAtomValue(discoverRepositoriesAtom(searchPaths))
-  const refresh = useAtomRefresh(discoverRepositoriesAtom(searchPaths))
+  const repositoriesResult = useAtomValue(
+    discoverRepositoriesAtom(searchPaths),
+  );
+  const refresh = useAtomRefresh(discoverRepositoriesAtom(searchPaths));
 
-  const repositories = Result.getOrElse(repositoriesResult, () => [])
+  const repositories = Result.getOrElse(repositoriesResult, () => []);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -87,8 +77,8 @@ export function useDiscoverRepositories(searchPaths: string[]) {
     // Computed convenience properties
     repositories,
     isLoading:
-      repositoriesResult._tag === 'Initial' && repositoriesResult.waiting,
-  }
+      repositoriesResult._tag === "Initial" && repositoriesResult.waiting,
+  };
 }
 
 /**
@@ -97,10 +87,10 @@ export function useDiscoverRepositories(searchPaths: string[]) {
  * Returns full Result for exhaustive error handling.
  */
 export function useAllRepositories() {
-  const repositoriesResult = useAtomValue(allRepositoriesAtom)
-  const refresh = useAtomRefresh(allRepositoriesAtom)
+  const repositoriesResult = useAtomValue(allRepositoriesAtom);
+  const refresh = useAtomRefresh(allRepositoriesAtom);
 
-  const repositories = Result.getOrElse(repositoriesResult, () => [])
+  const repositories = Result.getOrElse(repositoriesResult, () => []);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -112,8 +102,8 @@ export function useAllRepositories() {
     // Computed convenience properties
     repositories,
     isLoading:
-      repositoriesResult._tag === 'Initial' && repositoriesResult.waiting,
-  }
+      repositoriesResult._tag === "Initial" && repositoriesResult.waiting,
+  };
 }
 
 /**
@@ -122,10 +112,10 @@ export function useAllRepositories() {
  * Returns full Result for exhaustive error handling.
  */
 export function useRepositoryByPath(path: string) {
-  const repositoryResult = useAtomValue(repositoryByPathAtom(path))
-  const refresh = useAtomRefresh(repositoryByPathAtom(path))
+  const repositoryResult = useAtomValue(repositoryByPathAtom(path));
+  const refresh = useAtomRefresh(repositoryByPathAtom(path));
 
-  const repository = Result.getOrElse(repositoryResult, () => null)
+  const repository = Result.getOrElse(repositoryResult, () => null);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -136,9 +126,8 @@ export function useRepositoryByPath(path: string) {
 
     // Computed convenience properties
     repository,
-    isLoading:
-      repositoryResult._tag === 'Initial' && repositoryResult.waiting,
-  }
+    isLoading: repositoryResult._tag === "Initial" && repositoryResult.waiting,
+  };
 }
 
 /**
@@ -150,15 +139,15 @@ export function useRepositoryByPath(path: string) {
  * Components should handle null with early returns before calling this hook.
  */
 export function useRepositoryById(repositoryId: RepositoryId) {
-  const repositoryResult = useAtomValue(repositoryByIdAtom(repositoryId))
-  const refresh = useAtomRefresh(repositoryByIdAtom(repositoryId))
+  const repositoryResult = useAtomValue(repositoryByIdAtom(repositoryId));
+  const refresh = useAtomRefresh(repositoryByIdAtom(repositoryId));
 
   const repository = Result.match(repositoryResult, {
     onSuccess: (data) =>
       Array.isArray(data.value) ? data.value[0] : data.value,
     onFailure: () => null,
     onInitial: () => null,
-  })
+  });
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -169,8 +158,8 @@ export function useRepositoryById(repositoryId: RepositoryId) {
 
     // Computed convenience properties
     repository,
-    isLoading: repositoryResult._tag === 'Initial' && repositoryResult.waiting,
-  }
+    isLoading: repositoryResult._tag === "Initial" && repositoryResult.waiting,
+  };
 }
 
 /**
@@ -179,7 +168,7 @@ export function useRepositoryById(repositoryId: RepositoryId) {
  * Returns mutation atom for refreshing repository state.
  */
 export function useRefreshRepository() {
-  const [refreshResult, refresh] = useAtom(refreshRepositoryAtom)
+  const [refreshResult, refresh] = useAtom(refreshRepositoryAtom);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -190,7 +179,7 @@ export function useRefreshRepository() {
 
     // Computed convenience properties
     isRefreshing: refreshResult.waiting,
-  }
+  };
 }
 
 /**
@@ -199,7 +188,7 @@ export function useRefreshRepository() {
  * Returns full Result for exhaustive error handling.
  */
 export function useValidateRepository(path: string) {
-  const validationResult = useAtomValue(validateRepositoryAtom(path))
+  const validationResult = useAtomValue(validateRepositoryAtom(path));
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -207,23 +196,22 @@ export function useValidateRepository(path: string) {
 
     // Computed convenience properties
     isValidating:
-      validationResult._tag === 'Initial' && validationResult.waiting,
-  }
+      validationResult._tag === "Initial" && validationResult.waiting,
+  };
 }
 
 /**
  * Hook for repository metadata
  *
  * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires a non-null repositoryId.
+ * Components should handle null with early returns before calling this hook.
  */
-export function useRepositoryMetadata(repositoryId: RepositoryId | null) {
-  const metadataResult = useAtomValue(
-    repositoryId
-      ? repositoryMetadataAtom(repositoryId)
-      : (emptyNullAtom as unknown as ReturnType<typeof repositoryMetadataAtom>)
-  )
+export function useRepositoryMetadata(repositoryId: RepositoryId) {
+  const metadataResult = useAtomValue(repositoryMetadataAtom(repositoryId));
 
-  const metadata = Result.getOrElse(metadataResult, () => null)
+  const metadata = Result.getOrElse(metadataResult, () => null);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -231,10 +219,8 @@ export function useRepositoryMetadata(repositoryId: RepositoryId | null) {
 
     // Computed convenience properties
     metadata,
-    isLoading: repositoryId
-      ? metadataResult._tag === 'Initial' && metadataResult.waiting
-      : false,
-  }
+    isLoading: metadataResult._tag === "Initial" && metadataResult.waiting,
+  };
 }
 
 /**
@@ -243,12 +229,12 @@ export function useRepositoryMetadata(repositoryId: RepositoryId | null) {
  * Returns mutation atom for removing repository from cache.
  */
 export function useForgetRepository() {
-  const runForget = useAtomSet(forgetRepositoryAtom)
+  const runForget = useAtomSet(forgetRepositoryAtom);
 
   return {
     // Actions
     forget: runForget,
-  }
+  };
 }
 
 // ===== Commit Graph Hooks =====
@@ -257,22 +243,18 @@ export function useForgetRepository() {
  * Hook for commit graph
  *
  * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires a non-null repositoryId.
+ * Components should handle null with early returns before calling this hook.
  */
 export function useCommitGraph(
-  repositoryId: RepositoryId | null,
-  options?: GraphOptions
+  repositoryId: RepositoryId,
+  options?: GraphOptions,
 ) {
-  const graphResult = useAtomValue(
-    repositoryId
-      ? commitGraphAtom({ repositoryId, options })
-      : (emptyCommitGraphAtom as unknown as ReturnType<typeof commitGraphAtom>)
-  )
+  const graphResult = useAtomValue(commitGraphAtom({ repositoryId, options }));
+  const refresh = useAtomRefresh(commitGraphAtom({ repositoryId, options }));
 
-  const refresh = repositoryId
-    ? useAtomRefresh(commitGraphAtom({ repositoryId, options }))
-    : () => {}
-
-  const graph = Result.getOrElse(graphResult, () => null)
+  const graph = Result.getOrElse(graphResult, () => null);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -283,25 +265,24 @@ export function useCommitGraph(
 
     // Computed convenience properties
     graph,
-    isLoading: repositoryId
-      ? graphResult._tag === 'Initial' && graphResult.waiting
-      : false,
-  }
+    isLoading: graphResult._tag === "Initial" && graphResult.waiting,
+  };
 }
 
 /**
  * Hook for commit graph statistics
  *
  * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires a non-null repositoryId.
+ * Components should handle null with early returns before calling this hook.
  */
-export function useCommitGraphStatistics(repositoryId: RepositoryId | null) {
+export function useCommitGraphStatistics(repositoryId: RepositoryId) {
   const statisticsResult = useAtomValue(
-    repositoryId
-      ? commitGraphStatisticsAtom(repositoryId)
-      : (emptyNullAtom as unknown as ReturnType<typeof commitGraphStatisticsAtom>)
-  )
+    commitGraphStatisticsAtom(repositoryId),
+  );
 
-  const statistics = Result.getOrElse(statisticsResult, () => null)
+  const statistics = Result.getOrElse(statisticsResult, () => null);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -309,28 +290,22 @@ export function useCommitGraphStatistics(repositoryId: RepositoryId | null) {
 
     // Computed convenience properties
     statistics,
-    isLoading: repositoryId
-      ? statisticsResult._tag === 'Initial' && statisticsResult.waiting
-      : false,
-  }
+    isLoading: statisticsResult._tag === "Initial" && statisticsResult.waiting,
+  };
 }
 
 /**
  * Hook for specific commit
  *
  * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires non-null repositoryId and commitHash.
+ * Components should handle null with early returns before calling this hook.
  */
-export function useCommit(
-  repositoryId: RepositoryId | null,
-  commitHash: string | null
-) {
-  const commitResult = useAtomValue(
-    repositoryId && commitHash
-      ? commitAtom({ repositoryId, commitHash })
-      : (emptyCommitAtom as unknown as ReturnType<typeof commitAtom>)
-  )
+export function useCommit(repositoryId: RepositoryId, commitHash: string) {
+  const commitResult = useAtomValue(commitAtom({ repositoryId, commitHash }));
 
-  const commit = Result.getOrElse(commitResult, () => null)
+  const commit = Result.getOrElse(commitResult, () => null);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -338,29 +313,27 @@ export function useCommit(
 
     // Computed convenience properties
     commit,
-    isLoading:
-      repositoryId && commitHash
-        ? commitResult._tag === 'Initial' && commitResult.waiting
-        : false,
-  }
+    isLoading: commitResult._tag === "Initial" && commitResult.waiting,
+  };
 }
 
 /**
  * Hook for commit with refs
  *
  * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires non-null repositoryId and commitHash.
+ * Components should handle null with early returns before calling this hook.
  */
 export function useCommitWithRefs(
-  repositoryId: RepositoryId | null,
-  commitHash: string | null
+  repositoryId: RepositoryId,
+  commitHash: string,
 ) {
   const commitWithRefsResult = useAtomValue(
-    repositoryId && commitHash
-      ? commitWithRefsAtom({ repositoryId, commitHash })
-      : (emptyCommitWithRefsAtom as unknown as ReturnType<typeof commitWithRefsAtom>)
-  )
+    commitWithRefsAtom({ repositoryId, commitHash }),
+  );
 
-  const commitWithRefs = Result.getOrElse(commitWithRefsResult, () => null)
+  const commitWithRefs = Result.getOrElse(commitWithRefsResult, () => null);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -369,30 +342,28 @@ export function useCommitWithRefs(
     // Computed convenience properties
     commitWithRefs,
     isLoading:
-      repositoryId && commitHash
-        ? commitWithRefsResult._tag === 'Initial' &&
-          commitWithRefsResult.waiting
-        : false,
-  }
+      commitWithRefsResult._tag === "Initial" && commitWithRefsResult.waiting,
+  };
 }
 
 /**
  * Hook for commit history
  *
  * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires non-null repositoryId and branchName.
+ * Components should handle null with early returns before calling this hook.
  */
 export function useCommitHistory(
-  repositoryId: RepositoryId | null,
-  branchName: string | null,
-  maxCount?: number
+  repositoryId: RepositoryId,
+  branchName: string,
+  maxCount?: number,
 ) {
   const historyResult = useAtomValue(
-    repositoryId && branchName
-      ? commitHistoryAtom({ repositoryId, branchName, maxCount })
-      : (emptyCommitsArrayAtom as unknown as ReturnType<typeof commitHistoryAtom>)
-  )
+    commitHistoryAtom({ repositoryId, branchName, maxCount }),
+  );
 
-  const history = Result.getOrElse(historyResult, () => [])
+  const history = Result.getOrElse(historyResult, () => []);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -400,11 +371,8 @@ export function useCommitHistory(
 
     // Computed convenience properties
     history,
-    isLoading:
-      repositoryId && branchName
-        ? historyResult._tag === 'Initial' && historyResult.waiting
-        : false,
-  }
+    isLoading: historyResult._tag === "Initial" && historyResult.waiting,
+  };
 }
 
 // ===== Working Tree Hooks =====
@@ -413,19 +381,15 @@ export function useCommitHistory(
  * Hook for working tree status
  *
  * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires a non-null repositoryId.
+ * Components should handle null with early returns before calling this hook.
  */
-export function useWorkingTreeStatus(repositoryId: RepositoryId | null) {
-  const statusResult = useAtomValue(
-    repositoryId
-      ? workingTreeStatusAtom(repositoryId)
-      : (emptyWorkingTreeAtom as unknown as ReturnType<typeof workingTreeStatusAtom>)
-  )
+export function useWorkingTreeStatus(repositoryId: RepositoryId) {
+  const statusResult = useAtomValue(workingTreeStatusAtom(repositoryId));
+  const refresh = useAtomRefresh(workingTreeStatusAtom(repositoryId));
 
-  const refresh = repositoryId
-    ? useAtomRefresh(workingTreeStatusAtom(repositoryId))
-    : () => {}
-
-  const status = Result.getOrElse(statusResult, () => null)
+  const status = Result.getOrElse(statusResult, () => null);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -436,25 +400,24 @@ export function useWorkingTreeStatus(repositoryId: RepositoryId | null) {
 
     // Computed convenience properties
     status,
-    isLoading: repositoryId
-      ? statusResult._tag === 'Initial' && statusResult.waiting
-      : false,
-  }
+    isLoading: statusResult._tag === "Initial" && statusResult.waiting,
+  };
 }
 
 /**
  * Hook for working tree status summary
  *
  * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires a non-null repositoryId.
+ * Components should handle null with early returns before calling this hook.
  */
-export function useWorkingTreeStatusSummary(repositoryId: RepositoryId | null) {
+export function useWorkingTreeStatusSummary(repositoryId: RepositoryId) {
   const summaryResult = useAtomValue(
-    repositoryId
-      ? workingTreeStatusSummaryAtom(repositoryId)
-      : (emptyNullAtom as unknown as ReturnType<typeof workingTreeStatusSummaryAtom>)
-  )
+    workingTreeStatusSummaryAtom(repositoryId),
+  );
 
-  const summary = Result.getOrElse(summaryResult, () => null)
+  const summary = Result.getOrElse(summaryResult, () => null);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -462,10 +425,8 @@ export function useWorkingTreeStatusSummary(repositoryId: RepositoryId | null) {
 
     // Computed convenience properties
     summary,
-    isLoading: repositoryId
-      ? summaryResult._tag === 'Initial' && summaryResult.waiting
-      : false,
-  }
+    isLoading: summaryResult._tag === "Initial" && summaryResult.waiting,
+  };
 }
 
 /**
@@ -474,7 +435,7 @@ export function useWorkingTreeStatusSummary(repositoryId: RepositoryId | null) {
  * Returns mutation atom for staging files.
  */
 export function useStageFiles() {
-  const [stageResult, stage] = useAtom(stageFilesAtom)
+  const [stageResult, stage] = useAtom(stageFilesAtom);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -485,7 +446,7 @@ export function useStageFiles() {
 
     // Computed convenience properties
     isStaging: stageResult.waiting,
-  }
+  };
 }
 
 /**
@@ -494,7 +455,7 @@ export function useStageFiles() {
  * Returns mutation atom for unstaging files.
  */
 export function useUnstageFiles() {
-  const [unstageResult, unstage] = useAtom(unstageFilesAtom)
+  const [unstageResult, unstage] = useAtom(unstageFilesAtom);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -505,7 +466,7 @@ export function useUnstageFiles() {
 
     // Computed convenience properties
     isUnstaging: unstageResult.waiting,
-  }
+  };
 }
 
 /**
@@ -514,7 +475,7 @@ export function useUnstageFiles() {
  * Returns mutation atom for discarding changes.
  */
 export function useDiscardChanges() {
-  const [discardResult, discard] = useAtom(discardChangesAtom)
+  const [discardResult, discard] = useAtom(discardChangesAtom);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -525,22 +486,24 @@ export function useDiscardChanges() {
 
     // Computed convenience properties
     isDiscarding: discardResult.waiting,
-  }
+  };
 }
 
 /**
  * Hook for diff
  *
  * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires a non-null repositoryId.
+ * Components should handle null with early returns before calling this hook.
  */
-export function useDiff(repositoryId: RepositoryId | null, options: { path: string; staged?: boolean }) {
-  const diffResult = useAtomValue(
-    repositoryId
-      ? diffAtom({ repositoryId, options })
-      : (emptyNullAtom as unknown as ReturnType<typeof diffAtom>)
-  )
+export function useDiff(
+  repositoryId: RepositoryId,
+  options: { path: string; staged?: boolean },
+) {
+  const diffResult = useAtomValue(diffAtom({ repositoryId, options }));
 
-  const diff = Result.getOrElse(diffResult, () => null)
+  const diff = Result.getOrElse(diffResult, () => null);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -548,10 +511,8 @@ export function useDiff(repositoryId: RepositoryId | null, options: { path: stri
 
     // Computed convenience properties
     diff,
-    isLoading: repositoryId
-      ? diffResult._tag === 'Initial' && diffResult.waiting
-      : false,
-  }
+    isLoading: diffResult._tag === "Initial" && diffResult.waiting,
+  };
 }
 
 /**
@@ -560,7 +521,7 @@ export function useDiff(repositoryId: RepositoryId | null, options: { path: stri
  * Returns mutation atom for creating stash.
  */
 export function useCreateStash() {
-  const [createStashResult, createStash] = useAtom(createStashAtom)
+  const [createStashResult, createStash] = useAtom(createStashAtom);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -571,22 +532,21 @@ export function useCreateStash() {
 
     // Computed convenience properties
     isCreatingStash: createStashResult.waiting,
-  }
+  };
 }
 
 /**
  * Hook for stashes
  *
  * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires a non-null repositoryId.
+ * Components should handle null with early returns before calling this hook.
  */
-export function useStashes(repositoryId: RepositoryId | null) {
-  const stashesResult = useAtomValue(
-    repositoryId
-      ? stashesAtom(repositoryId)
-      : (emptyNullAtom as unknown as ReturnType<typeof stashesAtom>)
-  )
+export function useStashes(repositoryId: RepositoryId) {
+  const stashesResult = useAtomValue(stashesAtom(repositoryId));
 
-  const stashes = Result.getOrElse(stashesResult, () => [])
+  const stashes = Result.getOrElse(stashesResult, () => []);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -594,10 +554,8 @@ export function useStashes(repositoryId: RepositoryId | null) {
 
     // Computed convenience properties
     stashes,
-    isLoading: repositoryId
-      ? stashesResult._tag === 'Initial' && stashesResult.waiting
-      : false,
-  }
+    isLoading: stashesResult._tag === "Initial" && stashesResult.waiting,
+  };
 }
 
 /**
@@ -606,7 +564,7 @@ export function useStashes(repositoryId: RepositoryId | null) {
  * Returns mutation atom for popping stash.
  */
 export function usePopStash() {
-  const [popStashResult, popStash] = useAtom(popStashAtom)
+  const [popStashResult, popStash] = useAtom(popStashAtom);
 
   return {
     // Primary: Full Result for exhaustive error handling
@@ -617,5 +575,5 @@ export function usePopStash() {
 
     // Computed convenience properties
     isPoppingStash: popStashResult.waiting,
-  }
+  };
 }
