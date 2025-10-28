@@ -254,7 +254,7 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
          * Uses RepositoryService to discover and cache repositories.
          * Returns empty array if no workspace is configured.
          */
-        discoverWorkspaceRepositories: Effect.gen(function* () {
+        discoverWorkspaceRepositories: () => Effect.gen(function* () {
           const currentPath = store.get('currentPath') as string | null | undefined
 
           if (!currentPath) {
@@ -275,7 +275,7 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
          * Returns cached repositories discovered in the workspace.
          * If cache is empty, triggers discovery first.
          */
-        getWorkspaceRepositories: Effect.gen(function* () {
+        getWorkspaceRepositories: () => Effect.gen(function* () {
           const currentPath = store.get('currentPath') as string | null | undefined
 
           if (!currentPath) {

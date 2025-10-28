@@ -123,8 +123,8 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
                 if (error._tag === 'TimeoutException') {
                   return new GitCommandTimeoutError({
                     commandId: id,
-                    timeoutMs: timeoutMs!,
-                    message: `Git command timed out after ${timeoutMs}ms`,
+                    timeoutMs: timeoutMs ?? 0,
+                    message: `Git command timed out after ${timeoutMs ?? 0}ms`,
                   })
                 }
                 // Check if already a GitCommandDomainError
@@ -183,7 +183,7 @@ export class NodeGitCommandRunner extends Effect.Service<NodeGitCommandRunner>()
             }
 
             return handle
-          }),
+          }).pipe(Effect.provide(NodeContext.layer)),
       }
 
       return runner

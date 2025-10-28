@@ -68,14 +68,14 @@ export const setupWorkspaceIpcHandlers = Effect.gen(function* () {
 
   // Discover repositories in current workspace
   registerIpcHandler(WorkspaceIpcContracts.discoverWorkspaceRepositories, () =>
-    workspaceService.discoverWorkspaceRepositories.pipe(
+    workspaceService.discoverWorkspaceRepositories().pipe(
       Effect.map((repos: any) => repos.map(toSharedRepository))
     )
   )
 
   // Get cached repositories from workspace
   registerIpcHandler(WorkspaceIpcContracts.getWorkspaceRepositories, () =>
-    workspaceService.getWorkspaceRepositories.pipe(
+    workspaceService.getWorkspaceRepositories().pipe(
       Effect.map((repos: any) => repos.map(toSharedRepository))
     )
   )
