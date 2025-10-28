@@ -387,12 +387,12 @@ export const discardChangesAtom = sourceControlRuntime.fn(
  * Gets diff for file or commit
  */
 export const diffAtom = Atom.family(
-  (params: { repositoryId: RepositoryId; options: any }) =>
+  (params: { repositoryId: RepositoryId; options: { path: string; staged?: boolean } }) =>
     sourceControlRuntime
       .atom(
         Effect.gen(function* () {
           const client = yield* SourceControlClient
-          return yield* client.getDiff(params.repositoryId, params.options)
+          return yield* client.getDiff(params.repositoryId, params.options.path, params.options.staged)
         })
       )
       .pipe(Atom.setIdleTTL(Duration.seconds(10)))
@@ -489,4 +489,36 @@ export const emptyCommitGraphAtom = Atom.make(() =>
  */
 export const emptyWorkingTreeAtom = Atom.make(() =>
   Result.success(null as WorkingTree | null)
+)
+
+/**
+ * Empty nullable atom (generic)
+ * Returns null (for fallback when no specific type needed)
+ */
+export const emptyNullAtom = Atom.make(() =>
+  Result.success(null)
+)
+
+/**
+ * Empty commit atom
+ * Returns null commit (for fallback)
+ */
+export const emptyCommitAtom = Atom.make(() =>
+  Result.success(null as Commit | null)
+)
+
+/**
+ * Empty commit with refs atom
+ * Returns null commit with refs (for fallback)
+ */
+export const emptyCommitWithRefsAtom = Atom.make(() =>
+  Result.success(null as CommitWithRefs | null)
+)
+
+/**
+ * Empty commits array atom
+ * Returns empty commits array (for fallback)
+ */
+export const emptyCommitsArrayAtom = Atom.make(() =>
+  Result.success([] as Commit[])
 )

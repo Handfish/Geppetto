@@ -137,7 +137,7 @@ export function useWatcherLogs(watcherId: string, limit?: number) {
   console.log(`[useWatcherLogs] logsResult:`, {
     tag: logsResult._tag,
     waiting: logsResult.waiting,
-    dataLength: logsResult._tag === 'Success' ? (logsResult.value as any[]).length : 0,
+    dataLength: logsResult._tag === 'Success' ? (logsResult.value as readonly unknown[]).length : 0,
   })
 
   const logs = Result.getOrElse(logsResult, () => [])

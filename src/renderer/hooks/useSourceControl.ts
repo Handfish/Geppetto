@@ -40,6 +40,10 @@ import {
   emptyRepositoriesAtom,
   emptyCommitGraphAtom,
   emptyWorkingTreeAtom,
+  emptyNullAtom,
+  emptyCommitAtom,
+  emptyCommitWithRefsAtom,
+  emptyCommitsArrayAtom,
 } from '../atoms/source-control-atoms'
 
 /**
@@ -224,7 +228,7 @@ export function useRepositoryMetadata(repositoryId: RepositoryId | null) {
   const metadataResult = useAtomValue(
     repositoryId
       ? repositoryMetadataAtom(repositoryId)
-      : (emptyRepositoriesAtom as any)
+      : emptyNullAtom
   )
 
   const metadata = Result.getOrElse(metadataResult, () => null)
@@ -302,7 +306,7 @@ export function useCommitGraphStatistics(repositoryId: RepositoryId | null) {
   const statisticsResult = useAtomValue(
     repositoryId
       ? commitGraphStatisticsAtom(repositoryId)
-      : (emptyCommitGraphAtom as any)
+      : emptyNullAtom
   )
 
   const statistics = Result.getOrElse(statisticsResult, () => null)
@@ -331,7 +335,7 @@ export function useCommit(
   const commitResult = useAtomValue(
     repositoryId && commitHash
       ? commitAtom({ repositoryId, commitHash })
-      : (emptyCommitGraphAtom as any)
+      : emptyCommitAtom
   )
 
   const commit = Result.getOrElse(commitResult, () => null)
@@ -361,7 +365,7 @@ export function useCommitWithRefs(
   const commitWithRefsResult = useAtomValue(
     repositoryId && commitHash
       ? commitWithRefsAtom({ repositoryId, commitHash })
-      : (emptyCommitGraphAtom as any)
+      : emptyCommitWithRefsAtom
   )
 
   const commitWithRefs = Result.getOrElse(commitWithRefsResult, () => null)
@@ -393,7 +397,7 @@ export function useCommitHistory(
   const historyResult = useAtomValue(
     repositoryId && branchName
       ? commitHistoryAtom({ repositoryId, branchName, maxCount })
-      : (emptyCommitGraphAtom as any)
+      : emptyCommitsArrayAtom
   )
 
   const history = Result.getOrElse(historyResult, () => [])
@@ -455,7 +459,7 @@ export function useWorkingTreeStatusSummary(repositoryId: RepositoryId | null) {
   const summaryResult = useAtomValue(
     repositoryId
       ? workingTreeStatusSummaryAtom(repositoryId)
-      : (emptyWorkingTreeAtom as any)
+      : emptyNullAtom
   )
 
   const summary = Result.getOrElse(summaryResult, () => null)
@@ -537,9 +541,9 @@ export function useDiscardChanges() {
  *
  * Returns full Result for exhaustive error handling.
  */
-export function useDiff(repositoryId: RepositoryId | null, options: any) {
+export function useDiff(repositoryId: RepositoryId | null, options: { path: string; staged?: boolean }) {
   const diffResult = useAtomValue(
-    repositoryId ? diffAtom({ repositoryId, options }) : (emptyWorkingTreeAtom as any)
+    repositoryId ? diffAtom({ repositoryId, options }) : emptyNullAtom
   )
 
   const diff = Result.getOrElse(diffResult, () => null)
@@ -583,7 +587,7 @@ export function useCreateStash() {
  */
 export function useStashes(repositoryId: RepositoryId | null) {
   const stashesResult = useAtomValue(
-    repositoryId ? stashesAtom(repositoryId) : (emptyWorkingTreeAtom as any)
+    repositoryId ? stashesAtom(repositoryId) : emptyNullAtom
   )
 
   const stashes = Result.getOrElse(stashesResult, () => [])

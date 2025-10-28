@@ -18,6 +18,32 @@ import type {
   TmuxSession,
   LogEntry,
 } from '../../../shared/schemas/ai-watchers'
+import type { NetworkError } from '../../../shared/schemas/errors'
+import type { WatcherNotFoundError } from '../../../shared/schemas/ai-watchers/errors'
+
+// Type-safe window extension for dev API
+interface DevAiWatchersAPI {
+  listWatchers: () => readonly AiWatcher[]
+  listTmuxSessions: () => readonly TmuxSession[]
+  createWatcher: (config: Partial<AiWatcherConfig>) => void
+  attachToTmux: (sessionName: string) => void
+  stopWatcher: (watcherId: string) => void
+  startWatcher: (watcherId: string) => void
+  showPanel: () => void
+  hidePanel: () => void
+  togglePanel: () => void
+  getResults: () => {
+    watchers: unknown
+    sessions: unknown
+    createResult: unknown
+  }
+}
+
+declare global {
+  interface Window {
+    __DEV_AI_WATCHERS__?: DevAiWatchersAPI
+  }
+}
 
 // Helper to clean object by removing undefined properties
 // This ensures optional schema fields work correctly over IPC
@@ -140,21 +166,15 @@ function WatcherLogsDisplay({
               {logsResult.waiting ? 'Loading logs...' : 'Ready to load logs'}
             </div>
           ))
-          .onErrorTag('AuthenticationError', error => (
-            <div className="text-red-400">
-              Authentication error: {error.message}
-            </div>
-          ))
-          .onErrorTag('NetworkError', error => (
+          .onErrorTag('NetworkError', (error: NetworkError) => (
             <div className="text-red-400">Network error: {error.message}</div>
           ))
-          .onErrorTag('NotFoundError', error => (
+          .onErrorTag('WatcherNotFoundError', (error: WatcherNotFoundError) => (
             <div className="text-yellow-400">
               Watcher not found: {error.message}
             </div>
           ))
-          .onSuccess(value => {
-            const logs = value as readonly LogEntry[]
+          .onSuccess((logs: readonly LogEntry[]) => {
             if (logs.length === 0) {
               return <div className="text-gray-500">No logs yet</div>
             }
@@ -185,7 +205,7 @@ function WatcherLogsDisplay({
               </div>
             )
           })
-          .onDefect(defect => (
+          .onDefect((defect: unknown) => (
             <div className="text-red-400">
               Unexpected error: {String(defect)}
             </div>
@@ -261,10 +281,10 @@ export function AiWatcherDevPanel() {
         listWatchers: () => {
           console.log('[AI Watcher] Listing watchers...')
           refreshWatchers()
-          const watchers = Result.getOrElse(
+          const watchers: readonly AiWatcher[] = Result.getOrElse(
             watchersResult,
             () => []
-          ) as readonly AiWatcher[]
+          )
           if (watchers && watchers.length > 0) {
             console.table(
               watchers.map(w => ({
@@ -282,10 +302,10 @@ export function AiWatcherDevPanel() {
         listTmuxSessions: () => {
           console.log('[AI Watcher] Listing tmux sessions...')
           refreshSessions()
-          const sessions = Result.getOrElse(
+          const sessions: readonly TmuxSession[] = Result.getOrElse(
             sessionsResult,
             () => []
-          ) as readonly TmuxSession[]
+          )
           if (sessions && sessions.length > 0) {
             console.table(
               sessions.map(s => ({
@@ -353,12 +373,12 @@ export function AiWatcherDevPanel() {
         }),
       }
 
-      ;(window as any).__DEV_AI_WATCHERS__ = api
+      window.__DEV_AI_WATCHERS__ = api
     }
 
     return () => {
       if (process.env.NODE_ENV === 'development') {
-        delete (window as any).__DEV_AI_WATCHERS__
+        delete window.__DEV_AI_WATCHERS__
       }
     }
   }, [
@@ -396,7 +416,7 @@ export function AiWatcherDevPanel() {
           <button
             className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded"
             onClick={() =>
-              (window as any).__DEV_AI_WATCHERS__.listTmuxSessions()
+              window.__DEV_AI_WATCHERS__?.listTmuxSessions()
             }
           >
             List Tmux Sessions
@@ -409,8 +429,7 @@ export function AiWatcherDevPanel() {
                   Click button to load sessions...
                 </div>
               ))
-              .onSuccess(value => {
-                const sessions = value as readonly TmuxSession[]
+              .onSuccess((sessions: readonly TmuxSession[]) => {
                 if (sessions.length > 0) {
                   return (
                     <div className="space-y-1">
@@ -465,7 +484,7 @@ export function AiWatcherDevPanel() {
           <div className="flex gap-2 mb-2">
             <button
               className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded"
-              onClick={() => (window as any).__DEV_AI_WATCHERS__.listWatchers()}
+              onClick={() => window.__DEV_AI_WATCHERS__?.listWatchers()}
             >
               List Watchers
             </button>
@@ -499,8 +518,7 @@ export function AiWatcherDevPanel() {
                   Click button to load watchers...
                 </div>
               ))
-              .onSuccess(value => {
-                const watchers = value as readonly AiWatcher[]
+              .onSuccess((watchers: readonly AiWatcher[]) => {
                 if (watchers.length > 0) {
                   return (
                     <div className="space-y-1">

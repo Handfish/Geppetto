@@ -1,5 +1,6 @@
 import React from 'react'
 import { Result, useAtomValue } from '@effect-atom/atom-react'
+import { Option } from 'effect'
 import { useAiProviderAuth } from '../hooks/useAiProviderAtoms'
 import type {
   AiProviderType,
@@ -154,16 +155,16 @@ function ProviderUsageSection({
     }
 
     if (Result.isFailure(signInResult)) {
-      const error = Result.match(signInResult, {
-        onSuccess: () => null,
-        onFailure: (data) => (data as unknown as { error: any }).error,
-        onInitial: () => null,
-      })
+      const errorOption = Result.error(signInResult)
 
-      if (error?._tag === 'AiFeatureUnavailableError') {
-        const message = error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
-        setFeatureLockMessage(message)
-        signInFeatureToastShownRef.current = true
+      if (Option.isSome(errorOption)) {
+        const error = errorOption.value as SignInError
+
+        if (error._tag === 'AiFeatureUnavailableError') {
+          const message = error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
+          setFeatureLockMessage(message)
+          signInFeatureToastShownRef.current = true
+        }
       }
     }
   }, [signInResult])
@@ -175,22 +176,22 @@ function ProviderUsageSection({
     }
 
     if (Result.isFailure(usageResult)) {
-      const error = Result.match(usageResult, {
-        onSuccess: () => null,
-        onFailure: (data) => (data as unknown as { error: any }).error,
-        onInitial: () => null,
-      })
+      const errorOption = Result.error(usageResult)
 
-      if (error?._tag === 'AiFeatureUnavailableError') {
-        const message = error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
-        setFeatureLockMessage(message)
+      if (Option.isSome(errorOption)) {
+        const error = errorOption.value as UsageError
 
-        if (
-          !signInFeatureToastShownRef.current &&
-          !usageFeatureToastShownRef.current
-        ) {
-          showProFeatureLockedToast(message)
-          usageFeatureToastShownRef.current = true
+        if (error._tag === 'AiFeatureUnavailableError') {
+          const message = error.message ?? DEFAULT_PRO_FEATURE_MESSAGE
+          setFeatureLockMessage(message)
+
+          if (
+            !signInFeatureToastShownRef.current &&
+            !usageFeatureToastShownRef.current
+          ) {
+            showProFeatureLockedToast(message)
+            usageFeatureToastShownRef.current = true
+          }
         }
       }
     }
