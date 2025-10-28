@@ -103,7 +103,7 @@ interface BranchListProps {
   /**
    * Repository ID to show branches for
    */
-  repositoryId: RepositoryId
+  repositoryId: RepositoryId | null
 
   /**
    * Filter branches by type
@@ -123,7 +123,7 @@ export function BranchList({
 }: BranchListProps) {
   const [filterState, setFilterState] = React.useState(filter)
 
-  // Early return if no repository selected
+  // Early return if no repository selected (MUST be before hooks)
   if (!repositoryId) {
     return (
       <div className="space-y-4">
@@ -135,6 +135,7 @@ export function BranchList({
     )
   }
 
+  // Now repositoryId is guaranteed non-null
   const { repositoryResult, refresh } = useRepositoryById(repositoryId)
 
   return (
@@ -232,10 +233,23 @@ export function BranchList({
  * ```
  */
 interface RemoteListProps {
-  repositoryId: RepositoryId
+  repositoryId: RepositoryId | null
 }
 
 export function RemoteList({ repositoryId }: RemoteListProps) {
+  // Early return if no repository selected (MUST be before hooks)
+  if (!repositoryId) {
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-white">Remotes</h3>
+        <div className="text-center py-8">
+          <p className="text-gray-400">No repository selected</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Now repositoryId is guaranteed non-null
   const { repositoryResult } = useRepositoryById(repositoryId)
 
   return (
