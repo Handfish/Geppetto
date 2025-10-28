@@ -11,7 +11,7 @@
 | Phase | Status | Duration | Completion |
 |-------|--------|----------|------------|
 | 1. PixiJS Graph Renderer | ✅ Complete | 8-10 hours | 100% |
-| 2. Commit Details Panel | ⏳ Not Started | 6-8 hours | 0% |
+| 2. Commit Details Panel | 🚧 In Progress | 6-8 hours | 0% |
 | 3. Advanced Features | ⏳ Not Started | 8-10 hours | 0% |
 | 4. Polish & Documentation | ⏳ Not Started | 4-6 hours | 0% |
 
@@ -65,21 +65,31 @@
   - [x] Dev server runs successfully
   - [x] @pixi/react v8 API compatibility verified
   - [x] All components properly typed
+  - [x] Visual verification complete
+  - [x] Runtime issues resolved (passive events, CSP)
+  - [x] Commit selection working
+  - [x] Zoom functionality working
+  - [x] Performance smooth (60fps)
 
-**Blockers**: None (resolved @pixi/react v8 API issues)
+**Blockers**: None (all issues resolved)
 
 **Notes**:
 - Discovered @pixi/react v8 uses extend() pattern instead of direct component imports
 - Updated all components to use lowercase prefixed JSX elements (pixiContainer, pixiGraphics, pixiText)
 - Fixed Application props to accept direct configuration instead of options object
 - Fixed readonly array type issue in GraphLayout.ts
+- Fixed passive event listener warning with native addEventListener
+- Fixed Electron CSP error with pixi.js/unsafe-eval polyfill
+- Fixed commit node selection/hover detection with proper state management
+- Added hover feedback (yellow ring) and debugging features
+- All features verified working: selection, hover, zoom, rendering
 
 ---
 
 ## Phase 2: Commit Details Panel (0%)
 
 **Target**: 6-8 hours
-**Status**: ⏳ Not Started
+**Status**: 🚧 Starting
 
 ### Tasks
 

@@ -55,6 +55,9 @@ export function GraphStage({
     scale: 1.0,
   })
 
+  // Hover state for debugging
+  const [hoveredCommit, setHoveredCommit] = useState<string | null>(null)
+
   // Ref for the container div to attach native wheel event
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -92,9 +95,26 @@ export function GraphStage({
     }
   }, [])
 
+  // Get hovered node info for display
+  const hoveredNode = hoveredCommit ? layout.nodes.get(hoveredCommit as any) : null
+
   return (
-    <div ref={containerRef} className="border border-gray-700 rounded">
-      <Application
+    <div className="relative">
+      {/* Hover info overlay - for debugging */}
+      {hoveredNode && (
+        <div className="absolute top-0 left-0 right-0 z-10 bg-yellow-900/90 text-yellow-100 px-3 py-2 text-xs font-mono border-b border-yellow-700">
+          <div className="flex items-center gap-4">
+            <span className="font-semibold">HOVERING:</span>
+            <span className="text-yellow-300">{hoveredNode.commit.hash.slice(0, 7)}</span>
+            <span className="truncate flex-1">{hoveredNode.commit.subject}</span>
+            <span className="text-yellow-400">
+              pos: ({hoveredNode.x.toFixed(0)}, {hoveredNode.y.toFixed(0)})
+            </span>
+          </div>
+        </div>
+      )}
+      <div ref={containerRef} className="border border-gray-700 rounded">
+        <Application
         width={width}
         height={height}
         backgroundColor={defaultTheme.backgroundColor} // gray-800 for dark mode
@@ -127,15 +147,42 @@ export function GraphStage({
           })}
 
           {/* Render commit nodes */}
-          {Array.from(layout.nodes.values()).map((node) => (
-            <CommitNode
-              key={node.commit.hash}
-              node={node}
-              theme={defaultTheme}
-              isSelected={node.commit.hash === selectedCommit}
-              onSelect={onCommitSelect ?? (() => {})}
-            />
-          ))}
+          {/* Sort by y position to ensure render order matches visual layout */}
+          {Array.from(layout.nodes.values())
+            .sort((a, b) => a.y - b.y)
+            .map((node) => {
+              const isSelected = node.commit.hash === selectedCommit
+              if (isSelected) {
+                console.log('[GraphStage] Rendering selected node:', {
+                  hash: node.commit.hash.slice(0, 7),
+                  subject: node.commit.subject,
+                  selectedCommit: selectedCommit?.slice(0, 7),
+                  position: { x: node.x, y: node.y },
+                })
+              }
+              return (
+                <CommitNode
+                  key={node.commit.hash}
+                  node={node}
+                  theme={defaultTheme}
+                  isSelected={isSelected}
+                  onSelect={onCommitSelect ?? (() => {})}
+                  onHover={(hash) => {
+                    setHoveredCommit(hash)
+                    if (hash) {
+                      const hoveredNode = layout.nodes.get(hash as any)
+                      if (hoveredNode) {
+                        console.log('[GraphStage] Hover on node:', {
+                          hash: hash.slice(0, 7),
+                          subject: hoveredNode.commit.subject,
+                          position: { x: hoveredNode.x, y: hoveredNode.y },
+                        })
+                      }
+                    }
+                  }}
+                />
+              )
+            })}
 
           {/* Render ref labels (branches/tags) */}
           {Array.from(layout.nodes.values()).map((node) =>
@@ -155,6 +202,7 @@ export function GraphStage({
           )}
         </pixiContainer>
       </Application>
+      </div>
     </div>
   )
 }

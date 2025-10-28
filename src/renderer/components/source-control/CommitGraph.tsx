@@ -126,6 +126,11 @@ export function CommitGraphView({
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
 
   const handleCommitSelect = (hash: string) => {
+    console.log('[CommitGraphView] handleCommitSelect called:', {
+      hash: hash.slice(0, 7),
+      fullHash: hash,
+      previousSelected: selectedCommit?.slice(0, 7),
+    })
     setSelectedCommit(hash)
     onCommitSelect?.(hash)
   }
