@@ -740,28 +740,118 @@ Added comprehensive state management and event handling:
 
 ## Phase 2.2: File Changes Implementation
 
-### [Date] - File Changes List
+### 2025-10-28 - Full Backend and Frontend Implementation
 
-**Data Source**:
-- Need to determine if we need new IPC handler for file diffs
-- Current useCommit hook provides commit data
-- May need to add getDiff handler
+**Implementation Steps Completed**:
 
-**File Change Schema**:
-```typescript
-interface FileChange {
-  path: string
-  status: 'added' | 'modified' | 'deleted' | 'renamed'
-  additions: number
-  deletions: number
-}
+1. **IPC Contract** (`ipc-contracts.ts`):
+   - Added `'source-control:get-commit-files'` contract
+   - Input: `repositoryId`, `commitHash`
+   - Output: `Array<FileChange>`
+   - Errors: `NotFoundError`, `GitOperationError`
+
+2. **Port Interface** (`commit-operations-port.ts`):
+   - Added `getCommitFiles` method to `CommitOperationsPort`
+   - Returns array of file changes with status and stats
+
+3. **Backend Service** (`commit-graph-service.ts`):
+   - Implemented `getCommitFiles` method
+   - Uses two git commands for complete information:
+     - `git show --numstat` for additions/deletions counts
+     - `git show --name-status` for file status and renames
+   - Parses and combines output into FileChange objects
+   - Handles renamed files with old/new paths
+   - Maps git status codes (A/M/D/R/C) to FileStatus enum
+
+4. **IPC Handler** (`source-control-handlers.ts`):
+   - Registered handler for `'source-control:get-commit-files'`
+   - Maps domain file changes to shared schema
+   - Full type safety maintained
+
+5. **Client Method** (`source-control-client.ts`):
+   - Added `getCommitFiles` method
+   - Type-safe wrapper around IPC call
+
+6. **Atom** (`source-control-atoms.ts`):
+   - Created `commitFilesAtom` atom family
+   - Memoized params: `{ repositoryId, commitHash }`
+   - Reactivity key: `source-control:commit:{id}:{hash}`
+   - 10-minute TTL for caching
+
+7. **Hook** (`useSourceControl.ts`):
+   - Created `useCommitFiles` hook
+   - Returns `filesResult` for Result.builder pattern
+   - Memoizes params to prevent atom churn
+   - Includes loading and convenience states
+
+8. **UI Component** (`FileChangesList.tsx`):
+   - Replaced placeholder with fully functional component
+   - Uses `useCommitFiles` hook for data
+   - Result.builder pattern for exhaustive error handling
+   - Features:
+     - File status badges (A/M/D/R/C with colors)
+     - Line count statistics (+additions/-deletions)
+     - Renamed file tracking (shows old → new path)
+     - Summary with total files and line changes
+     - Hover effects for interactive feel
+     - Empty state for commits with no changes
+
+**Git Command Details**:
+
+```bash
+# Get line counts (numstat)
+git show --numstat --format= <hash>
+# Output: additions\tdeletions\tfilepath
+
+# Get file status (name-status)
+git show --name-status --format= <hash>
+# Output: status\tpath OR status\toldpath\tnewpath
 ```
 
-**Challenges**:
+**Status Code Mapping**:
+- `A` → `added` (green)
+- `M` → `modified` (blue)
+- `D` → `deleted` (red)
+- `R` → `renamed` (purple)
+- `C` → `copied` (cyan)
 
-**Solutions**:
+**UI Design**:
+- Clean file list with status badges
+- Monospace font for file paths and stats
+- Color-coded additions (green) and deletions (red)
+- Responsive hover states
+- Total summary at top
+- Handles edge cases (no changes, binary files)
+
+**Type Safety**:
+- ✅ Full end-to-end type safety
+- ✅ Effect Schema validation at IPC boundary
+- ✅ Branded types throughout (RepositoryId, CommitHash)
+- ✅ Result pattern for error handling
+
+**Testing Status**:
+- ✅ TypeScript compilation passes
+- ✅ Dev server running successfully
+- ✅ No runtime errors in build
+- ⏳ Visual testing pending
+
+**Files Modified/Created**:
+- Modified: `ipc-contracts.ts`
+- Modified: `commit-operations-port.ts`
+- Modified: `commit-graph-service.ts`
+- Modified: `source-control-handlers.ts`
+- Modified: `source-control-client.ts`
+- Modified: `source-control-atoms.ts`
+- Modified: `useSourceControl.ts`
+- Modified: `FileChangesList.tsx`
+- Modified: `CommitDetailsPanel.tsx`
 
 **Notes**:
+- Phase 2.2 complete - fully functional file changes display
+- All backend, IPC, atom, hook, and UI layers implemented
+- Ready for visual testing
+- Performance optimized with 10-minute TTL caching
+- No breaking changes to existing code
 
 ---
 

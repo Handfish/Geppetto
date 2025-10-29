@@ -9,6 +9,7 @@ import type {
   WorkingTree,
   Commit,
   CommitWithRefs,
+  FileChange,
 } from '../../shared/schemas/source-control'
 
 /**
@@ -283,6 +284,27 @@ export const commitHistoryAtom = Atom.family(
           `source-control:repository:${params.repositoryId}`,
         ]),
         Atom.setIdleTTL(Duration.seconds(30))
+      )
+)
+
+/**
+ * Commit files atom
+ * Gets files changed in a commit
+ */
+export const commitFilesAtom = Atom.family(
+  (params: { repositoryId: RepositoryId; commitHash: string }) =>
+    sourceControlRuntime
+      .atom(
+        Effect.gen(function* () {
+          const client = yield* SourceControlClient
+          return yield* client.getCommitFiles(params.repositoryId, params.commitHash)
+        })
+      )
+      .pipe(
+        Atom.withReactivity([
+          `source-control:commit:${params.repositoryId}:${params.commitHash}`,
+        ]),
+        Atom.setIdleTTL(Duration.minutes(10))
       )
 )
 

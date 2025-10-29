@@ -304,6 +304,30 @@ export interface CommitOperationsPort {
     commit1: CommitHash,
     commit2: CommitHash
   ): Effect.Effect<CommitHash, RepositoryNotFoundError | GraphBuildError>
+
+  /**
+   * Get files changed in a commit
+   *
+   * Returns list of files with their change status and line counts.
+   *
+   * @param repositoryId - Repository identifier
+   * @param commitHash - Commit hash
+   * @returns Array of file changes with status and stats
+   */
+  getCommitFiles(
+    repositoryId: RepositoryId,
+    commitHash: CommitHash
+  ): Effect.Effect<
+    Array<{
+      path: string
+      status: 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'unmodified' | 'untracked' | 'ignored' | 'conflicted'
+      staged: boolean
+      oldPath?: string
+      additions?: number
+      deletions?: number
+    }>,
+    RepositoryNotFoundError | GraphBuildError
+  >
 }
 
 /**

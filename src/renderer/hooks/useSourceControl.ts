@@ -24,6 +24,7 @@ import {
   commitAtom,
   commitWithRefsAtom,
   commitHistoryAtom,
+  commitFilesAtom,
   workingTreeStatusAtom,
   workingTreeStatusSummaryAtom,
   stageFilesAtom,
@@ -398,6 +399,38 @@ export function useCommitHistory(
     // Computed convenience properties
     history,
     isLoading: historyResult._tag === "Initial" && historyResult.waiting,
+  };
+}
+
+/**
+ * Hook for commit files
+ *
+ * Returns full Result for exhaustive error handling.
+ *
+ * **IMPORTANT**: This hook requires non-null repositoryId and commitHash.
+ * Components should handle null with early returns before calling this hook.
+ */
+export function useCommitFiles(
+  repositoryId: RepositoryId,
+  commitHash: string,
+) {
+  // Memoize params to prevent atom family from creating new subscriptions on every render
+  const params = useMemo(
+    () => ({ repositoryId, commitHash }),
+    [repositoryId.value, commitHash]
+  );
+
+  const filesResult = useAtomValue(commitFilesAtom(params));
+
+  const files = Result.getOrElse(filesResult, () => []);
+
+  return {
+    // Primary: Full Result for exhaustive error handling
+    filesResult,
+
+    // Computed convenience properties
+    files,
+    isLoading: filesResult._tag === "Initial" && filesResult.waiting,
   };
 }
 

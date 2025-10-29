@@ -1,64 +1,162 @@
 import React from 'react'
+import { Result } from '@effect-atom/atom-react'
+import { useCommitFiles } from '../../../hooks/useSourceControl'
+import { ErrorAlert, LoadingSpinner } from '../../ui/ErrorAlert'
+import type { RepositoryId, FileChange } from '../../../../shared/schemas/source-control'
+import type {
+  GitOperationError,
+  NotFoundError,
+  NetworkError,
+} from '../../../../shared/schemas/errors'
 
 /**
  * FileChangesList Component
  *
  * Displays the list of files changed in a commit.
  * Shows file path, status (added/modified/deleted), and stats (additions/deletions).
- *
- * **NOTE**: This component is a placeholder. To implement fully, we need:
- * 1. New IPC contract: 'source-control:get-commit-files'
- * 2. Backend handler to get file changes for a commit
- * 3. Schema for commit file changes (can reuse FileChange from working-tree)
- * 4. Atom and hook for commit files
- *
- * For now, shows a message indicating the feature is pending backend support.
  */
 
 interface FileChangesListProps {
-  repositoryId: string
+  repositoryId: RepositoryId
   commitHash: string
+}
+
+/**
+ * FileStatusBadge - Displays file change status with appropriate styling
+ */
+function FileStatusBadge({ status }: { status: FileChange['status'] }) {
+  const colors = {
+    added: 'bg-green-900 text-green-200',
+    modified: 'bg-blue-900 text-blue-200',
+    deleted: 'bg-red-900 text-red-200',
+    renamed: 'bg-purple-900 text-purple-200',
+    copied: 'bg-cyan-900 text-cyan-200',
+    unmodified: 'bg-gray-700 text-gray-300',
+    untracked: 'bg-yellow-900 text-yellow-200',
+    ignored: 'bg-gray-600 text-gray-400',
+    conflicted: 'bg-orange-900 text-orange-200',
+  }
+
+  const labels = {
+    added: 'A',
+    modified: 'M',
+    deleted: 'D',
+    renamed: 'R',
+    copied: 'C',
+    unmodified: '',
+    untracked: '?',
+    ignored: 'I',
+    conflicted: 'U',
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center justify-center w-5 h-5 text-xs font-mono font-semibold rounded ${colors[status]}`}
+    >
+      {labels[status]}
+    </span>
+  )
+}
+
+/**
+ * FileChangeItem - Displays a single file change
+ */
+function FileChangeItem({ file }: { file: FileChange }) {
+  return (
+    <div className="flex items-start gap-3 py-2 px-3 hover:bg-gray-800 rounded transition-colors">
+      <FileStatusBadge status={file.status} />
+      <div className="flex-1 min-w-0">
+        <div className="text-sm text-white font-mono truncate">{file.path}</div>
+        {file.oldPath && file.status === 'renamed' && (
+          <div className="text-xs text-gray-400 font-mono truncate">
+            ← {file.oldPath}
+          </div>
+        )}
+      </div>
+      {(file.additions !== undefined || file.deletions !== undefined) && (
+        <div className="flex items-center gap-2 text-xs font-mono">
+          {file.additions !== undefined && file.additions > 0 && (
+            <span className="text-green-400">+{file.additions}</span>
+          )}
+          {file.deletions !== undefined && file.deletions > 0 && (
+            <span className="text-red-400">-{file.deletions}</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function FileChangesList({
   repositoryId,
   commitHash,
 }: FileChangesListProps) {
-  return (
-    <div className="p-4 border border-yellow-700 bg-yellow-900/20 rounded">
-      <div className="flex items-start gap-3">
-        <div className="text-yellow-400">
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        </div>
-        <div className="flex-1 space-y-2">
-          <h4 className="text-sm font-semibold text-yellow-200">
-            File Changes List - Coming Soon
-          </h4>
-          <p className="text-xs text-yellow-100">
-            To display file changes for this commit, we need to implement:
-          </p>
-          <ul className="text-xs text-yellow-100 list-disc list-inside space-y-1">
-            <li>Backend IPC handler for getting commit file changes</li>
-            <li>Atom and hook for fetching commit files</li>
-            <li>UI for displaying file list with stats</li>
-          </ul>
-          <div className="text-xs text-yellow-200 font-mono bg-yellow-900/30 p-2 rounded mt-2">
-            Commit: {commitHash.slice(0, 7)}
+  const { filesResult } = useCommitFiles(repositoryId, commitHash)
+
+  return Result.builder(filesResult)
+    .onInitial(() => (
+      <div className="flex items-center justify-center py-12">
+        <LoadingSpinner size="md" />
+      </div>
+    ))
+    .onErrorTag('NotFoundError', (error: NotFoundError) => (
+      <ErrorAlert error={error} message="Commit not found" />
+    ))
+    .onErrorTag('NetworkError', (error: NetworkError) => (
+      <ErrorAlert error={error} message="Failed to load commit files" />
+    ))
+    .onErrorTag('GitOperationError', (error: GitOperationError) => (
+      <ErrorAlert error={error} message="Git operation failed" />
+    ))
+    .onDefect((defect: unknown) => (
+      <ErrorAlert message={`Unexpected error: ${String(defect)}`} />
+    ))
+    .onSuccess((files: readonly FileChange[]) => {
+      if (files.length === 0) {
+        return (
+          <div className="text-center py-12">
+            <p className="text-gray-400">No files changed in this commit</p>
+          </div>
+        )
+      }
+
+      // Calculate total stats
+      const totalAdditions = files.reduce(
+        (sum, file) => sum + (file.additions ?? 0),
+        0
+      )
+      const totalDeletions = files.reduce(
+        (sum, file) => sum + (file.deletions ?? 0),
+        0
+      )
+
+      return (
+        <div className="space-y-4">
+          {/* Summary */}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-400">
+              {files.length} {files.length === 1 ? 'file' : 'files'} changed
+            </span>
+            {(totalAdditions > 0 || totalDeletions > 0) && (
+              <div className="flex items-center gap-3 font-mono text-xs">
+                {totalAdditions > 0 && (
+                  <span className="text-green-400">+{totalAdditions}</span>
+                )}
+                {totalDeletions > 0 && (
+                  <span className="text-red-400">-{totalDeletions}</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* File list */}
+          <div className="border border-gray-700 rounded divide-y divide-gray-700">
+            {files.map((file) => (
+              <FileChangeItem key={file.path} file={file} />
+            ))}
           </div>
         </div>
-      </div>
-    </div>
-  )
+      )
+    })
+    .render()
 }

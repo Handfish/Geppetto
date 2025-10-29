@@ -65,6 +65,9 @@ export class SourceControlClient extends Effect.Service<SourceControlClient>()(
       type GetCommitHistoryInput = S.Schema.Type<
         (typeof IpcContracts)['source-control:get-commit-history']['input']
       >
+      type GetCommitFilesInput = S.Schema.Type<
+        (typeof IpcContracts)['source-control:get-commit-files']['input']
+      >
       type GetStatusInput = S.Schema.Type<
         (typeof IpcContracts)['source-control:get-status']['input']
       >
@@ -200,6 +203,18 @@ export class SourceControlClient extends Effect.Service<SourceControlClient>()(
             repositoryId,
             branchName,
             maxCount,
+          }),
+
+        /**
+         * Get files changed in a commit
+         */
+        getCommitFiles: (
+          repositoryId: GetCommitFilesInput['repositoryId'],
+          commitHash: GetCommitFilesInput['commitHash']
+        ) =>
+          ipc.invoke('source-control:get-commit-files', {
+            repositoryId,
+            commitHash,
           }),
 
         // ===== Working Tree Operations =====

@@ -126,7 +126,7 @@ export function CommitDetailsPanel({
               {activeTab === 'info' && <CommitInfo commit={commit} />}
               {activeTab === 'files' && (
                 <FileChangesList
-                  repositoryId={repositoryId.value}
+                  repositoryId={repositoryId}
                   commitHash={commitHash}
                 />
               )}

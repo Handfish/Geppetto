@@ -294,6 +294,28 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
         .pipe(Effect.map((commits) => commits.map(toSharedCommit)))
   )
 
+  registerIpcHandler(
+    SourceControlIpcContracts['source-control:get-commit-files'],
+    (input) =>
+      commitService
+        .getCommitFiles(
+          toDomainRepositoryId(input.repositoryId),
+          makeCommitHash(input.commitHash)
+        )
+        .pipe(
+          Effect.map((files) =>
+            files.map((file) => ({
+              path: file.path,
+              status: file.status,
+              staged: file.staged,
+              oldPath: file.oldPath,
+              additions: file.additions,
+              deletions: file.deletions,
+            }))
+          )
+        )
+  )
+
   // ===== Working Tree Handlers =====
   // Note: These would be implemented once WorkingTreeService is created
 

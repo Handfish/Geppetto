@@ -870,6 +870,147 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
           return makeCommitHash(output)
         }),
+
+      /**
+       * Get files changed in a commit
+       *
+       * Returns list of files with their change status and line counts.
+       * Uses git show with --numstat and --name-status formats.
+       */
+      getCommitFiles: (repositoryId: RepositoryId, commitHash: CommitHash) =>
+        Effect.gen(function* () {
+          const repo = yield* repoService.getRepositoryById(repositoryId)
+
+          // Get file status and line counts using --numstat
+          const numstatOutput = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const request = new GitCommandRequest({
+                id: crypto.randomUUID() as GitCommandId,
+                args: ['show', '--numstat', '--format=', commitHash.value],
+                worktree: new GitWorktreeContext({ repositoryPath: repo.path }),
+              })
+
+              const handle = yield* gitRunner.execute(request)
+              const result = yield* handle.awaitResult
+
+              return result.stdout?.trim() ?? ''
+            })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to get commit files',
+                  cause: error,
+                })
+              )
+            )
+          )
+
+          // Get file status (for renames and copies)
+          const nameStatusOutput = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const request = new GitCommandRequest({
+                id: crypto.randomUUID() as GitCommandId,
+                args: ['show', '--name-status', '--format=', commitHash.value],
+                worktree: new GitWorktreeContext({ repositoryPath: repo.path }),
+              })
+
+              const handle = yield* gitRunner.execute(request)
+              const result = yield* handle.awaitResult
+
+              return result.stdout?.trim() ?? ''
+            })
+          ).pipe(
+            Effect.catchAll((error) =>
+              Effect.fail(
+                new GraphBuildError({
+                  repositoryId,
+                  reason: 'Failed to get commit file status',
+                  cause: error,
+                })
+              )
+            )
+          )
+
+          // Parse numstat output (format: additions\tdeletions\tfilepath)
+          const numstatMap = new Map<string, { additions: number; deletions: number }>()
+          if (numstatOutput) {
+            const lines = numstatOutput.split('\n')
+            for (const line of lines) {
+              if (!line.trim()) continue
+
+              const parts = line.split('\t')
+              if (parts.length < 3) continue
+
+              const additions = parts[0] === '-' ? 0 : parseInt(parts[0], 10)
+              const deletions = parts[1] === '-' ? 0 : parseInt(parts[1], 10)
+              const path = parts.slice(2).join('\t') // Handle paths with tabs
+
+              numstatMap.set(path, { additions, deletions })
+            }
+          }
+
+          // Parse name-status output (format: status\tpath or status\toldpath\tnewpath)
+          const fileChanges: Array<{
+            path: string
+            status: 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'unmodified' | 'untracked' | 'ignored' | 'conflicted'
+            staged: boolean
+            oldPath?: string
+            additions?: number
+            deletions?: number
+          }> = []
+
+          if (nameStatusOutput) {
+            const lines = nameStatusOutput.split('\n')
+            for (const line of lines) {
+              if (!line.trim()) continue
+
+              const parts = line.split('\t')
+              if (parts.length < 2) continue
+
+              const statusCode = parts[0][0] // First character is the status
+              const path = parts.length === 3 ? parts[2] : parts[1] // Renamed files have old and new paths
+              const oldPath = parts.length === 3 ? parts[1] : undefined
+
+              // Map git status codes to FileStatus
+              let status: 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'unmodified' | 'untracked' | 'ignored' | 'conflicted'
+              switch (statusCode) {
+                case 'A':
+                  status = 'added'
+                  break
+                case 'D':
+                  status = 'deleted'
+                  break
+                case 'M':
+                  status = 'modified'
+                  break
+                case 'R':
+                  status = 'renamed'
+                  break
+                case 'C':
+                  status = 'copied'
+                  break
+                default:
+                  status = 'modified' // Default to modified for unknown status
+              }
+
+              // Get line counts from numstat
+              const stats = numstatMap.get(path)
+
+              fileChanges.push({
+                path,
+                status,
+                staged: true, // Committed files are considered "staged"
+                oldPath,
+                additions: stats?.additions,
+                deletions: stats?.deletions,
+              })
+            }
+          }
+
+          return fileChanges
+        }),
     }
 
     return port

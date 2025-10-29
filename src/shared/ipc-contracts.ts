@@ -501,6 +501,16 @@ export const SourceControlIpcContracts = {
     errors: S.Union(NotFoundError, GitOperationError),
   },
 
+  'source-control:get-commit-files': {
+    channel: 'source-control:get-commit-files' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      commitHash: S.String,
+    }),
+    output: S.Array(FileChange),
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
   // Working Tree Operations
   'source-control:get-status': {
     channel: 'source-control:get-status' as const,
