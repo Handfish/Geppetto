@@ -447,7 +447,9 @@ The Git Tree visual graph is a hardware-accelerated commit history visualization
 - Click commits to view details
 - Right-click context menu (copy hash, message, view details)
 - Hover feedback with visual highlights
-- Mouse wheel zoom
+- Mouse wheel zoom (0.5x - 2.0x)
+- Click and drag to pan canvas
+- Arrow keys / WASD for keyboard navigation
 
 **Commit Details Panel**:
 - Full commit information (hash, author, date, message, parents)
@@ -476,6 +478,8 @@ The Git Tree visual graph is a hardware-accelerated commit history visualization
 - `Ctrl/Cmd + -`: Zoom out
 - `Ctrl/Cmd + 0`: Reset zoom
 - `Escape`: Clear selection / Close panels
+- `Arrow Keys` or `WASD`: Pan canvas (when focused)
+- `Home`: Reset pan position
 
 ### Architecture
 

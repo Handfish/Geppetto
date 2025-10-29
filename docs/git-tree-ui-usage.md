@@ -45,12 +45,18 @@ The Git Tree visual graph provides an interactive, hardware-accelerated visualiz
 - **Settings Persistence**: All settings automatically saved to localStorage
 
 ### Keyboard Shortcuts
+
+**Global Shortcuts** (work anywhere):
 - **Ctrl/Cmd + F**: Focus search input
 - **Ctrl/Cmd + R**: Refresh graph
 - **Ctrl/Cmd + =**: Zoom in
 - **Ctrl/Cmd + -**: Zoom out
 - **Ctrl/Cmd + 0**: Reset zoom to 100%
 - **Escape**: Clear selection / Close panels / Blur input
+
+**Canvas Navigation** (when canvas is focused):
+- **Arrow Keys** or **WASD**: Pan the canvas up/down/left/right
+- **Home**: Reset pan to initial position
 
 ---
 
@@ -198,13 +204,21 @@ When you first open a repository:
 - **Scroll down**: Zoom out
 - **Range**: 0.5x (50%) to 2.0x (200%)
 
-**Keyboard**:
+**Pan**:
+- **Click + Drag**: Pan the canvas in any direction
+- **Arrow Keys**: Pan when canvas is focused (50px per keypress)
+- **WASD Keys**: Alternative pan controls
+- **Home Key**: Reset pan to initial position
+
+**Zoom Keyboard Shortcuts**:
 - **Ctrl/Cmd + =**: Zoom in
 - **Ctrl/Cmd + -**: Zoom out
 - **Ctrl/Cmd + 0**: Reset to 100%
 
-**Pan (Future)**:
-- Click and drag to pan the canvas (not yet implemented)
+**Visual Feedback**:
+- Cursor changes to **grab hand** when hovering over canvas
+- Cursor changes to **grabbing hand** when dragging
+- Blue focus ring appears when canvas is focused (for keyboard navigation)
 
 ### Resetting Settings
 
@@ -295,20 +309,48 @@ Settings are stored at: `geppetto:graph-settings`
 
 ## Keyboard Reference Card
 
+### Global Shortcuts
+
 | Shortcut | Action | Notes |
 |----------|--------|-------|
 | **Ctrl/Cmd + F** | Focus search | Auto-selects input text |
 | **Ctrl/Cmd + R** | Refresh graph | Overrides browser refresh |
-| **Ctrl/Cmd + =** | Zoom in | Max: 2.0x |
-| **Ctrl/Cmd + -** | Zoom out | Min: 0.5x |
+| **Ctrl/Cmd + =** | Zoom in | Max: 2.0x (0.1 increments) |
+| **Ctrl/Cmd + -** | Zoom out | Min: 0.5x (0.1 decrements) |
 | **Ctrl/Cmd + 0** | Reset zoom | Back to 1.0x |
 | **Escape** | Clear/Close | Multi-purpose |
+
+### Canvas Navigation (When Focused)
+
+Click on the canvas first to focus it, then use:
+
+| Key | Action | Notes |
+|-----|--------|-------|
+| **↑ Arrow Up** or **W** | Pan up | 50px per press |
+| **↓ Arrow Down** or **S** | Pan down | 50px per press |
+| **← Arrow Left** or **A** | Pan left | 50px per press |
+| **→ Arrow Right** or **D** | Pan right | 50px per press |
+| **Home** | Reset pan | Back to initial position |
+
+### Mouse Controls
+
+| Action | Result |
+|--------|--------|
+| **Click + Drag** | Pan canvas | Smooth dragging |
+| **Mouse Wheel** | Zoom in/out | Smooth zoom |
+| **Click Commit** | Select commit | Shows details panel |
+| **Right-Click Commit** | Context menu | Copy operations |
 
 **Escape Key Behavior**:
 - When in search input: Blur input
 - When commit selected: Clear selection
 - When context menu open: Close menu
 - When details panel open: (No effect - use X button)
+
+**Focus Behavior**:
+- Canvas shows blue focus ring when focused (for keyboard navigation)
+- Click canvas or use Tab key to focus
+- Canvas must be focused for arrow key navigation
 
 ---
 
