@@ -1264,22 +1264,63 @@ useEffect(() => {
 
 ## Phase 3.3: Settings Panel
 
-### [Date] - Graph Configuration
+### 2025-10-28 - Graph Settings with localStorage Persistence
+
+**Implementation Approach**: Instead of creating a separate settings panel component, settings were integrated into the existing GraphFilters component with a custom hook for persistence.
 
 **Files Created**:
-- [ ] `src/renderer/components/source-control/GraphSettings.tsx`
+- [x] `src/renderer/hooks/useGraphSettings.ts` - Custom hook with localStorage persistence
 
-**Settings**:
-- Max commits (number)
-- Show refs (boolean)
-- Show merge commits (boolean)
-- Lane colors (array of colors)
+**Files Modified**:
+- [x] `src/renderer/components/source-control/GraphFilters.tsx` - Added display toggles
+- [x] `src/renderer/components/source-control/CommitGraph.tsx` - Integrated settings hook
+- [x] `src/renderer/components/source-control/graph/GraphStage.tsx` - Used display settings for conditional rendering
 
-**Persistence**:
-- Save to localStorage
-- Load on mount
+**Hook Implementation** (`useGraphSettings`):
+- **State Management**: Combines GraphOptions (filters) and GraphDisplaySettings (display toggles)
+- **Persistence**: Auto-saves to localStorage on every change
+- **Schema Evolution**: Merges stored settings with defaults to handle missing fields
+- **Separation**: `updateFilters()` for filter options, `updateDisplay()` for display settings
+- **Reset**: `resetToDefaults()` clears localStorage and restores defaults
+- **Storage Key**: `geppetto:graph-settings`
+
+**GraphDisplaySettings**:
+```typescript
+{
+  showRefs: boolean           // Show branch/tag labels on commits
+  showMergeCommits: boolean   // Include merge commits in graph
+  showMessages: boolean       // Show commit messages inline (future)
+}
+```
+
+**Filter Integration**:
+- Display toggles added to expanded filters panel
+- Reset button: "Reset All Settings to Defaults"
+- Separate sections for filters and display options
+- Visual separation with border divider
+
+**GraphStage Rendering Logic**:
+1. **showRefs**: Conditionally renders RefLabel components
+   - Default: `true` (refs visible)
+   - When `false`: Hides all branch/tag labels
+2. **showMergeCommits**: Filters merge commits from graph
+   - Default: `true` (all commits visible)
+   - When `false`: Removes commits with `parents.length > 1` and connected edges
+
+**Design Decisions**:
+- ✅ Integrated into GraphFilters instead of separate component (reduces UI clutter)
+- ✅ Automatic persistence (no save button needed)
+- ✅ Settings reset clears both filters and display settings
+- ✅ Type-safe with TypeScript interfaces
+- ❌ Lane color customization deferred (complex UI, low priority)
+
+**TypeScript Compilation**: ✅ Passes with no errors
 
 **Notes**:
+- Settings persist across page reloads and app restarts
+- localStorage gracefully handles schema evolution (old settings + new defaults)
+- Display toggles use standard checkbox inputs with Tailwind styling
+- Merge commit filtering preserves graph structure (removes both nodes and edges)
 
 ---
 

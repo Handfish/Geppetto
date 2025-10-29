@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import type { GraphOptions } from '../../../shared/schemas/source-control'
+import type { GraphDisplaySettings } from '../../hooks/useGraphSettings'
 
 /**
  * GraphFilters Component
@@ -9,12 +10,15 @@ import type { GraphOptions } from '../../../shared/schemas/source-control'
  * - Branch filter (include/exclude branches)
  * - Author filter (filter by commit author)
  * - Max commits slider
+ * - Display toggles (show refs, merge commits, messages)
  *
  * Usage:
  * ```tsx
  * <GraphFilters
  *   options={graphOptions}
  *   onOptionsChange={setGraphOptions}
+ *   displaySettings={displaySettings}
+ *   onDisplayChange={updateDisplay}
  *   availableBranches={['main', 'develop']}
  *   availableAuthors={['John Doe', 'Jane Smith']}
  * />
@@ -28,6 +32,12 @@ interface GraphFiltersProps {
   /** Callback when options change */
   onOptionsChange: (options: Partial<GraphOptions>) => void
 
+  /** Display settings (show/hide visual elements) */
+  displaySettings?: GraphDisplaySettings
+
+  /** Callback when display settings change */
+  onDisplayChange?: (settings: Partial<GraphDisplaySettings>) => void
+
   /** Available branches for dropdown */
   availableBranches?: string[]
 
@@ -39,15 +49,21 @@ interface GraphFiltersProps {
 
   /** Callback when search text changes */
   onSearchChange?: (text: string) => void
+
+  /** Callback to reset all settings to defaults */
+  onReset?: () => void
 }
 
 export function GraphFilters({
   options,
   onOptionsChange,
+  displaySettings,
+  onDisplayChange,
   availableBranches = [],
   availableAuthors = [],
   searchText = '',
   onSearchChange,
+  onReset,
 }: GraphFiltersProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -90,6 +106,11 @@ export function GraphFilters({
       maxCommits: 20,
       layoutAlgorithm: options.layoutAlgorithm ?? 'topological',
     })
+  }
+
+  const handleResetAll = () => {
+    onSearchChange?.('')
+    onReset?.()
   }
 
   const hasActiveFilters =
@@ -226,6 +247,72 @@ export function GraphFilters({
             />
             <span className="text-sm text-gray-300 w-12">{maxCommits}</span>
           </div>
+
+          {/* Display Settings */}
+          {displaySettings && onDisplayChange && (
+            <>
+              <div className="border-t border-gray-700 my-3" />
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">Display Options</label>
+
+                {/* Show Refs Toggle */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={displaySettings.showRefs}
+                    onChange={(e) =>
+                      onDisplayChange({ showRefs: e.target.checked })
+                    }
+                    className="w-4 h-4 bg-gray-900 border-gray-700 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <span className="text-sm text-gray-400">
+                    Show branch/tag labels
+                  </span>
+                </label>
+
+                {/* Show Merge Commits Toggle */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={displaySettings.showMergeCommits}
+                    onChange={(e) =>
+                      onDisplayChange({ showMergeCommits: e.target.checked })
+                    }
+                    className="w-4 h-4 bg-gray-900 border-gray-700 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <span className="text-sm text-gray-400">
+                    Show merge commits
+                  </span>
+                </label>
+
+                {/* Show Messages Toggle */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={displaySettings.showMessages}
+                    onChange={(e) =>
+                      onDisplayChange({ showMessages: e.target.checked })
+                    }
+                    className="w-4 h-4 bg-gray-900 border-gray-700 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <span className="text-sm text-gray-400">
+                    Show commit messages
+                  </span>
+                </label>
+              </div>
+
+              {/* Reset to Defaults Button */}
+              {onReset && (
+                <button
+                  onClick={handleResetAll}
+                  className="mt-3 w-full px-3 py-2 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+                >
+                  Reset All Settings to Defaults
+                </button>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

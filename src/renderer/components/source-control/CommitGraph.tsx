@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Result } from '@effect-atom/atom-react'
-import { useCommitGraph, useCommitHistory } from '../../hooks/useSourceControl'
+import { useCommitGraph, useCommitHistory, useCommit } from '../../hooks/useSourceControl'
+import { useGraphSettings } from '../../hooks/useGraphSettings'
 import { ErrorAlert, LoadingSpinner } from '../ui/ErrorAlert'
 import { GraphStage } from './graph'
 import { CommitDetailsPanel } from './details'
 import { GraphFilters } from './GraphFilters'
+import { CommitContextMenu } from './CommitContextMenu'
 import type {
   RepositoryId,
   CommitGraph as CommitGraphType,
@@ -132,13 +134,10 @@ export function CommitGraphView({
   options,
   onCommitSelect,
 }: CommitGraphViewProps) {
-  // Local filter state (overrides parent options)
-  const [filterOptions, setFilterOptions] = useState<Partial<GraphOptions>>({
-    maxCommits: options?.maxCommits ?? 20,
-    layoutAlgorithm: options?.layoutAlgorithm ?? 'topological',
-  })
+  // Graph settings with persistence
+  const { settings, updateFilters, updateDisplay, resetToDefaults } = useGraphSettings()
 
-  // Merge parent options with local filters
+  // Merge parent options with persisted settings
   const mergedOptions: GraphOptions | undefined = useMemo(() => {
     // Start with defaults
     const defaults: GraphOptions = {
@@ -146,18 +145,22 @@ export function CommitGraphView({
       layoutAlgorithm: 'topological',
     }
 
-    // Merge parent options and local filters
+    // Merge: defaults → parent options → persisted settings
     return {
       ...defaults,
       ...options,
-      ...filterOptions,
+      ...settings,
     } as GraphOptions
-  }, [options, filterOptions])
+  }, [options, settings])
 
   const { graphResult, refresh } = useCommitGraph(repositoryId, mergedOptions)
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
   const [autoRecoveryAttempted, setAutoRecoveryAttempted] = useState(false)
   const [searchText, setSearchText] = useState('')
+  const [contextMenu, setContextMenu] = useState<{
+    commit: Commit
+    position: { x: number; y: number }
+  } | null>(null)
 
   // Apply client-side search filtering to graph result
   const filteredGraphResult = useMemo(() => {
@@ -237,6 +240,24 @@ export function CommitGraphView({
     onCommitSelect?.(hash)
   }
 
+  const handleCommitContextMenu = (hash: string, position: { x: number; y: number }) => {
+    console.log('[CommitGraphView] handleCommitContextMenu called:', {
+      hash: hash.slice(0, 7),
+      position,
+    })
+
+    // Find the commit in the graph
+    if (filteredGraphResult._tag === 'Success') {
+      const node = filteredGraphResult.value.nodes.find((n) => String(n.id) === hash)
+      if (node) {
+        setContextMenu({
+          commit: node.commit,
+          position,
+        })
+      }
+    }
+  }
+
   // Automatic cache recovery on NotFoundError
   useEffect(() => {
     if (graphResult._tag === 'Failure' && !graphResult.waiting && !autoRecoveryAttempted) {
@@ -284,8 +305,11 @@ export function CommitGraphView({
 
       {/* Filters */}
       <GraphFilters
-        options={filterOptions}
-        onOptionsChange={setFilterOptions}
+        options={settings}
+        onOptionsChange={updateFilters}
+        displaySettings={settings.display}
+        onDisplayChange={updateDisplay}
+        onReset={resetToDefaults}
         availableBranches={availableBranches}
         availableAuthors={availableAuthors}
         searchText={searchText}
@@ -373,6 +397,8 @@ export function CommitGraphView({
                     graph={graph}
                     selectedCommit={selectedCommit ?? undefined}
                     onCommitSelect={handleCommitSelect}
+                    onCommitContextMenu={handleCommitContextMenu}
+                    displaySettings={settings.display}
                     width={800}
                     height={600}
                   />
@@ -396,6 +422,18 @@ export function CommitGraphView({
                   </div>
                 )}
               </div>
+
+              {/* Context Menu (shown on right-click) */}
+              {contextMenu && (
+                <CommitContextMenu
+                  commit={contextMenu.commit}
+                  position={contextMenu.position}
+                  onClose={() => setContextMenu(null)}
+                  onViewDetails={(commit) => {
+                    handleCommitSelect(String(commit.hash))
+                  }}
+                />
+              )}
             </div>
           )
         })

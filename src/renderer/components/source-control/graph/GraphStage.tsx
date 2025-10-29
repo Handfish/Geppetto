@@ -10,6 +10,7 @@ import { CommitNode } from './CommitNode'
 import { CommitEdge } from './CommitEdge'
 import { RefLabel } from './RefLabel'
 import type { CommitGraph } from '../../../../shared/schemas/source-control'
+import type { GraphDisplaySettings } from '../../../hooks/useGraphSettings'
 
 // Register PixiJS components for use in JSX
 extend({ Container, Graphics, Text })
@@ -34,6 +35,12 @@ interface GraphStageProps {
   /** Callback when a commit is clicked */
   onCommitSelect?: (hash: string) => void
 
+  /** Callback when a commit is right-clicked */
+  onCommitContextMenu?: (hash: string, position: { x: number; y: number }) => void
+
+  /** Display settings (control visibility of graph elements) */
+  displaySettings?: GraphDisplaySettings
+
   /** Canvas width in pixels */
   width?: number
 
@@ -45,6 +52,8 @@ export function GraphStage({
   graph,
   selectedCommit,
   onCommitSelect,
+  onCommitContextMenu,
+  displaySettings,
   width = 800,
   height = 600,
 }: GraphStageProps) {
@@ -67,6 +76,28 @@ export function GraphStage({
     const layoutEngine = new GraphLayoutEngine(defaultTheme)
     return layoutEngine.layout(graph)
   }, [graph])
+
+  // Filter nodes and edges based on display settings
+  const { filteredNodes, filteredEdges } = useMemo(() => {
+    let nodes = Array.from(layout.nodes.values())
+    let edges = layout.edges
+
+    // Filter merge commits if setting is disabled
+    if (displaySettings && !displaySettings.showMergeCommits) {
+      // Filter nodes where commit has more than 1 parent (merge commits)
+      const nonMergeNodes = nodes.filter((node) => node.commit.parents.length <= 1)
+      const nonMergeHashes = new Set(nonMergeNodes.map((n) => String(n.commit.hash)))
+
+      // Filter edges to only include those between non-merge commits
+      edges = edges.filter(
+        (edge) => nonMergeHashes.has(String(edge.from)) && nonMergeHashes.has(String(edge.to))
+      )
+
+      nodes = nonMergeNodes
+    }
+
+    return { filteredNodes: nodes, filteredEdges: edges }
+  }, [layout, displaySettings])
 
   /**
    * Handle mouse wheel for zooming
@@ -128,7 +159,7 @@ export function GraphStage({
           scale={{ x: viewport.scale, y: viewport.scale }}
         >
           {/* Render edges first (behind nodes) */}
-          {layout.edges.map((edge, index) => {
+          {filteredEdges.map((edge, index) => {
             const fromNode = layout.nodes.get(edge.from)
             const toNode = layout.nodes.get(edge.to)
 
@@ -148,7 +179,7 @@ export function GraphStage({
 
           {/* Render commit nodes */}
           {/* Sort by y position to ensure render order matches visual layout */}
-          {Array.from(layout.nodes.values())
+          {filteredNodes
             .sort((a, b) => a.y - b.y)
             .map((node) => {
               const isSelected = node.commit.hash === selectedCommit
@@ -180,26 +211,28 @@ export function GraphStage({
                       }
                     }
                   }}
+                  onContextMenu={onCommitContextMenu}
                 />
               )
             })}
 
-          {/* Render ref labels (branches/tags) */}
-          {Array.from(layout.nodes.values()).map((node) =>
-            node.refs.map((ref, index) => (
-              <RefLabel
-                key={`${node.commit.hash}-${ref}`}
-                text={ref}
-                x={node.x + defaultTheme.nodeRadius + 8}
-                y={
-                  node.y -
-                  defaultTheme.fontSize / 2 +
-                  index * (defaultTheme.fontSize + 4)
-                }
-                theme={defaultTheme}
-              />
-            ))
-          )}
+          {/* Render ref labels (branches/tags) - only if showRefs is enabled */}
+          {(!displaySettings || displaySettings.showRefs) &&
+            filteredNodes.map((node) =>
+              node.refs.map((ref, index) => (
+                <RefLabel
+                  key={`${node.commit.hash}-${ref}`}
+                  text={ref}
+                  x={node.x + defaultTheme.nodeRadius + 8}
+                  y={
+                    node.y -
+                    defaultTheme.fontSize / 2 +
+                    index * (defaultTheme.fontSize + 4)
+                  }
+                  theme={defaultTheme}
+                />
+              ))
+            )}
         </pixiContainer>
       </Application>
       </div>

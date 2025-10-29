@@ -27,6 +27,9 @@ interface CommitNodeProps {
 
   /** Callback when node is hovered */
   onHover?: (commitHash: string | null) => void
+
+  /** Callback when node is right-clicked */
+  onContextMenu?: (commitHash: string, position: { x: number; y: number }) => void
 }
 
 export function CommitNode({
@@ -35,6 +38,7 @@ export function CommitNode({
   isSelected,
   onSelect,
   onHover,
+  onContextMenu,
 }: CommitNodeProps) {
   const [isHovered, setIsHovered] = useState(false)
 
@@ -112,8 +116,23 @@ export function CommitNode({
         })
         onSelect(node.commit.hash)
       })
+
+      // Right-click
+      g.on('rightclick', (event) => {
+        console.log('[CommitNode] RIGHT CLICK detected:', {
+          hash: node.commit.hash.slice(0, 7),
+          subject: node.commit.subject,
+          position: { x: node.x, y: node.y },
+          eventGlobal: { x: event.global.x, y: event.global.y },
+        })
+        // Pass global screen coordinates for menu positioning
+        onContextMenu?.(node.commit.hash, {
+          x: event.global.x,
+          y: event.global.y,
+        })
+      })
     },
-    [node, theme, isSelected, isHovered, onSelect, onHover]
+    [node, theme, isSelected, isHovered, onSelect, onHover, onContextMenu]
   )
 
   // Position Graphics at node coordinates
