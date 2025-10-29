@@ -177,23 +177,38 @@ export function CommitGraphView({
       if (graphContainerRef.current) {
         const { width, height } = graphContainerRef.current.getBoundingClientRect()
         // Ensure minimum dimensions and account for padding/borders
-        const finalWidth = Math.max(width - 4, 400) // -4 for border
-        const finalHeight = Math.max(height - 4, 400) // -4 for border
-        setGraphDimensions({ width: finalWidth, height: finalHeight })
-        console.log('[CommitGraph] Measured dimensions:', { width: finalWidth, height: finalHeight, rawWidth: width, rawHeight: height })
+        const finalWidth = Math.max(width - 8, 400) // Account for border + padding
+        const finalHeight = Math.max(height - 8, 400) // Account for border + padding
+
+        // Only update if dimensions changed significantly (avoid infinite loops)
+        setGraphDimensions((prev) => {
+          if (Math.abs(prev.width - finalWidth) > 5 || Math.abs(prev.height - finalHeight) > 5) {
+            console.log('[CommitGraph] Updating dimensions:', {
+              width: finalWidth,
+              height: finalHeight,
+              rawWidth: width,
+              rawHeight: height,
+              hasDetails: !!selectedCommit
+            })
+            return { width: finalWidth, height: finalHeight }
+          }
+          return prev
+        })
       }
     }
 
-    // Initial measurement with delay to ensure layout is complete
-    const timeoutId = setTimeout(updateDimensions, 0)
-
-    // Also measure on next frame
-    requestAnimationFrame(updateDimensions)
+    // Initial measurement with multiple attempts
+    const timeoutId = setTimeout(updateDimensions, 50)
+    const frameId = requestAnimationFrame(() => {
+      requestAnimationFrame(updateDimensions) // Double RAF for layout completion
+    })
 
     // Listen for window resize
     window.addEventListener('resize', updateDimensions)
+
     return () => {
       clearTimeout(timeoutId)
+      cancelAnimationFrame(frameId)
       window.removeEventListener('resize', updateDimensions)
     }
   }, [selectedCommit]) // Re-measure when details panel opens/closes
@@ -351,8 +366,8 @@ export function CommitGraphView({
   }, [repositoryId])
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full space-y-4">
+      <div className="flex items-center justify-between flex-shrink-0">
         <h3 className="text-lg font-semibold text-white">Commit Graph</h3>
         <button
           onClick={refresh}
@@ -363,18 +378,20 @@ export function CommitGraphView({
       </div>
 
       {/* Filters */}
-      <GraphFilters
-        ref={searchInputRef}
-        options={settings}
-        onOptionsChange={updateFilters}
-        displaySettings={settings.display}
-        onDisplayChange={updateDisplay}
-        onReset={resetToDefaults}
-        availableBranches={availableBranches}
-        availableAuthors={availableAuthors}
-        searchText={searchText}
-        onSearchChange={setSearchText}
-      />
+      <div className="flex-shrink-0">
+        <GraphFilters
+          ref={searchInputRef}
+          options={settings}
+          onOptionsChange={updateFilters}
+          displaySettings={settings.display}
+          onDisplayChange={updateDisplay}
+          onReset={resetToDefaults}
+          availableBranches={availableBranches}
+          availableAuthors={availableAuthors}
+          searchText={searchText}
+          onSearchChange={setSearchText}
+        />
+      </div>
 
       {Result.builder(filteredGraphResult)
         .onInitial(() => (
@@ -439,8 +456,8 @@ export function CommitGraphView({
           }
 
           return (
-            <div className="flex flex-col flex-1 space-y-3">
-              <div className="flex items-center justify-between text-sm text-gray-400">
+            <div className="flex flex-col flex-1 min-h-0 space-y-3">
+              <div className="flex items-center justify-between text-sm text-gray-400 flex-shrink-0">
                 <span>
                   {graph.totalCommits}{' '}
                   {graph.totalCommits === 1 ? 'commit' : 'commits'}
@@ -451,7 +468,7 @@ export function CommitGraphView({
               {/* Layout: Graph + Details Panel */}
               <div className="flex gap-4 flex-1 min-h-0">
                 {/* Graph Section */}
-                <div ref={graphContainerRef} className="flex-1 min-h-0">
+                <div ref={graphContainerRef} className="flex-1 flex flex-col min-h-0 min-w-0">
                   {/* PixiJS Visual Graph */}
                   <GraphStage
                     graph={graph}
@@ -466,7 +483,7 @@ export function CommitGraphView({
                   />
 
                   {graph.nodes.length < graph.totalCommits && (
-                    <div className="text-center py-2 text-sm text-gray-500">
+                    <div className="text-center py-2 text-sm text-gray-500 flex-shrink-0">
                       Showing {graph.nodes.length} of {graph.totalCommits} commits
                     </div>
                   )}
@@ -474,7 +491,7 @@ export function CommitGraphView({
 
                 {/* Details Panel (shown when commit selected) */}
                 {selectedCommit && (
-                  <div className="w-96 h-[600px]">
+                  <div className="w-96 flex flex-col min-h-0">
                     <CommitDetailsPanel
                       repositoryId={repositoryId}
                       repositoryPath={repositoryPath}
