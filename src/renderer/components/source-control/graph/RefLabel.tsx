@@ -46,9 +46,7 @@ export function RefLabel({ text, x, y, theme }: RefLabelProps) {
 
       // Draw rounded rectangle background
       // Color: purple with 30% opacity (0x9333ea = purple-600)
-      g.beginFill(0x9333ea, 0.3)
-      g.drawRoundedRect(x, y, width, height, 4)
-      g.endFill()
+      g.roundRect(x, y, width, height, 4).fill({ color: 0x9333ea, alpha: 0.3 })
     },
     [text, x, y, theme]
   )

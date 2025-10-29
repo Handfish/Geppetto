@@ -855,7 +855,81 @@ git show --name-status --format= <hash>
 
 ---
 
-## Phase 2.3: Integration with Graph
+## Phase 2.3: PixiJS v8 API Migration
+
+### 2025-10-28 - Updating to Modern PixiJS Graphics API
+
+**Problem**: PixiJS v8 deprecation warnings in console:
+- `Graphics#lineStyle` deprecated → Use `Graphics#setStrokeStyle`
+- `Graphics#beginFill` deprecated → Use `Graphics#fill`
+- `Graphics#endFill` no longer needed
+- `Graphics#drawCircle` renamed to `Graphics#circle`
+- `Graphics#drawRoundedRect` renamed to `Graphics#roundRect`
+
+**Migration Steps**:
+
+1. **CommitNode.tsx**:
+   - Old: `g.beginFill(color)` → `g.drawCircle()` → `g.endFill()`
+   - New: `g.circle(x, y, radius).fill(color)`
+   - Old: `g.lineStyle(width, color)` → `g.drawCircle()`
+   - New: `g.circle(x, y, radius).stroke({ width, color })`
+
+2. **CommitEdge.tsx**:
+   - Old: `g.lineStyle(width, color)` → draw path → `g.endFill()`
+   - New: draw path → `g.stroke({ width, color })`
+   - Removed unnecessary `endFill()` call
+
+3. **RefLabel.tsx**:
+   - Old: `g.beginFill(color, alpha)` → `g.drawRoundedRect()` → `g.endFill()`
+   - New: `g.roundRect(x, y, w, h, radius).fill({ color, alpha })`
+
+**New PixiJS v8 API Patterns**:
+
+```typescript
+// Filled shapes (use fluent API)
+g.circle(x, y, radius).fill(color)
+g.roundRect(x, y, width, height, radius).fill({ color, alpha })
+
+// Stroked shapes (outlines)
+g.circle(x, y, radius).stroke({ width, color })
+
+// Paths (lines/curves)
+g.moveTo(x1, y1)
+g.lineTo(x2, y2)
+g.stroke({ width, color })
+
+// Bezier curves
+g.moveTo(x1, y1)
+g.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x2, y2)
+g.stroke({ width, color })
+```
+
+**Benefits**:
+- ✅ Cleaner, more readable code with method chaining
+- ✅ More consistent API across different shape types
+- ✅ Better TypeScript type inference
+- ✅ No more deprecated warnings in console
+- ✅ Prepares codebase for future PixiJS versions
+
+**Testing**:
+- ✅ TypeScript compilation passes
+- ✅ Dev server reloaded successfully
+- ✅ No runtime errors
+- ⏳ Visual verification pending (graph should look identical)
+
+**Files Modified**:
+- `src/renderer/components/source-control/graph/CommitNode.tsx`
+- `src/renderer/components/source-control/graph/CommitEdge.tsx`
+- `src/renderer/components/source-control/graph/RefLabel.tsx`
+
+**Notes**:
+- Migration was straightforward thanks to clear deprecation messages
+- No breaking changes - all rendering should look identical
+- Fluent API makes code more concise and readable
+
+---
+
+## Phase 2.4: Integration with Graph (Previously 2.3)
 
 ### [Date] - Details Panel Integration
 

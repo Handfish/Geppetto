@@ -38,7 +38,6 @@ export function CommitEdge({ edge, theme, fromNode, toNode }: CommitEdgeProps) {
 
       // Set line style
       const lineWidth = edge.isMerge ? 3 : 2
-      g.lineStyle(lineWidth, edge.color)
 
       if (edge.fromLane === edge.toLane) {
         // Straight vertical line for same-lane connections
@@ -60,8 +59,8 @@ export function CommitEdge({ edge, theme, fromNode, toNode }: CommitEdgeProps) {
         )
       }
 
-      // End the line
-      g.endFill()
+      // Apply stroke style to the path
+      g.stroke({ width: lineWidth, color: edge.color })
     },
     [edge, fromNode, toNode]
   )

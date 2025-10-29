@@ -51,27 +51,21 @@ export function CommitNode({
       g.clear()
 
       // Draw main commit circle at (0, 0) - Graphics is positioned at (node.x, node.y)
-      g.beginFill(node.color)
-      g.drawCircle(0, 0, theme.nodeRadius)
-      g.endFill()
+      g.circle(0, 0, theme.nodeRadius).fill(node.color)
 
       // Draw selection ring if selected or highlighted
       if (isSelected || node.highlighted) {
-        g.lineStyle(3, theme.highlightColor)
-        g.drawCircle(0, 0, theme.nodeRadius + 4)
+        g.circle(0, 0, theme.nodeRadius + 4).stroke({ width: 3, color: theme.highlightColor })
       }
 
       // Draw hover ring (yellow/orange color for visibility)
       if (isHovered && !isSelected) {
-        g.lineStyle(2, 0xfbbf24) // yellow-400 for hover
-        g.drawCircle(0, 0, theme.nodeRadius + 4)
+        g.circle(0, 0, theme.nodeRadius + 4).stroke({ width: 2, color: 0xfbbf24 }) // yellow-400 for hover
       }
 
       // Draw HEAD indicator (smaller inner circle)
       if (node.isHead) {
-        g.beginFill(theme.headColor)
-        g.drawCircle(0, 0, theme.nodeRadius - 2)
-        g.endFill()
+        g.circle(0, 0, theme.nodeRadius - 2).fill(theme.headColor)
       }
 
       // Make interactive
