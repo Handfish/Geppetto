@@ -1075,6 +1075,117 @@ g.stroke({ width, color })
 
 ---
 
+## Phase 2.5.1: Automatic Cache Recovery (No Manual Buttons)
+
+### 2025-10-28 - Refactoring to Automatic Recovery
+
+**User Request**: "Is it possible we can just fire this event instead of creating a button to click?"
+
+**Problem**: Initial implementation required users to click retry buttons. User wanted automatic recovery without manual intervention.
+
+**Solution**: Implemented fully automatic cache recovery using `useEffect` hooks:
+
+1. **CommitGraphView Automatic Recovery**:
+   - Detects `NotFoundError` in `useEffect` when `graphResult` changes
+   - Uses `Result.matchWithError` to extract error from Result
+   - Automatically invokes `source-control:get-repository` IPC
+   - Calls `refresh()` on success to retry graph load
+   - Tracks attempts with `autoRecoveryAttempted` state to prevent loops
+   - Resets recovery flag when switching repositories
+
+2. **CommitDetailsPanel Automatic Recovery**:
+   - Same pattern as CommitGraphView
+   - Resets recovery flag when switching commits or repositories
+
+3. **Updated Error UI**:
+   - Initial state: "Attempting to refresh repository cache..."
+   - After failed recovery: "Automatic cache recovery failed..." with Retry button
+   - Only shows manual controls if automatic recovery fails
+
+4. **Added `refresh` to useCommit hook**:
+   - Was missing from original hook implementation
+   - Now consistent with other hooks like `useCommitGraph`
+
+**Implementation Pattern**:
+
+```typescript
+// Automatic cache recovery on NotFoundError
+useEffect(() => {
+  if (graphResult._tag === 'Failure' && !graphResult.waiting && !autoRecoveryAttempted) {
+    Result.matchWithError(graphResult, {
+      onInitial: () => {},
+      onError: (error) => {
+        if (error._tag === 'NotFoundError') {
+          console.log('[CommitGraphView] Cache miss detected, attempting automatic recovery...')
+          setAutoRecoveryAttempted(true)
+
+          // Attempt to refresh cache
+          window.electron.ipcRenderer
+            .invoke('source-control:get-repository', { path: repositoryPath })
+            .then(() => {
+              console.log('[CommitGraphView] Cache refreshed successfully, retrying graph load...')
+              refresh()
+            })
+            .catch((err) => {
+              console.error('[CommitGraphView] Cache refresh failed:', err)
+            })
+        }
+      },
+      onDefect: () => {},
+      onSuccess: () => {},
+    })
+  }
+}, [graphResult, autoRecoveryAttempted, repositoryPath, refresh])
+
+// Reset recovery flag when switching repositories
+useEffect(() => {
+  setAutoRecoveryAttempted(false)
+}, [repositoryId])
+```
+
+**Key Design Decisions**:
+
+1. **No 'effect' imports**: Uses `Result.matchWithError` from `@effect-atom/atom-react` instead of importing `Cause` and `Option` from 'effect'
+2. **Single automatic attempt**: `autoRecoveryAttempted` flag prevents infinite retry loops
+3. **Graceful degradation**: Manual retry still available if automatic recovery fails
+4. **Reactive recovery**: Triggers on any `NotFoundError`, not just initial load
+5. **Clear logging**: Console logs trace recovery attempts for debugging
+
+**UX Flow**:
+1. User encounters cache miss → Sees "Attempting to refresh repository cache..."
+2. Automatic recovery succeeds → Data loads seamlessly (no user action needed)
+3. Automatic recovery fails → User sees error with manual Retry/Close buttons
+
+**Benefits**:
+- ✅ **Zero user interaction required** for most cache misses
+- ✅ **Seamless recovery** - data loads automatically when cache refreshed
+- ✅ **No infinite loops** - single attempt with flag tracking
+- ✅ **Consistent with @effect-atom patterns** - uses Result.matchWithError
+- ✅ **Preserves manual fallback** - retry button available if automatic fails
+- ✅ **Clean imports** - no external 'effect' dependencies
+
+**Testing Status**:
+- ✅ TypeScript compilation passes (only unrelated RepositoryDropdown error remains)
+- ✅ Dev server hot-reloaded successfully
+- ✅ Automatic recovery tested and confirmed working by user
+- ✅ Cache refresh fires automatically on NotFoundError
+- ✅ Graph loads automatically after successful recovery
+
+**Files Modified**:
+- `src/renderer/components/source-control/CommitGraph.tsx` (added automatic recovery)
+- `src/renderer/components/source-control/details/CommitDetailsPanel.tsx` (added automatic recovery)
+- `src/renderer/hooks/useSourceControl.ts` (added refresh to useCommit return)
+- `src/renderer/components/dev/SourceControlDevPanel.tsx` (passes repositoryPath prop)
+
+**Notes**:
+- **Verified working** by user in real-world testing
+- Eliminates need for manual button clicks in most cases
+- Recovery happens transparently in background
+- Manual controls only appear if automatic recovery fails
+- Consistent error handling across all components
+
+---
+
 ## Phase 2.6: Testing Phase 2
 
 ### [Date] - Phase 2 Verification

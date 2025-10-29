@@ -133,6 +133,16 @@
   - [x] Add helpful error messages and debugging info
   - [x] Test TypeScript compilation and hot reload
 
+- [x] 2.5.1 Automatic Cache Recovery (No Manual Buttons)
+  - [x] Refactor to use useEffect for automatic detection
+  - [x] Implement Result.matchWithError pattern
+  - [x] Add autoRecoveryAttempted flag to prevent loops
+  - [x] Update error UI to show recovery status
+  - [x] Add refresh method to useCommit hook
+  - [x] Pass repositoryPath prop to components
+  - [x] Test automatic recovery in real usage
+  - [x] Verify user confirmation of working behavior
+
 - [ ] 2.6 Testing
   - [ ] Details panel opens on commit click (pending visual testing)
   - [ ] Commit info displays correctly (pending visual testing)
@@ -141,7 +151,7 @@
   - [ ] Panel closes (pending visual testing)
   - [ ] Fullscreen toggle works (pending visual testing)
   - [ ] Layout responsive in both modes (pending visual testing)
-  - [ ] Cache recovery mechanisms work (pending cache expiration test)
+  - [x] Cache recovery mechanisms work ✅ Verified by user
 
 **Blockers**: None
 
@@ -153,7 +163,13 @@
 - Visual testing pending user interaction
 - Performance optimized with 10-minute TTL caching
 - Fullscreen toggle enhances UX for detailed inspection
-- **Cache Recovery**: Implemented three-level cache recovery strategy (automatic refresh on tab switch, manual retry in CommitGraph, graceful panel closure in CommitDetailsPanel) to handle repository cache expiration gracefully
+- **Cache Recovery**: Implemented fully automatic cache recovery using `useEffect` hooks
+  - Detects `NotFoundError` and automatically fires `source-control:get-repository` IPC
+  - Uses `Result.matchWithError` from `@effect-atom/atom-react` (no 'effect' imports)
+  - Zero user interaction required for most cache misses
+  - Seamless recovery with single automatic attempt (prevents infinite loops)
+  - Manual retry available if automatic recovery fails
+  - ✅ Verified working by user in real-world testing
 
 ---
 
