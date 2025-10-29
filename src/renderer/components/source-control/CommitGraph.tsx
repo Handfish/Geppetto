@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Result } from '@effect-atom/atom-react'
 import { useCommitGraph, useCommitHistory } from '../../hooks/useSourceControl'
 import { ErrorAlert, LoadingSpinner } from '../ui/ErrorAlert'
 import { GraphStage } from './graph'
 import { CommitDetailsPanel } from './details'
+import { GraphFilters } from './GraphFilters'
 import type {
   RepositoryId,
   CommitGraph as CommitGraphType,
@@ -131,9 +132,100 @@ export function CommitGraphView({
   options,
   onCommitSelect,
 }: CommitGraphViewProps) {
-  const { graphResult, refresh } = useCommitGraph(repositoryId, options)
+  // Local filter state (overrides parent options)
+  const [filterOptions, setFilterOptions] = useState<Partial<GraphOptions>>({
+    maxCommits: options?.maxCommits ?? 20,
+    layoutAlgorithm: options?.layoutAlgorithm ?? 'topological',
+  })
+
+  // Merge parent options with local filters
+  const mergedOptions: GraphOptions | undefined = useMemo(() => {
+    // Start with defaults
+    const defaults: GraphOptions = {
+      maxCommits: 20,
+      layoutAlgorithm: 'topological',
+    }
+
+    // Merge parent options and local filters
+    return {
+      ...defaults,
+      ...options,
+      ...filterOptions,
+    } as GraphOptions
+  }, [options, filterOptions])
+
+  const { graphResult, refresh } = useCommitGraph(repositoryId, mergedOptions)
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
   const [autoRecoveryAttempted, setAutoRecoveryAttempted] = useState(false)
+  const [searchText, setSearchText] = useState('')
+
+  // Apply client-side search filtering to graph result
+  const filteredGraphResult = useMemo(() => {
+    if (graphResult._tag !== 'Success' || !searchText.trim()) {
+      return graphResult
+    }
+
+    const graph = graphResult.value
+    const searchLower = searchText.toLowerCase()
+
+    // Filter nodes based on commit subject/message
+    const filteredNodes = graph.nodes.filter((node) => {
+      const subjectMatch = node.commit.subject.toLowerCase().includes(searchLower)
+      const messageMatch = node.commit.message.toLowerCase().includes(searchLower)
+      const hashMatch = String(node.commit.hash).toLowerCase().includes(searchLower)
+      return subjectMatch || messageMatch || hashMatch
+    })
+
+    // Keep only edges where both nodes exist in filtered nodes
+    const nodeHashSet = new Set(filteredNodes.map((n) => String(n.id)))
+    const filteredEdges = graph.edges.filter(
+      (edge) => nodeHashSet.has(String(edge.from)) && nodeHashSet.has(String(edge.to))
+    )
+
+    // Return filtered graph
+    return {
+      ...graphResult,
+      value: {
+        ...graph,
+        nodes: filteredNodes,
+        edges: filteredEdges,
+      },
+    }
+  }, [graphResult, searchText])
+
+  // Extract available authors and branches from graph data
+  const { availableAuthors, availableBranches } = useMemo(() => {
+    if (graphResult._tag !== 'Success') {
+      return { availableAuthors: [], availableBranches: [] }
+    }
+
+    const graph = graphResult.value
+    const authorsSet = new Set<string>()
+    const branchesSet = new Set<string>()
+
+    // Extract unique authors from commits
+    graph.nodes.forEach((node) => {
+      authorsSet.add(node.commit.author.name)
+    })
+
+    // Extract branch names from refs
+    graph.nodes.forEach((node) => {
+      node.refs.forEach((ref) => {
+        // Simple branch name extraction (refs like "origin/main", "main", etc.)
+        if (ref.includes('/')) {
+          const parts = ref.split('/')
+          branchesSet.add(parts[parts.length - 1])
+        } else {
+          branchesSet.add(ref)
+        }
+      })
+    })
+
+    return {
+      availableAuthors: Array.from(authorsSet).sort(),
+      availableBranches: Array.from(branchesSet).sort(),
+    }
+  }, [graphResult])
 
   const handleCommitSelect = (hash: string) => {
     console.log('[CommitGraphView] handleCommitSelect called:', {
@@ -190,7 +282,17 @@ export function CommitGraphView({
         </button>
       </div>
 
-      {Result.builder(graphResult)
+      {/* Filters */}
+      <GraphFilters
+        options={filterOptions}
+        onOptionsChange={setFilterOptions}
+        availableBranches={availableBranches}
+        availableAuthors={availableAuthors}
+        searchText={searchText}
+        onSearchChange={setSearchText}
+      />
+
+      {Result.builder(filteredGraphResult)
         .onInitial(() => (
           <div className="flex items-center justify-center py-12">
             <LoadingSpinner size="md" />
