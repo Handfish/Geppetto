@@ -119,23 +119,84 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
     }
 
     /**
+     * Helper: Get all refs (branches and tags) for commits
+     */
+    const getRefsForCommits = (
+      repoPath: string,
+      commits: Commit[]
+    ): Effect.Effect<Map<string, string[]>, GraphBuildError> =>
+      Effect.gen(function* () {
+        // Get all branches with their commit hashes
+        const branchesOutput = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const request = new GitCommandRequest({
+              id: crypto.randomUUID() as GitCommandId,
+              args: ['for-each-ref', '--format=%(refname:short) %(objectname)', 'refs/heads/', 'refs/remotes/'],
+              worktree: new GitWorktreeContext({ repositoryPath: repoPath }),
+            })
+
+            const handle = yield* gitRunner.execute(request)
+            const result = yield* handle.awaitResult
+
+            return result.stdout ?? ''
+          })
+        ).pipe(Effect.catchAll(() => Effect.succeed('')))
+
+        // Parse refs into a map of commit hash -> ref names
+        const refsMap = new Map<string, string[]>()
+
+        if (branchesOutput) {
+          const lines = branchesOutput.split('\n')
+          for (const line of lines) {
+            if (!line.trim()) continue
+
+            const parts = line.trim().split(' ')
+            if (parts.length < 2) continue
+
+            const refName = parts[0]
+            const commitHash = parts[1]
+
+            if (!refsMap.has(commitHash)) {
+              refsMap.set(commitHash, [])
+            }
+            refsMap.get(commitHash)!.push(refName)
+          }
+        }
+
+        return refsMap
+      }).pipe(
+        Effect.catchAll((error) =>
+          Effect.fail(
+            new GraphBuildError({
+              repositoryId: new RepositoryId({ value: '' }),
+              reason: 'Failed to get refs for commits',
+              cause: error,
+            })
+          )
+        )
+      )
+
+    /**
      * Helper: Build graph from commits
      */
     const buildGraphFromCommits = (
       repositoryId: RepositoryId,
       commits: Commit[],
+      refsMap: Map<string, string[]>,
       options: GraphOptions
     ): CommitGraph => {
       const nodes: CommitGraphNode[] = []
       const edges: CommitGraphEdge[] = []
 
-      // Create nodes
+      // Create nodes with refs
       for (const commit of commits) {
+        const refs = refsMap.get(commit.hash.value) ?? []
+
         nodes.push(
           new CommitGraphNode({
             id: CommitGraphNodeId.fromCommitHash(commit.hash),
             commit,
-            refs: [], // Would need to parse git refs
+            refs, // Now includes branch/tag names!
             isHead: false, // Would need to check current HEAD
             column: 0, // Would need layout algorithm
           })
@@ -258,7 +319,8 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
           const repo = yield* repoService.getRepositoryById(repositoryId)
           const commits = yield* getCommitsFromRepo(repo.path, graphOptions)
-          const graph = buildGraphFromCommits(repositoryId, commits, graphOptions)
+          const refsMap = yield* getRefsForCommits(repo.path, commits)
+          const graph = buildGraphFromCommits(repositoryId, commits, refsMap, graphOptions)
 
           // Cache the graph
           yield* Ref.update(graphCache, (cache) => {
@@ -313,7 +375,8 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
 
           // Rebuild graph with new commits
           const allCommits = [...newCommits, ...existingGraph.nodes.map((n) => n.commit)]
-          const newGraph = buildGraphFromCommits(repositoryId, allCommits, existingGraph.options)
+          const refsMap = yield* getRefsForCommits(repo.path, allCommits)
+          const newGraph = buildGraphFromCommits(repositoryId, allCommits, refsMap, existingGraph.options)
 
           return new GraphUpdateResult({
             graph: newGraph,
