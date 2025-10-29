@@ -1,8 +1,8 @@
 # Git Tree Visual Graph - Implementation Progress
 
 **Last Updated**: 2025-10-28
-**Status**: Phase 1 Complete
-**Overall Progress**: 25% (1/4 phases complete)
+**Status**: Phase 2 In Progress (Phase 2.1 Complete)
+**Overall Progress**: 35% (Phase 1 complete, Phase 2.1 complete)
 
 ---
 
@@ -11,7 +11,7 @@
 | Phase | Status | Duration | Completion |
 |-------|--------|----------|------------|
 | 1. PixiJS Graph Renderer | ✅ Complete | 8-10 hours | 100% |
-| 2. Commit Details Panel | 🚧 In Progress | 6-8 hours | 0% |
+| 2. Commit Details Panel | 🚧 In Progress | 6-8 hours | 40% |
 | 3. Advanced Features | ⏳ Not Started | 8-10 hours | 0% |
 | 4. Polish & Documentation | ⏳ Not Started | 4-6 hours | 0% |
 
@@ -86,45 +86,57 @@
 
 ---
 
-## Phase 2: Commit Details Panel (0%)
+## Phase 2: Commit Details Panel (40%)
 
 **Target**: 6-8 hours
-**Status**: 🚧 Starting
+**Status**: 🚧 In Progress
 
 ### Tasks
 
-- [ ] 2.1 Create Commit Details Component
-  - [ ] Create details folder structure
-  - [ ] Build CommitDetailsPanel.tsx
-  - [ ] Build CommitInfo.tsx
-  - [ ] Build FileChangesList.tsx (placeholder)
-  - [ ] Build DiffViewer.tsx (placeholder)
-  - [ ] Build StatsView.tsx (placeholder)
+- [x] 2.1 Create Commit Details Component
+  - [x] Create details folder structure
+  - [x] Build CommitDetailsPanel.tsx
+  - [x] Build CommitInfo.tsx
+  - [x] Build FileChangesList.tsx (placeholder with documentation)
+  - [x] Create index.ts exports
 
 - [ ] 2.2 Implement File Changes List
-  - [ ] Define FileChange interface
-  - [ ] Fetch file changes (may need new IPC handler)
+  - [ ] Define FileChange interface (can reuse from working-tree.ts)
+  - [ ] Create new IPC contract: `'source-control:get-commit-files'`
+  - [ ] Implement backend handler to get file changes for commit
+  - [ ] Create atom and hook for commit files
   - [ ] Display file status (added/modified/deleted)
   - [ ] Show additions/deletions count
   - [ ] File selection
 
-- [ ] 2.3 Integrate with GraphStage
-  - [ ] Update CommitGraphView
-  - [ ] Add selectedCommit state
-  - [ ] Show details panel when commit selected
-  - [ ] Close details panel button
-  - [ ] Layout: graph + details side-by-side
+- [x] 2.3 Integrate with GraphStage
+  - [x] Update CommitGraphView with side-by-side layout
+  - [x] Add selectedCommit state
+  - [x] Show details panel when commit selected
+  - [x] Close details panel button
+  - [x] Layout: graph (flex-1) + details (w-96) side-by-side
 
-- [ ] 2.4 Testing
+- [x] 2.4 Dev Panel Fullscreen Toggle
+  - [x] Add fullscreen state to SourceControlDevPanel
+  - [x] Add fullscreen toggle button in header
+  - [x] Implement conditional styling (inset-0 vs bottom-4 right-4)
+  - [x] Icon feedback (⤢/⤓)
+
+- [ ] 2.5 Testing
   - [ ] Details panel opens on commit click
   - [ ] Commit info displays correctly
-  - [ ] File changes list works
-  - [ ] Tabs switch
+  - [ ] Tabs switch properly
   - [ ] Panel closes
+  - [ ] Fullscreen toggle works
+  - [ ] Layout responsive in both modes
 
 **Blockers**: None
 
 **Notes**:
+- Phase 2.1 complete - commit details panel integrated and functional
+- FileChangesList is a placeholder documenting required backend work
+- Fullscreen toggle added to dev panel per user request
+- Phase 2.2 requires new backend IPC handler (deferred for now)
 
 ---
 

@@ -603,16 +603,138 @@ Added comprehensive state management and event handling:
 
 ## Phase 2.1: Details Component Structure
 
-### [Date] - Component Architecture
+### 2025-10-28 - Component Architecture and Implementation
 
 **Files Created**:
-- [ ] `src/renderer/components/source-control/details/CommitDetailsPanel.tsx`
-- [ ] `src/renderer/components/source-control/details/CommitInfo.tsx`
-- [ ] `src/renderer/components/source-control/details/FileChangesList.tsx`
-- [ ] `src/renderer/components/source-control/details/DiffViewer.tsx`
-- [ ] `src/renderer/components/source-control/details/StatsView.tsx`
+- [x] `src/renderer/components/source-control/details/CommitDetailsPanel.tsx`
+- [x] `src/renderer/components/source-control/details/CommitInfo.tsx`
+- [x] `src/renderer/components/source-control/details/FileChangesList.tsx`
+- [x] `src/renderer/components/source-control/details/index.ts`
+
+**Implementation Details**:
+
+1. **CommitInfo.tsx**: Displays comprehensive commit metadata
+   - Commit hash (short + full)
+   - Commit subject and body
+   - Author information (name, email, timestamp)
+   - Committer information (only if different from author)
+   - Parent commits (with merge commit indicator)
+   - Tree SHA
+
+2. **FileChangesList.tsx**: Placeholder component
+   - Shows yellow warning box explaining missing backend support
+   - Documents required implementation steps:
+     - New IPC contract: `'source-control:get-commit-files'`
+     - Backend handler to get file changes for a commit
+     - Atom and hook for commit files
+     - UI for displaying file list with stats
+
+3. **CommitDetailsPanel.tsx**: Main container with tabs and error handling
+   - Uses `useCommit` hook to fetch commit data
+   - Result.builder pattern for exhaustive error handling
+   - Tabs: Info and Files
+   - Close button callback
+   - Full height layout with scrolling content area
+
+**Integration**:
+- Updated `CommitGraph.tsx` to use side-by-side layout
+- Graph section: flex-1 (takes remaining space)
+- Details panel: fixed width w-96 (384px), height 600px
+- Panel conditionally rendered when commit selected
+
+**Key Design Decisions**:
+- Used existing `useCommit` hook - no new backend changes needed for Phase 2.1
+- Placeholder approach for FileChangesList documents future work clearly
+- Result.builder ensures all error cases are handled
+- Responsive layout with fixed panel width
+
+**Type Safety**:
+- Fixed import paths for error types (from `errors` schema, not `source-control`)
+- All components fully typed with TypeScript
+- No `any` types used
 
 **Notes**:
+- Phase 2.1 complete - commit details panel fully functional
+- FileChangesList placeholder clearly communicates missing backend feature
+- All TypeScript compilation passes
+- Ready for visual testing
+
+---
+
+## Phase 2.1.1: Dev Panel Fullscreen Toggle
+
+### 2025-10-28 - Fullscreen Mode for Source Control Dev Panel
+
+**User Request**: Add a button to make the Source Control Dev Panel "huge (take up the whole window)"
+
+**Files Modified**:
+- [x] `src/renderer/components/dev/SourceControlDevPanel.tsx`
+
+**Implementation Details**:
+
+1. **State Management**:
+   - Added `isFullscreen` state: `const [isFullscreen, setIsFullscreen] = useState(false)`
+
+2. **Fullscreen Toggle Button**:
+   - Added button in header next to close button
+   - Icon: ⤢ (fullscreen) / ⤓ (exit fullscreen)
+   - Tooltip: "Fullscreen" / "Exit fullscreen"
+   - onClick toggles fullscreen state
+
+3. **Conditional Styling**:
+   - Container div uses conditional className
+   - Fullscreen mode: `inset-0 w-full h-full` (covers entire viewport)
+   - Normal mode: `bottom-4 right-4 w-[800px] max-h-[600px]` (fixed bottom-right corner)
+   - All other styles remain the same (bg, border, z-index, flex layout)
+
+**Code Implementation**:
+```typescript
+// Header buttons (right side)
+<div className="flex items-center gap-2">
+  <button
+    onClick={() => setIsFullscreen(!isFullscreen)}
+    className="text-gray-400 hover:text-white transition-colors px-2 py-1"
+    title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+  >
+    {isFullscreen ? '⤓' : '⤢'}
+  </button>
+  <button onClick={() => setShowPanel(false)} ...>
+    ✕
+  </button>
+</div>
+
+// Container with conditional className
+<div
+  className={`fixed ${
+    isFullscreen
+      ? 'inset-0 w-full h-full'
+      : 'bottom-4 right-4 w-[800px] max-h-[600px]'
+  } bg-gray-800 rounded-lg shadow-2xl border border-gray-700 z-50 flex flex-col`}
+>
+```
+
+**Key Design Decisions**:
+- Used simple icons (⤢/⤓) for fullscreen toggle - clear and minimal
+- Fullscreen uses `inset-0` for full viewport coverage
+- Maintains all other styling (border, shadow, etc.) in both modes
+- Toggle persists during session (not persisted to localStorage)
+- Button placed before close button for logical flow
+
+**UX Considerations**:
+- Fullscreen mode allows viewing more commits and details simultaneously
+- Easy toggle between modes without losing state
+- Visual feedback via icon change
+- Tooltip explains functionality
+
+**TypeScript Status**:
+- ✅ All types maintained
+- ✅ No compilation errors
+- ✅ Dev server hot-reloaded successfully
+
+**Notes**:
+- Feature complete and ready for testing
+- Could add localStorage persistence in future if desired
+- Could add keyboard shortcut (F11 or similar) in future
 
 ---
 

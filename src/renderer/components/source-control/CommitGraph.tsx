@@ -3,6 +3,7 @@ import { Result } from '@effect-atom/atom-react'
 import { useCommitGraph, useCommitHistory } from '../../hooks/useSourceControl'
 import { ErrorAlert, LoadingSpinner } from '../ui/ErrorAlert'
 import { GraphStage } from './graph'
+import { CommitDetailsPanel } from './details'
 import type {
   RepositoryId,
   CommitGraph as CommitGraphType,
@@ -184,20 +185,37 @@ export function CommitGraphView({
                 <span>{graph.totalBranches} branches</span>
               </div>
 
-              {/* PixiJS Visual Graph */}
-              <GraphStage
-                graph={graph}
-                selectedCommit={selectedCommit ?? undefined}
-                onCommitSelect={handleCommitSelect}
-                width={800}
-                height={600}
-              />
+              {/* Layout: Graph + Details Panel */}
+              <div className="flex gap-4">
+                {/* Graph Section */}
+                <div className="flex-1">
+                  {/* PixiJS Visual Graph */}
+                  <GraphStage
+                    graph={graph}
+                    selectedCommit={selectedCommit ?? undefined}
+                    onCommitSelect={handleCommitSelect}
+                    width={800}
+                    height={600}
+                  />
 
-              {graph.nodes.length < graph.totalCommits && (
-                <div className="text-center py-2 text-sm text-gray-500">
-                  Showing {graph.nodes.length} of {graph.totalCommits} commits
+                  {graph.nodes.length < graph.totalCommits && (
+                    <div className="text-center py-2 text-sm text-gray-500">
+                      Showing {graph.nodes.length} of {graph.totalCommits} commits
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* Details Panel (shown when commit selected) */}
+                {selectedCommit && (
+                  <div className="w-96 h-[600px]">
+                    <CommitDetailsPanel
+                      repositoryId={repositoryId}
+                      commitHash={selectedCommit}
+                      onClose={() => setSelectedCommit(null)}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )
         })

@@ -25,6 +25,7 @@ type TabType = 'repositories' | 'commits' | 'branches' | 'status'
 
 export function SourceControlDevPanel() {
   const [showPanel, setShowPanel] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('repositories')
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const hasLoggedRef = useRef(false)
@@ -111,7 +112,13 @@ export function SourceControlDevPanel() {
   ]
 
   return (
-    <div className="fixed bottom-4 right-4 w-[800px] max-h-[600px] bg-gray-800 rounded-lg shadow-2xl border border-gray-700 z-50 flex flex-col">
+    <div
+      className={`fixed ${
+        isFullscreen
+          ? 'inset-0 w-full h-full'
+          : 'bottom-4 right-4 w-[800px] max-h-[600px]'
+      } bg-gray-800 rounded-lg shadow-2xl border border-gray-700 z-50 flex flex-col`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-700">
         <div className="flex items-center gap-3">
@@ -134,13 +141,22 @@ export function SourceControlDevPanel() {
             </div>
           )}
         </div>
-        <button
-          onClick={() => setShowPanel(false)}
-          className="text-gray-400 hover:text-white transition-colors"
-          title="Hide panel"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="text-gray-400 hover:text-white transition-colors px-2 py-1"
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          >
+            {isFullscreen ? '⤓' : '⤢'}
+          </button>
+          <button
+            onClick={() => setShowPanel(false)}
+            className="text-gray-400 hover:text-white transition-colors"
+            title="Hide panel"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
