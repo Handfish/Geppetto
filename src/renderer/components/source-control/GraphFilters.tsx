@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, forwardRef } from 'react'
 import type { GraphOptions } from '../../../shared/schemas/source-control'
 import type { GraphDisplaySettings } from '../../hooks/useGraphSettings'
 
@@ -54,18 +54,22 @@ interface GraphFiltersProps {
   onReset?: () => void
 }
 
-export function GraphFilters({
-  options,
-  onOptionsChange,
-  displaySettings,
-  onDisplayChange,
-  availableBranches = [],
-  availableAuthors = [],
-  searchText = '',
-  onSearchChange,
-  onReset,
-}: GraphFiltersProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+export const GraphFilters = forwardRef<HTMLInputElement, GraphFiltersProps>(
+  function GraphFilters(
+    {
+      options,
+      onOptionsChange,
+      displaySettings,
+      onDisplayChange,
+      availableBranches = [],
+      availableAuthors = [],
+      searchText = '',
+      onSearchChange,
+      onReset,
+    },
+    searchInputRef
+  ) {
+    const [isExpanded, setIsExpanded] = useState(false)
 
   // Extract current values from options
   const maxCommits = options.maxCommits ?? 20
@@ -150,6 +154,7 @@ export function GraphFilters({
           {/* Quick search input (always visible) */}
           <div className="relative">
             <input
+              ref={searchInputRef}
               type="text"
               value={searchText}
               onChange={(e) => onSearchChange?.(e.target.value)}
@@ -318,3 +323,4 @@ export function GraphFilters({
     </div>
   )
 }
+)

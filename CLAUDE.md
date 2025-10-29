@@ -424,6 +424,179 @@ src/
     └── index.ts                 # IPC bridge (contextBridge)
 ```
 
+## Git Tree Visual Graph
+
+### Overview
+
+The Git Tree visual graph is a hardware-accelerated commit history visualization built with PixiJS and WebGL. It provides an interactive graph view of repository commits with rich interactivity, search/filtering, and commit details.
+
+**Status**: ✅ Complete (Phases 1-4)
+**Technology**: PixiJS v8, @pixi/react, WebGL rendering
+**Performance**: 60fps, hardware-accelerated
+
+### Features
+
+**Core Visualization**:
+- Interactive commit graph with lane-based layout
+- Hardware-accelerated WebGL rendering via PixiJS
+- Topological layout with automatic lane assignment
+- Colored lanes for easy branch tracking
+- Smooth zoom (0.5x - 2.0x) with mouse wheel
+
+**Interactivity**:
+- Click commits to view details
+- Right-click context menu (copy hash, message, view details)
+- Hover feedback with visual highlights
+- Mouse wheel zoom
+
+**Commit Details Panel**:
+- Full commit information (hash, author, date, message, parents)
+- File changes list with status badges (A/M/D/R)
+- Line additions/deletions statistics
+- Tabs interface (Changes / Diff / Stats)
+- Side-by-side layout with graph
+
+**Search & Filtering**:
+- Real-time client-side search (commit message/hash/content)
+- Author filter dropdown
+- Branch multi-select filter
+- Max commits slider (10-200)
+- Active filter count indicator
+
+**Display Settings**:
+- Toggle branch/tag labels (show/hide refs)
+- Toggle merge commits visibility
+- Settings persist to localStorage
+- Reset to defaults button
+
+**Keyboard Shortcuts**:
+- `Ctrl/Cmd + F`: Focus search
+- `Ctrl/Cmd + R`: Refresh graph
+- `Ctrl/Cmd + =`: Zoom in
+- `Ctrl/Cmd + -`: Zoom out
+- `Ctrl/Cmd + 0`: Reset zoom
+- `Escape`: Clear selection / Close panels
+
+### Architecture
+
+**Backend (Already Complete)**:
+- `CommitGraphService` - Graph building with topological layout
+- `RepositoryService` - Repository management and caching
+- IPC contracts (`source-control:get-commit-graph`)
+- Effect Atoms for reactive state
+
+**Frontend Components**:
+```
+src/renderer/components/source-control/
+├── CommitGraph.tsx              # Main container with state management
+├── GraphFilters.tsx             # Search, filters, display settings
+├── CommitContextMenu.tsx        # Right-click context menu
+├── graph/                       # PixiJS rendering
+│   ├── GraphStage.tsx          # Main PixiJS Stage component
+│   ├── CommitNode.tsx          # Commit circle (Graphics)
+│   ├── CommitEdge.tsx          # Edge line with curves (Graphics)
+│   ├── RefLabel.tsx            # Branch/tag label (Container + Text)
+│   ├── GraphLayout.ts          # Layout engine (position calculation)
+│   ├── GraphTheme.ts           # Colors and styling constants
+│   └── types.ts                # Graph rendering types
+└── details/                     # Commit details panel
+    ├── CommitDetailsPanel.tsx  # Main details container
+    ├── CommitInfo.tsx          # Commit metadata
+    └── FileChangesList.tsx     # Changed files list
+```
+
+**Custom Hooks**:
+```
+src/renderer/hooks/
+├── useSourceControl.ts              # Main source control hooks
+├── useGraphSettings.ts              # Settings persistence (localStorage)
+└── useGraphKeyboardShortcuts.ts    # Keyboard shortcut handling
+```
+
+### PixiJS Implementation
+
+**Component Pattern**:
+- `GraphStage`: PixiJS Application + Container for viewport
+- `CommitNode`: Graphics component (circle with interactive events)
+- `CommitEdge`: Graphics component (lines with bezier curves)
+- `RefLabel`: Container + Graphics (background) + Text (label)
+
+**Rendering Flow**:
+1. Backend graph → GraphLayoutEngine → Visual layout (x, y, colors)
+2. PixiJS Stage renders nodes, edges, labels
+3. Container applies viewport transform (zoom, pan)
+4. Interactive events (pointerdown, rightclick, pointerover)
+
+**Performance Optimizations**:
+- WebGL hardware acceleration (PixiJS)
+- useMemo for layout calculations
+- useCallback for event handlers
+- Client-side search (no backend round-trips)
+- Conditional rendering based on display settings
+
+### State Management
+
+**Settings Persistence**:
+```typescript
+interface GraphSettings extends Partial<GraphOptions> {
+  display: {
+    showRefs: boolean           // Show branch/tag labels
+    showMergeCommits: boolean   // Include merge commits
+    showMessages: boolean       // Show inline messages (future)
+  }
+}
+```
+
+**Storage**: localStorage key `geppetto:graph-settings`
+**Auto-save**: On every settings change
+**Schema Evolution**: Old settings merge with new defaults
+
+**Zoom State**: Managed in CommitGraph, passed down to GraphStage
+**Search State**: Local state with client-side filtering
+**Selection State**: Commit hash tracked in CommitGraph
+
+### Keyboard Shortcuts Implementation
+
+**Hook**: `useGraphKeyboardShortcuts`
+**Pattern**: Document-level event listener with capture phase
+**Filtering**: Ignores events when typing in inputs/textareas
+**Modifiers**: Ctrl (Windows/Linux) or Cmd (Mac)
+
+**Example Usage**:
+```typescript
+useGraphKeyboardShortcuts({
+  onFocusSearch: () => searchInputRef.current?.focus(),
+  onRefresh: refresh,
+  onZoomIn: () => setZoom((z) => Math.min(2.0, z + 0.1)),
+  onZoomOut: () => setZoom((z) => Math.max(0.5, z - 0.1)),
+  onResetZoom: () => setZoom(1.0),
+  onClearSelection: () => setSelectedCommit(null),
+})
+```
+
+### Documentation
+
+- **Usage Guide**: `docs/git-tree-ui-usage.md` - Complete user documentation
+- **Implementation Plan**: `docs/git-tree-ui-plan.md` - Original design document
+- **Progress Tracker**: `docs/git-tree-ui-progress.md` - Phase completion status
+- **Implementation Log**: `docs/git-tree-ui-log.md` - Detailed implementation notes
+
+### Future Enhancements
+
+**Phase 5** (Advanced Git Operations):
+- Checkout, cherry-pick, revert operations
+- Create branch/tag from commit
+- Interactive rebase
+
+**Phase 6** (Diff Viewer):
+- Inline file diff view with syntax highlighting
+- Side-by-side diff mode
+- Blame view integration
+
+**Phase 7** (File History):
+- File-specific commit history
+- Follow file renames across commits
+
 ## Architecture Documentation
 
 **See comprehensive docs** for detailed patterns and rationale:

@@ -41,6 +41,12 @@ interface GraphStageProps {
   /** Display settings (control visibility of graph elements) */
   displaySettings?: GraphDisplaySettings
 
+  /** External zoom level control (0.5 - 2.0) */
+  zoomLevel?: number
+
+  /** Callback when zoom changes (via mouse wheel) */
+  onZoomChange?: (zoom: number) => void
+
   /** Canvas width in pixels */
   width?: number
 
@@ -54,15 +60,19 @@ export function GraphStage({
   onCommitSelect,
   onCommitContextMenu,
   displaySettings,
+  zoomLevel,
+  onZoomChange,
   width = 800,
   height = 600,
 }: GraphStageProps) {
-  // Viewport state for zoom and pan
+  // Viewport state for pan only (zoom controlled externally)
   const [viewport, setViewport] = useState({
     x: 0,
     y: 20, // Add small top padding
-    scale: 1.0,
   })
+
+  // Use external zoom level if provided, otherwise default
+  const currentZoom = zoomLevel ?? 1.0
 
   // Hover state for debugging
   const [hoveredCommit, setHoveredCommit] = useState<string | null>(null)
@@ -112,10 +122,8 @@ export function GraphStage({
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault()
 
-      setViewport((prev) => ({
-        ...prev,
-        scale: Math.max(0.5, Math.min(2.0, prev.scale - event.deltaY * 0.001)),
-      }))
+      const newZoom = Math.max(0.5, Math.min(2.0, currentZoom - event.deltaY * 0.001))
+      onZoomChange?.(newZoom)
     }
 
     // Register with passive: false to allow preventDefault()
@@ -124,7 +132,7 @@ export function GraphStage({
     return () => {
       container.removeEventListener('wheel', handleWheel)
     }
-  }, [])
+  }, [currentZoom, onZoomChange])
 
   // Get hovered node info for display
   const hoveredNode = hoveredCommit ? layout.nodes.get(hoveredCommit as any) : null
@@ -156,7 +164,7 @@ export function GraphStage({
         <pixiContainer
           x={viewport.x}
           y={viewport.y}
-          scale={{ x: viewport.scale, y: viewport.scale }}
+          scale={{ x: currentZoom, y: currentZoom }}
         >
           {/* Render edges first (behind nodes) */}
           {filteredEdges.map((edge, index) => {

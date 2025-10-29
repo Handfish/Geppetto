@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Result } from '@effect-atom/atom-react'
 import { useCommitGraph, useCommitHistory, useCommit } from '../../hooks/useSourceControl'
 import { useGraphSettings } from '../../hooks/useGraphSettings'
+import { useGraphKeyboardShortcuts } from '../../hooks/useGraphKeyboardShortcuts'
 import { ErrorAlert, LoadingSpinner } from '../ui/ErrorAlert'
 import { GraphStage } from './graph'
 import { CommitDetailsPanel } from './details'
@@ -161,6 +162,33 @@ export function CommitGraphView({
     commit: Commit
     position: { x: number; y: number }
   } | null>(null)
+  const [zoomLevel, setZoomLevel] = useState(1.0)
+
+  // Refs for keyboard shortcuts
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // Zoom control callbacks
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel((prev) => Math.min(2.0, prev + 0.1))
+  }, [])
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel((prev) => Math.max(0.5, prev - 0.1))
+  }, [])
+
+  const handleResetZoom = useCallback(() => {
+    setZoomLevel(1.0)
+  }, [])
+
+  // Keyboard shortcuts
+  useGraphKeyboardShortcuts({
+    onFocusSearch: () => searchInputRef.current?.focus(),
+    onRefresh: refresh,
+    onZoomIn: handleZoomIn,
+    onZoomOut: handleZoomOut,
+    onResetZoom: handleResetZoom,
+    onClearSelection: () => setSelectedCommit(null),
+  })
 
   // Apply client-side search filtering to graph result
   const filteredGraphResult = useMemo(() => {
@@ -305,6 +333,7 @@ export function CommitGraphView({
 
       {/* Filters */}
       <GraphFilters
+        ref={searchInputRef}
         options={settings}
         onOptionsChange={updateFilters}
         displaySettings={settings.display}
@@ -399,6 +428,8 @@ export function CommitGraphView({
                     onCommitSelect={handleCommitSelect}
                     onCommitContextMenu={handleCommitContextMenu}
                     displaySettings={settings.display}
+                    zoomLevel={zoomLevel}
+                    onZoomChange={setZoomLevel}
                     width={800}
                     height={600}
                   />
