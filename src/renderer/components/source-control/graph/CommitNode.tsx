@@ -124,11 +124,12 @@ export function CommitNode({
           subject: node.commit.subject,
           position: { x: node.x, y: node.y },
           eventGlobal: { x: event.global.x, y: event.global.y },
+          eventClient: { x: event.client.x, y: event.client.y },
         })
-        // Pass global screen coordinates for menu positioning
+        // Use client coordinates which are already relative to the viewport
         onContextMenu?.(node.commit.hash, {
-          x: event.global.x,
-          y: event.global.y,
+          x: event.client.x,
+          y: event.client.y,
         })
       })
     },

@@ -116,7 +116,7 @@ export function SourceControlDevPanel() {
       className={`fixed ${
         isFullscreen
           ? 'inset-0 w-full h-full'
-          : 'bottom-4 right-4 w-[800px] max-h-[600px]'
+          : 'bottom-4 right-4 w-[1200px] h-[calc(100vh-8rem)]'
       } bg-gray-800 rounded-lg shadow-2xl border border-gray-700 z-50 flex flex-col`}
     >
       {/* Header */}
@@ -197,7 +197,7 @@ export function SourceControlDevPanel() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className={`flex-1 p-4 ${activeTab === 'commits' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
         {activeTab === 'repositories' && (
           <RepositoryExplorer
             onRepositorySelect={async (repo) => {
@@ -217,7 +217,7 @@ export function SourceControlDevPanel() {
         )}
 
         {activeTab === 'commits' && selectedRepository && (
-          <div className="space-y-6">
+          <div className="flex-1 flex flex-col min-h-0">
             <CommitGraphView
               repositoryId={selectedRepository.id}
               repositoryPath={selectedRepository.path}

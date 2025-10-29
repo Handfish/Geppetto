@@ -74,6 +74,12 @@ export function GraphStage({
   // Ref to the PixiJS container for direct manipulation
   const pixiContainerRef = useRef<any>(null)
 
+  // Ref to the PixiJS Application for resizing
+  const pixiAppRef = useRef<any>(null)
+
+  // Boolean state to trigger resize effect when app is ready
+  const [pixiAppReady, setPixiAppReady] = useState(false)
+
   // Use external zoom level if provided, otherwise default
   const currentZoom = zoomLevel ?? 1.0
 
@@ -95,6 +101,13 @@ export function GraphStage({
       pixiContainerRef.current.y = y
     }
   }, [])
+
+  // Resize PixiJS renderer when dimensions change
+  useEffect(() => {
+    if (pixiAppReady && pixiAppRef.current?.renderer) {
+      pixiAppRef.current.renderer.resize(width, height)
+    }
+  }, [width, height, pixiAppReady])
 
   // Calculate layout from backend graph
   // Memoized to avoid recalculation on every render
@@ -276,7 +289,6 @@ export function GraphStage({
       if (handled) {
         event.preventDefault()
         event.stopPropagation()
-        console.log('[GraphStage] Keyboard nav:', event.key, '→', viewportRef.current)
       }
     }
 
@@ -325,15 +337,28 @@ export function GraphStage({
         ref={containerRef}
         tabIndex={0}
         className="border border-gray-700 rounded outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-grab"
-        style={{ userSelect: 'none', width: `${width}px`, height: `${height}px` }}
+        style={{
+          userSelect: 'none',
+          width: `${width}px`,
+          height: `${height}px`,
+          overflow: 'hidden', // Prevent canvas overflow
+          display: 'block' // Remove any inline spacing
+        }}
         onClick={() => containerRef.current?.focus()}
       >
         <Application
+        ref={(app) => {
+          if (app && !pixiAppRef.current) {
+            pixiAppRef.current = app
+            setPixiAppReady(true)
+          }
+        }}
         width={width}
         height={height}
-        backgroundColor={defaultTheme.backgroundColor} // gray-800 for dark mode
-        antialias={true} // Smooth rendering
-        resolution={window.devicePixelRatio || 1} // Support high-DPI displays
+        backgroundColor={defaultTheme.backgroundColor}
+        antialias={true}
+        resolution={window.devicePixelRatio || 1}
+        style={{ display: 'block' }}
       >
         {/* Container for viewport transform (zoom/pan) */}
         <pixiContainer
@@ -367,14 +392,6 @@ export function GraphStage({
             .sort((a, b) => a.y - b.y)
             .map((node) => {
               const isSelected = node.commit.hash === selectedCommit
-              if (isSelected) {
-                console.log('[GraphStage] Rendering selected node:', {
-                  hash: node.commit.hash.slice(0, 7),
-                  subject: node.commit.subject,
-                  selectedCommit: selectedCommit?.slice(0, 7),
-                  position: { x: node.x, y: node.y },
-                })
-              }
               return (
                 <CommitNode
                   key={node.commit.hash}
@@ -382,19 +399,7 @@ export function GraphStage({
                   theme={defaultTheme}
                   isSelected={isSelected}
                   onSelect={onCommitSelect ?? (() => {})}
-                  onHover={(hash) => {
-                    setHoveredCommit(hash)
-                    if (hash) {
-                      const hoveredNode = layout.nodes.get(hash as any)
-                      if (hoveredNode) {
-                        console.log('[GraphStage] Hover on node:', {
-                          hash: hash.slice(0, 7),
-                          subject: hoveredNode.commit.subject,
-                          position: { x: hoveredNode.x, y: hoveredNode.y },
-                        })
-                      }
-                    }
-                  }}
+                  onHover={setHoveredCommit}
                   onContextMenu={onCommitContextMenu}
                 />
               )

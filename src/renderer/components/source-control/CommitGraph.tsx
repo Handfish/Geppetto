@@ -168,50 +168,69 @@ export function CommitGraphView({
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Ref for graph container to measure dimensions
-  const graphContainerRef = useRef<HTMLDivElement>(null)
-  const [graphDimensions, setGraphDimensions] = useState({ width: 800, height: 600 })
+  const [graphDimensions, setGraphDimensions] = useState<{ width: number; height: number } | null>(null)
+  const resizeObserverRef = useRef<ResizeObserver | null>(null)
+  const timeoutsRef = useRef<NodeJS.Timeout[]>([])
+  const containerElementRef = useRef<HTMLDivElement | null>(null)
 
-  // Measure container dimensions on mount and resize
-  useEffect(() => {
-    const updateDimensions = () => {
-      if (graphContainerRef.current) {
-        const { width, height } = graphContainerRef.current.getBoundingClientRect()
-        // Ensure minimum dimensions and account for padding/borders
-        const finalWidth = Math.max(width - 8, 400) // Account for border + padding
-        const finalHeight = Math.max(height - 8, 400) // Account for border + padding
+  // Shared dimension update function
+  const updateDimensions = useCallback(() => {
+    const container = containerElementRef.current
+    if (!container) return
 
-        // Only update if dimensions changed significantly (avoid infinite loops)
-        setGraphDimensions((prev) => {
-          if (Math.abs(prev.width - finalWidth) > 5 || Math.abs(prev.height - finalHeight) > 5) {
-            console.log('[CommitGraph] Updating dimensions:', {
-              width: finalWidth,
-              height: finalHeight,
-              rawWidth: width,
-              rawHeight: height,
-              hasDetails: !!selectedCommit
-            })
-            return { width: finalWidth, height: finalHeight }
-          }
-          return prev
-        })
+    const rect = container.getBoundingClientRect()
+    const width = rect.width
+    const height = rect.height
+
+    // Skip if container hasn't been laid out yet
+    if (width === 0 || height === 0) return
+
+    // Ensure minimum dimensions and account for padding/borders
+    const finalWidth = Math.max(width - 8, 400)
+    const finalHeight = Math.max(height - 8, 400)
+
+    // Only update if dimensions changed significantly (or first measurement)
+    setGraphDimensions((prev) => {
+      const widthChanged = !prev || Math.abs(prev.width - finalWidth) > 1
+      const heightChanged = !prev || Math.abs(prev.height - finalHeight) > 1
+
+      if (widthChanged || heightChanged) {
+        return { width: finalWidth, height: finalHeight }
       }
+
+      return prev
+    })
+  }, [])
+
+  // Callback ref for the graph container - sets up ResizeObserver when element is created
+  const graphContainerRef = useCallback((container: HTMLDivElement | null) => {
+    // Store the container element for later access
+    containerElementRef.current = container
+
+    // Clean up previous observer if it exists
+    if (resizeObserverRef.current) {
+      resizeObserverRef.current.disconnect()
+      timeoutsRef.current.forEach(clearTimeout)
+      timeoutsRef.current = []
     }
 
-    // Initial measurement with multiple attempts
-    const timeoutId = setTimeout(updateDimensions, 50)
-    const frameId = requestAnimationFrame(() => {
-      requestAnimationFrame(updateDimensions) // Double RAF for layout completion
+    if (!container) return
+
+    // Create ResizeObserver to automatically detect size changes
+    const resizeObserver = new ResizeObserver(() => {
+      updateDimensions()
     })
 
-    // Listen for window resize
-    window.addEventListener('resize', updateDimensions)
+    resizeObserverRef.current = resizeObserver
+    resizeObserver.observe(container)
 
-    return () => {
-      clearTimeout(timeoutId)
-      cancelAnimationFrame(frameId)
-      window.removeEventListener('resize', updateDimensions)
-    }
-  }, [selectedCommit]) // Re-measure when details panel opens/closes
+    // Initial measurement and delayed retry for layout completion
+    updateDimensions()
+    timeoutsRef.current.push(setTimeout(updateDimensions, 100))
+  }, [updateDimensions])
+
+  // REMOVED: Manual dimension update on selectedCommit change
+  // The ResizeObserver should automatically detect the container resize when details panel opens/closes
 
   // Zoom control callbacks
   const handleZoomIn = useCallback(() => {
@@ -305,21 +324,11 @@ export function CommitGraphView({
   }, [graphResult])
 
   const handleCommitSelect = (hash: string) => {
-    console.log('[CommitGraphView] handleCommitSelect called:', {
-      hash: hash.slice(0, 7),
-      fullHash: hash,
-      previousSelected: selectedCommit?.slice(0, 7),
-    })
     setSelectedCommit(hash)
     onCommitSelect?.(hash)
   }
 
   const handleCommitContextMenu = (hash: string, position: { x: number; y: number }) => {
-    console.log('[CommitGraphView] handleCommitContextMenu called:', {
-      hash: hash.slice(0, 7),
-      position,
-    })
-
     // Find the commit in the graph
     if (filteredGraphResult._tag === 'Success') {
       const node = filteredGraphResult.value.nodes.find((n) => String(n.id) === hash)
@@ -339,19 +348,12 @@ export function CommitGraphView({
         onInitial: () => {},
         onError: (error) => {
           if (error._tag === 'NotFoundError') {
-            console.log('[CommitGraphView] Cache miss detected, attempting automatic recovery...')
             setAutoRecoveryAttempted(true)
-
             // Attempt to refresh cache
             window.electron.ipcRenderer
               .invoke('source-control:get-repository', { path: repositoryPath })
-              .then(() => {
-                console.log('[CommitGraphView] Cache refreshed successfully, retrying graph load...')
-                refresh()
-              })
-              .catch((err) => {
-                console.error('[CommitGraphView] Cache refresh failed:', err)
-              })
+              .then(() => refresh())
+              .catch((err) => console.error('[CommitGraphView] Cache refresh failed:', err))
           }
         },
         onDefect: () => {},
@@ -466,21 +468,29 @@ export function CommitGraphView({
               </div>
 
               {/* Layout: Graph + Details Panel */}
-              <div className="flex gap-4 flex-1 min-h-0">
+              <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
                 {/* Graph Section */}
-                <div ref={graphContainerRef} className="flex-1 flex flex-col min-h-0 min-w-0">
-                  {/* PixiJS Visual Graph */}
-                  <GraphStage
-                    graph={graph}
-                    selectedCommit={selectedCommit ?? undefined}
-                    onCommitSelect={handleCommitSelect}
-                    onCommitContextMenu={handleCommitContextMenu}
-                    displaySettings={settings.display}
-                    zoomLevel={zoomLevel}
-                    onZoomChange={setZoomLevel}
-                    width={graphDimensions.width}
-                    height={graphDimensions.height}
-                  />
+                <div ref={graphContainerRef} className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden relative">
+                  {graphDimensions ? (
+                    <GraphStage
+                      graph={graph}
+                      selectedCommit={selectedCommit ?? undefined}
+                      onCommitSelect={handleCommitSelect}
+                      onCommitContextMenu={handleCommitContextMenu}
+                      displaySettings={settings.display}
+                      zoomLevel={zoomLevel}
+                      onZoomChange={setZoomLevel}
+                      width={graphDimensions.width}
+                      height={graphDimensions.height}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400">
+                      <div className="text-center">
+                        <LoadingSpinner size="md" />
+                        <p className="mt-2 text-sm">Loading graph...</p>
+                      </div>
+                    </div>
+                  )}
 
                   {graph.nodes.length < graph.totalCommits && (
                     <div className="text-center py-2 text-sm text-gray-500 flex-shrink-0">
