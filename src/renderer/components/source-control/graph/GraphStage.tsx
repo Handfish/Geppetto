@@ -325,7 +325,7 @@ export function GraphStage({
         ref={containerRef}
         tabIndex={0}
         className="border border-gray-700 rounded outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-grab"
-        style={{ userSelect: 'none' }}
+        style={{ userSelect: 'none', width: `${width}px`, height: `${height}px` }}
         onClick={() => containerRef.current?.focus()}
       >
         <Application

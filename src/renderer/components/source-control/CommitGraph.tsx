@@ -167,6 +167,37 @@ export function CommitGraphView({
   // Refs for keyboard shortcuts
   const searchInputRef = useRef<HTMLInputElement>(null)
 
+  // Ref for graph container to measure dimensions
+  const graphContainerRef = useRef<HTMLDivElement>(null)
+  const [graphDimensions, setGraphDimensions] = useState({ width: 800, height: 600 })
+
+  // Measure container dimensions on mount and resize
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (graphContainerRef.current) {
+        const { width, height } = graphContainerRef.current.getBoundingClientRect()
+        // Ensure minimum dimensions and account for padding/borders
+        const finalWidth = Math.max(width - 4, 400) // -4 for border
+        const finalHeight = Math.max(height - 4, 400) // -4 for border
+        setGraphDimensions({ width: finalWidth, height: finalHeight })
+        console.log('[CommitGraph] Measured dimensions:', { width: finalWidth, height: finalHeight, rawWidth: width, rawHeight: height })
+      }
+    }
+
+    // Initial measurement with delay to ensure layout is complete
+    const timeoutId = setTimeout(updateDimensions, 0)
+
+    // Also measure on next frame
+    requestAnimationFrame(updateDimensions)
+
+    // Listen for window resize
+    window.addEventListener('resize', updateDimensions)
+    return () => {
+      clearTimeout(timeoutId)
+      window.removeEventListener('resize', updateDimensions)
+    }
+  }, [selectedCommit]) // Re-measure when details panel opens/closes
+
   // Zoom control callbacks
   const handleZoomIn = useCallback(() => {
     setZoomLevel((prev) => Math.min(2.0, prev + 0.1))
@@ -408,7 +439,7 @@ export function CommitGraphView({
           }
 
           return (
-            <div className="space-y-3">
+            <div className="flex flex-col flex-1 space-y-3">
               <div className="flex items-center justify-between text-sm text-gray-400">
                 <span>
                   {graph.totalCommits}{' '}
@@ -418,9 +449,9 @@ export function CommitGraphView({
               </div>
 
               {/* Layout: Graph + Details Panel */}
-              <div className="flex gap-4">
+              <div className="flex gap-4 flex-1 min-h-0">
                 {/* Graph Section */}
-                <div className="flex-1">
+                <div ref={graphContainerRef} className="flex-1 min-h-0">
                   {/* PixiJS Visual Graph */}
                   <GraphStage
                     graph={graph}
@@ -430,8 +461,8 @@ export function CommitGraphView({
                     displaySettings={settings.display}
                     zoomLevel={zoomLevel}
                     onZoomChange={setZoomLevel}
-                    width={800}
-                    height={600}
+                    width={graphDimensions.width}
+                    height={graphDimensions.height}
                   />
 
                   {graph.nodes.length < graph.totalCommits && (

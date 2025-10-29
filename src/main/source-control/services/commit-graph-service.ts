@@ -177,6 +177,75 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
       )
 
     /**
+     * Helper: Assign lanes (columns) to commits
+     *
+     * Lane assignment algorithm:
+     * 1. Process commits from OLDEST to NEWEST (reverse of git log order)
+     * 2. Start each root commit (no parents) in lane 0
+     * 3. Try to place each commit in the same lane as its first parent
+     * 4. For merge commits, use the main parent's lane
+     * 5. Keep track of which lanes are "active" (have commits that will continue)
+     */
+    const assignLanes = (commits: Commit[]): Map<string, number> => {
+      const laneAssignments = new Map<string, number>()
+      const activeLanes: string[] = [] // Track which commit hash continues in each lane
+
+      // Build parent-to-children map for better traversal
+      const childrenMap = new Map<string, string[]>()
+      for (const commit of commits) {
+        for (const parent of commit.parents) {
+          if (!childrenMap.has(parent.value)) {
+            childrenMap.set(parent.value, [])
+          }
+          childrenMap.get(parent.value)!.push(commit.hash.value)
+        }
+      }
+
+      // Process commits from OLDEST to NEWEST (reverse order)
+      for (let i = commits.length - 1; i >= 0; i--) {
+        const commit = commits[i]
+        let assignedLane = -1
+
+        // If commit has no parents (root), assign to lane 0
+        if (commit.parents.length === 0) {
+          assignedLane = 0
+        }
+        // Try to continue in the same lane as first parent
+        else {
+          const firstParentLane = laneAssignments.get(commit.parents[0].value)
+          if (firstParentLane !== undefined) {
+            assignedLane = firstParentLane
+          }
+        }
+
+        // If still no lane, find first available lane
+        if (assignedLane === -1) {
+          assignedLane = activeLanes.findIndex((hash) => !hash)
+          if (assignedLane === -1) {
+            assignedLane = activeLanes.length
+          }
+        }
+
+        // Assign lane to commit
+        laneAssignments.set(commit.hash.value, assignedLane)
+
+        // Update active lanes - this commit now "owns" this lane
+        activeLanes[assignedLane] = commit.hash.value
+
+        // For additional parents (merge commits), reserve their lanes
+        for (let p = 1; p < commit.parents.length; p++) {
+          const parentLane = laneAssignments.get(commit.parents[p].value)
+          if (parentLane !== undefined && parentLane !== assignedLane) {
+            // Keep parent's lane active for the merge edge
+            activeLanes[parentLane] = commit.parents[p].value
+          }
+        }
+      }
+
+      return laneAssignments
+    }
+
+    /**
      * Helper: Build graph from commits
      */
     const buildGraphFromCommits = (
@@ -188,9 +257,13 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
       const nodes: CommitGraphNode[] = []
       const edges: CommitGraphEdge[] = []
 
-      // Create nodes with refs
+      // Assign lanes to commits
+      const laneAssignments = assignLanes(commits)
+
+      // Create nodes with refs and lane assignments
       for (const commit of commits) {
         const refs = refsMap.get(commit.hash.value) ?? []
+        const column = laneAssignments.get(commit.hash.value) ?? 0
 
         nodes.push(
           new CommitGraphNode({
@@ -198,7 +271,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
             commit,
             refs, // Now includes branch/tag names!
             isHead: false, // Would need to check current HEAD
-            column: 0, // Would need layout algorithm
+            column, // Now properly assigned!
           })
         )
       }
@@ -206,16 +279,19 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
       // Create edges (parent-child relationships)
       for (const commit of commits) {
         const childId = CommitGraphNodeId.fromCommitHash(commit.hash)
+        const childColumn = laneAssignments.get(commit.hash.value) ?? 0
 
         for (const parentHash of commit.parents) {
           const parentId = CommitGraphNodeId.fromCommitHash(parentHash)
+          const parentColumn = laneAssignments.get(parentHash.value) ?? 0
 
+          // Edge column is the source (parent) column
           edges.push(
             new CommitGraphEdge({
               from: parentId,
               to: childId,
               isMerge: commit.isMergeCommit(),
-              column: 0, // Would need layout algorithm
+              column: parentColumn,
             })
           )
         }
