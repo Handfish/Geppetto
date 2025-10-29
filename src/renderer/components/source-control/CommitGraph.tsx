@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Result } from '@effect-atom/atom-react'
 import { useCommitGraph, useCommitHistory } from '../../hooks/useSourceControl'
 import { ErrorAlert, LoadingSpinner } from '../ui/ErrorAlert'
@@ -91,11 +91,13 @@ function CommitNode({ commit, refs, isHead, onClick }: CommitNodeProps) {
  * - Shows refs (branches, tags) on commits
  * - Highlights HEAD commit
  * - Supports commit selection
+ * - Automatic cache recovery on NotFoundError
  *
  * Usage:
  * ```tsx
  * <CommitGraphView
  *   repositoryId={repositoryId}
+ *   repositoryPath={repositoryPath}
  *   options={{ maxCommits: 50 }}
  *   onCommitSelect={(hash) => console.log(hash)}
  * />
@@ -106,6 +108,11 @@ interface CommitGraphViewProps {
    * Repository ID to show graph for
    */
   repositoryId: RepositoryId
+
+  /**
+   * Repository path (for cache recovery)
+   */
+  repositoryPath: string
 
   /**
    * Graph options (max commits, branches, etc.)
@@ -120,11 +127,13 @@ interface CommitGraphViewProps {
 
 export function CommitGraphView({
   repositoryId,
+  repositoryPath,
   options,
   onCommitSelect,
 }: CommitGraphViewProps) {
   const { graphResult, refresh } = useCommitGraph(repositoryId, options)
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
+  const [autoRecoveryAttempted, setAutoRecoveryAttempted] = useState(false)
 
   const handleCommitSelect = (hash: string) => {
     console.log('[CommitGraphView] handleCommitSelect called:', {
@@ -135,6 +144,39 @@ export function CommitGraphView({
     setSelectedCommit(hash)
     onCommitSelect?.(hash)
   }
+
+  // Automatic cache recovery on NotFoundError
+  useEffect(() => {
+    if (graphResult._tag === 'Failure' && !graphResult.waiting && !autoRecoveryAttempted) {
+      Result.matchWithError(graphResult, {
+        onInitial: () => {},
+        onError: (error) => {
+          if (error._tag === 'NotFoundError') {
+            console.log('[CommitGraphView] Cache miss detected, attempting automatic recovery...')
+            setAutoRecoveryAttempted(true)
+
+            // Attempt to refresh cache
+            window.electron.ipcRenderer
+              .invoke('source-control:get-repository', { path: repositoryPath })
+              .then(() => {
+                console.log('[CommitGraphView] Cache refreshed successfully, retrying graph load...')
+                refresh()
+              })
+              .catch((err) => {
+                console.error('[CommitGraphView] Cache refresh failed:', err)
+              })
+          }
+        },
+        onDefect: () => {},
+        onSuccess: () => {},
+      })
+    }
+  }, [graphResult, autoRecoveryAttempted, repositoryPath, refresh])
+
+  // Reset recovery flag when switching repositories
+  useEffect(() => {
+    setAutoRecoveryAttempted(false)
+  }, [repositoryId])
 
   return (
     <div className="space-y-4">
@@ -163,22 +205,31 @@ export function CommitGraphView({
                 </svg>
               </div>
               <div className="flex-1 space-y-2">
-                <h4 className="text-sm font-semibold text-red-200">Repository Cache Missing</h4>
+                <h4 className="text-sm font-semibold text-red-200">Repository Cache Error</h4>
                 <p className="text-xs text-red-100">
-                  The repository is not in cache. This can happen if the cache expired or the app restarted.
+                  {autoRecoveryAttempted
+                    ? 'Automatic cache recovery failed. The repository could not be loaded.'
+                    : 'Attempting to refresh repository cache...'}
                 </p>
-                <p className="text-xs text-red-100 font-mono">
-                  Repository ID: {repositoryId.value.slice(0, 8)}...
-                </p>
-                <button
-                  onClick={refresh}
-                  className="mt-2 px-3 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
-                >
-                  Retry Loading
-                </button>
-                <p className="text-xs text-red-200 mt-2">
-                  <strong>Note:</strong> If this persists, please re-select the repository from the Repositories tab.
-                </p>
+                {autoRecoveryAttempted && (
+                  <>
+                    <p className="text-xs text-red-100 font-mono">
+                      Repository ID: {repositoryId.value.slice(0, 8)}...
+                    </p>
+                    <button
+                      onClick={() => {
+                        setAutoRecoveryAttempted(false)
+                        refresh()
+                      }}
+                      className="mt-2 px-3 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
+                    >
+                      Retry
+                    </button>
+                    <p className="text-xs text-red-200 mt-2">
+                      <strong>Note:</strong> Please re-select the repository from the Repositories tab.
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -236,6 +287,7 @@ export function CommitGraphView({
                   <div className="w-96 h-[600px]">
                     <CommitDetailsPanel
                       repositoryId={repositoryId}
+                      repositoryPath={repositoryPath}
                       commitHash={selectedCommit}
                       onClose={() => setSelectedCommit(null)}
                     />

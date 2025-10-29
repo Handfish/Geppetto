@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Result } from '@effect-atom/atom-react'
 import { useCommit } from '../../../hooks/useSourceControl'
 import { ErrorAlert, LoadingSpinner } from '../../ui/ErrorAlert'
@@ -18,14 +18,16 @@ import type {
  *
  * Features:
  * - Commit metadata (hash, author, message)
- * - File changes list (placeholder for now)
+ * - File changes list
  * - Close button
  * - Responsive layout
+ * - Automatic cache recovery on NotFoundError
  *
  * Usage:
  * ```tsx
  * <CommitDetailsPanel
  *   repositoryId={repositoryId}
+ *   repositoryPath={repositoryPath}
  *   commitHash={selectedCommitHash}
  *   onClose={() => setSelectedCommit(null)}
  * />
@@ -36,6 +38,9 @@ interface CommitDetailsPanelProps {
   /** Repository ID */
   repositoryId: RepositoryId
 
+  /** Repository path (for cache recovery) */
+  repositoryPath: string
+
   /** Commit hash to display */
   commitHash: string
 
@@ -45,11 +50,46 @@ interface CommitDetailsPanelProps {
 
 export function CommitDetailsPanel({
   repositoryId,
+  repositoryPath,
   commitHash,
   onClose,
 }: CommitDetailsPanelProps) {
-  const { commitResult } = useCommit(repositoryId, commitHash)
+  const { commitResult, refresh } = useCommit(repositoryId, commitHash)
   const [activeTab, setActiveTab] = useState<'info' | 'files'>('info')
+  const [autoRecoveryAttempted, setAutoRecoveryAttempted] = useState(false)
+
+  // Automatic cache recovery on NotFoundError
+  useEffect(() => {
+    if (commitResult._tag === 'Failure' && !commitResult.waiting && !autoRecoveryAttempted) {
+      Result.matchWithError(commitResult, {
+        onInitial: () => {},
+        onError: (error) => {
+          if (error._tag === 'NotFoundError') {
+            console.log('[CommitDetailsPanel] Cache miss detected, attempting automatic recovery...')
+            setAutoRecoveryAttempted(true)
+
+            // Attempt to refresh cache
+            window.electron.ipcRenderer
+              .invoke('source-control:get-repository', { path: repositoryPath })
+              .then(() => {
+                console.log('[CommitDetailsPanel] Cache refreshed successfully, retrying commit load...')
+                refresh()
+              })
+              .catch((err) => {
+                console.error('[CommitDetailsPanel] Cache refresh failed:', err)
+              })
+          }
+        },
+        onDefect: () => {},
+        onSuccess: () => {},
+      })
+    }
+  }, [commitResult, autoRecoveryAttempted, repositoryPath, refresh])
+
+  // Reset recovery flag when switching commits or repositories
+  useEffect(() => {
+    setAutoRecoveryAttempted(false)
+  }, [repositoryId, commitHash])
 
   return (
     <div className="flex flex-col h-full bg-gray-900 border-l border-gray-700">
@@ -118,19 +158,39 @@ export function CommitDetailsPanel({
                   </svg>
                 </div>
                 <div className="flex-1 space-y-2">
-                  <h4 className="text-sm font-semibold text-red-200">Repository Cache Missing</h4>
+                  <h4 className="text-sm font-semibold text-red-200">Repository Cache Error</h4>
                   <p className="text-xs text-red-100">
-                    The repository is not in cache. Please re-select it from the Repositories tab.
+                    {autoRecoveryAttempted
+                      ? 'Automatic cache recovery failed. The commit could not be loaded.'
+                      : 'Attempting to refresh repository cache...'}
                   </p>
-                  <p className="text-xs text-red-100 font-mono">
-                    Commit: {commitHash.slice(0, 7)}
-                  </p>
-                  <button
-                    onClick={onClose}
-                    className="mt-2 px-3 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
-                  >
-                    Close Panel
-                  </button>
+                  {autoRecoveryAttempted && (
+                    <>
+                      <p className="text-xs text-red-100 font-mono">
+                        Commit: {commitHash.slice(0, 7)}
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setAutoRecoveryAttempted(false)
+                            refresh()
+                          }}
+                          className="mt-2 px-3 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
+                        >
+                          Retry
+                        </button>
+                        <button
+                          onClick={onClose}
+                          className="mt-2 px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+                        >
+                          Close Panel
+                        </button>
+                      </div>
+                      <p className="text-xs text-red-200 mt-2">
+                        <strong>Note:</strong> Please re-select the repository from the Repositories tab.
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

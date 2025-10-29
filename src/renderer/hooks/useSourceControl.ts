@@ -323,12 +323,16 @@ export function useCommit(repositoryId: RepositoryId, commitHash: string) {
   );
 
   const commitResult = useAtomValue(commitAtom(params));
+  const refresh = useAtomRefresh(commitAtom(params));
 
   const commit = Result.getOrElse(commitResult, () => null);
 
   return {
     // Primary: Full Result for exhaustive error handling
     commitResult,
+
+    // Actions
+    refresh,
 
     // Computed convenience properties
     commit,

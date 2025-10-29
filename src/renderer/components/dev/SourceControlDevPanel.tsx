@@ -220,6 +220,7 @@ export function SourceControlDevPanel() {
           <div className="space-y-6">
             <CommitGraphView
               repositoryId={selectedRepository.id}
+              repositoryPath={selectedRepository.path}
               options={graphOptions}
             />
           </div>
