@@ -164,7 +164,19 @@ export function SourceControlDevPanel() {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={async () => {
+              // Ensure repository is cached when switching to data tabs
+              if (selectedRepository && tab.id !== 'repositories') {
+                try {
+                  console.log('[SourceControlDevPanel] Re-caching repository on tab switch:', selectedRepository.name)
+                  await window.electron.ipcRenderer.invoke('source-control:get-repository', { path: selectedRepository.path })
+                  console.log('[SourceControlDevPanel] Repository re-cached successfully')
+                } catch (error) {
+                  console.error('[SourceControlDevPanel] Failed to re-cache repository:', error)
+                }
+              }
+              setActiveTab(tab.id)
+            }}
             className={`
               px-4 py-2 text-sm font-medium transition-colors relative
               ${

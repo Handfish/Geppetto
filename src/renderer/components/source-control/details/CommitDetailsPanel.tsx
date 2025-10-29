@@ -110,7 +110,30 @@ export function CommitDetailsPanel({
             </div>
           ))
           .onErrorTag('NotFoundError', (error: NotFoundError) => (
-            <ErrorAlert error={error} message="Commit not found" />
+            <div className="p-4 border border-red-700 bg-red-900/20 rounded">
+              <div className="flex items-start gap-3">
+                <div className="text-red-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="flex-1 space-y-2">
+                  <h4 className="text-sm font-semibold text-red-200">Repository Cache Missing</h4>
+                  <p className="text-xs text-red-100">
+                    The repository is not in cache. Please re-select it from the Repositories tab.
+                  </p>
+                  <p className="text-xs text-red-100 font-mono">
+                    Commit: {commitHash.slice(0, 7)}
+                  </p>
+                  <button
+                    onClick={onClose}
+                    className="mt-2 px-3 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
+                  >
+                    Close Panel
+                  </button>
+                </div>
+              </div>
+            </div>
           ))
           .onErrorTag('NetworkError', (error: NetworkError) => (
             <ErrorAlert error={error} message="Failed to load commit" />

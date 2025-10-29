@@ -83,6 +83,7 @@
 - Fixed commit node selection/hover detection with proper state management
 - Added hover feedback (yellow ring) and debugging features
 - All features verified working: selection, hover, zoom, rendering
+- **PixiJS v8 API Migration** (completed during Phase 2.3): Updated all Graphics components to use v8 fluent API (`.circle().fill()`, `.roundRect().fill()`, `.stroke()`), removing deprecated methods (`beginFill`, `endFill`, `lineStyle`, `drawCircle`, `drawRoundedRect`)
 
 ---
 
@@ -125,7 +126,14 @@
   - [x] Implement conditional styling (inset-0 vs bottom-4 right-4)
   - [x] Icon feedback (⤢/⤓)
 
-- [ ] 2.5 Testing
+- [x] 2.5 Repository Cache Recovery
+  - [x] Add error UI with retry button to CommitGraph
+  - [x] Add error UI with close button to CommitDetailsPanel
+  - [x] Implement automatic cache refresh on tab switch
+  - [x] Add helpful error messages and debugging info
+  - [x] Test TypeScript compilation and hot reload
+
+- [ ] 2.6 Testing
   - [ ] Details panel opens on commit click (pending visual testing)
   - [ ] Commit info displays correctly (pending visual testing)
   - [ ] File changes list displays correctly (pending visual testing)
@@ -133,6 +141,7 @@
   - [ ] Panel closes (pending visual testing)
   - [ ] Fullscreen toggle works (pending visual testing)
   - [ ] Layout responsive in both modes (pending visual testing)
+  - [ ] Cache recovery mechanisms work (pending cache expiration test)
 
 **Blockers**: None
 
@@ -144,6 +153,7 @@
 - Visual testing pending user interaction
 - Performance optimized with 10-minute TTL caching
 - Fullscreen toggle enhances UX for detailed inspection
+- **Cache Recovery**: Implemented three-level cache recovery strategy (automatic refresh on tab switch, manual retry in CommitGraph, graceful panel closure in CommitDetailsPanel) to handle repository cache expiration gracefully
 
 ---
 
