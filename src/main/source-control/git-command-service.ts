@@ -115,7 +115,29 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
           if (!branchExisted) {
             // Branch doesn't exist - need to create it
             // First, determine base branch if not provided
-            const effectiveBaseBranch = baseBranch ?? repo.defaultBranch ?? 'main'
+            let effectiveBaseBranch = baseBranch ?? repo.defaultBranch
+
+            // If still no base branch, detect from git
+            if (!effectiveBaseBranch) {
+              const defaultBranchResult = yield* runToCompletion(
+                new GitCommandRequest({
+                  id: randomUUID() as GitCommandId,
+                  binary: 'git',
+                  args: ['symbolic-ref', 'refs/remotes/origin/HEAD'],
+                  worktree: new GitWorktreeContext({
+                    repositoryPath: repoPath,
+                  }),
+                })
+              ).pipe(
+                Effect.map((result) => {
+                  // Output is like "refs/remotes/origin/master"
+                  const match = result.stdout.trim().match(/refs\/remotes\/origin\/(.+)/)
+                  return match ? match[1] : 'main'
+                }),
+                Effect.catchAll(() => Effect.succeed('main'))
+              )
+              effectiveBaseBranch = defaultBranchResult
+            }
 
             // Create new branch from base branch
             yield* runToCompletion(
@@ -131,8 +153,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
               Effect.mapError((error) =>
                 new GitOperationError({
                   message: `Failed to create branch ${branchName} from ${effectiveBaseBranch}`,
-                  operation: 'create-branch',
-                  details: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
+                  stderr: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
                 })
               )
             )
@@ -152,8 +173,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             Effect.mapError((error) =>
               new GitOperationError({
                 message: `Failed to create worktree at ${worktreePath}`,
-                operation: 'worktree-add',
-                details: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
+                stderr: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
               })
             )
           )
@@ -196,8 +216,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             Effect.mapError((error) =>
               new GitOperationError({
                 message: `Failed to remove worktree at ${worktreePath}`,
-                operation: 'worktree-remove',
-                details: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
+                stderr: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
               })
             )
           )
@@ -236,8 +255,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             Effect.mapError((error) =>
               new GitOperationError({
                 message: 'Failed to list worktrees',
-                operation: 'worktree-list',
-                details: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
+                stderr: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
               })
             )
           )

@@ -524,6 +524,21 @@ export const mapDomainErrorToIpcError = (
     }
   }
 
+  // Handle shared errors directly (pass through)
+  if (error instanceof GitOperationError) {
+    return Effect.succeed({
+      _tag: 'Error' as const,
+      error: error,
+    })
+  }
+
+  if (error instanceof NotFoundError) {
+    return Effect.succeed({
+      _tag: 'Error' as const,
+      error: error,
+    })
+  }
+
   // Handle source control domain errors
   if (isSourceControlDomainError(error)) {
     // Repository not found errors
