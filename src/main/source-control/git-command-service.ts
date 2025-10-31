@@ -1,9 +1,9 @@
 import { Effect, Stream, Scope } from 'effect'
 import type {
   GitCommandEvent,
-  GitCommandRequest,
   GitCommandResult,
 } from '../../shared/schemas/source-control'
+import { GitCommandRequest, GitWorktreeContext, GitCommandId } from '../../shared/schemas/source-control'
 import type { GitCommandDomainError } from '../../shared/schemas/source-control/errors'
 import { NodeGitCommandRunner } from './adapters/git/node-git-command-runner'
 import type { GitCommandExecutionHandle } from './ports'
@@ -11,6 +11,7 @@ import { RepositoryService } from './services/repository-service'
 import { RepositoryId } from './domain/aggregates/repository'
 import { NotFoundError, GitOperationError } from '../../shared/schemas/errors'
 import * as path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 /**
  * Application service orchestrating command executions via the runner port.
@@ -95,11 +96,16 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
           const worktreePath = path.resolve(path.dirname(repoPath), `worktree-${branchName}`)
 
           // Check if branch exists
-          const branchCheckResult = yield* runToCompletion({
-            command: 'git',
-            args: ['rev-parse', '--verify', branchName],
-            cwd: repoPath,
-          }).pipe(
+          const branchCheckResult = yield* runToCompletion(
+            new GitCommandRequest({
+              id: randomUUID() as GitCommandId,
+              binary: 'git',
+              args: ['rev-parse', '--verify', branchName],
+              worktree: new GitWorktreeContext({
+                repositoryPath: repoPath,
+              }),
+            })
+          ).pipe(
             Effect.map(() => true),
             Effect.catchAll(() => Effect.succeed(false))
           )
@@ -112,11 +118,16 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             const effectiveBaseBranch = baseBranch ?? repo.defaultBranch ?? 'main'
 
             // Create new branch from base branch
-            yield* runToCompletion({
-              command: 'git',
-              args: ['branch', branchName, effectiveBaseBranch],
-              cwd: repoPath,
-            }).pipe(
+            yield* runToCompletion(
+              new GitCommandRequest({
+                id: randomUUID() as GitCommandId,
+                binary: 'git',
+                args: ['branch', branchName, effectiveBaseBranch],
+                worktree: new GitWorktreeContext({
+                  repositoryPath: repoPath,
+                }),
+              })
+            ).pipe(
               Effect.mapError((error) =>
                 new GitOperationError({
                   message: `Failed to create branch ${branchName} from ${effectiveBaseBranch}`,
@@ -128,11 +139,16 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
           }
 
           // Create worktree
-          yield* runToCompletion({
-            command: 'git',
-            args: ['worktree', 'add', worktreePath, branchName],
-            cwd: repoPath,
-          }).pipe(
+          yield* runToCompletion(
+            new GitCommandRequest({
+              id: randomUUID() as GitCommandId,
+              binary: 'git',
+              args: ['worktree', 'add', worktreePath, branchName],
+              worktree: new GitWorktreeContext({
+                repositoryPath: repoPath,
+              }),
+            })
+          ).pipe(
             Effect.mapError((error) =>
               new GitOperationError({
                 message: `Failed to create worktree at ${worktreePath}`,
@@ -167,11 +183,16 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             )
           )
 
-          yield* runToCompletion({
-            command: 'git',
-            args: ['worktree', 'remove', worktreePath, '--force'],
-            cwd: repo.path,
-          }).pipe(
+          yield* runToCompletion(
+            new GitCommandRequest({
+              id: randomUUID() as GitCommandId,
+              binary: 'git',
+              args: ['worktree', 'remove', worktreePath, '--force'],
+              worktree: new GitWorktreeContext({
+                repositoryPath: repo.path,
+              }),
+            })
+          ).pipe(
             Effect.mapError((error) =>
               new GitOperationError({
                 message: `Failed to remove worktree at ${worktreePath}`,
@@ -202,11 +223,16 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             )
           )
 
-          const result = yield* runToCompletion({
-            command: 'git',
-            args: ['worktree', 'list', '--porcelain'],
-            cwd: repo.path,
-          }).pipe(
+          const result = yield* runToCompletion(
+            new GitCommandRequest({
+              id: randomUUID() as GitCommandId,
+              binary: 'git',
+              args: ['worktree', 'list', '--porcelain'],
+              worktree: new GitWorktreeContext({
+                repositoryPath: repo.path,
+              }),
+            })
+          ).pipe(
             Effect.mapError((error) =>
               new GitOperationError({
                 message: 'Failed to list worktrees',

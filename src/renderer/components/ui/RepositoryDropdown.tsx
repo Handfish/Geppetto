@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   useFloating,
@@ -79,10 +79,8 @@ export function RepositoryDropdown({
     dismiss,
   ])
 
-  // Check workspace status when menu opens
-  useEffect(() => {
-    if (!isOpen) return
-
+  // Function to check workspace status
+  const checkWorkspaceStatus = useCallback(() => {
     setIsCheckingWorkspace(true)
 
     const checkWorkspace = Effect.gen(function* () {
@@ -93,7 +91,7 @@ export function RepositoryDropdown({
         provider: repo.provider,
         defaultBranch: repo.defaultBranch,
       })
-      return result.inWorkspace
+      return result
     })
 
     Effect.runPromise(
@@ -109,7 +107,13 @@ export function RepositoryDropdown({
         setWorkspaceRepositoryId(null)
         setIsCheckingWorkspace(false)
       })
-  }, [isOpen, repo.owner, repo.name])
+  }, [repo.owner, repo.name, repo.provider, repo.defaultBranch])
+
+  // Check workspace status when menu opens
+  useEffect(() => {
+    if (!isOpen) return
+    checkWorkspaceStatus()
+  }, [isOpen, checkWorkspaceStatus])
 
   const handleClone = () => {
     cloneToWorkspace({
@@ -135,6 +139,8 @@ export function RepositoryDropdown({
         toast.success(`${repo.owner}/${repo.name} cloned to workspace`, {
           duration: 6000,
         })
+        // Re-check workspace status after successful clone
+        checkWorkspaceStatus()
       } else if (Result.isFailure(cloneResult)) {
         // Extract error message using Result.match
         const errorMessage = Result.match(cloneResult, {
@@ -171,7 +177,7 @@ export function RepositoryDropdown({
     }
 
     prevWaitingRef.current = isWaiting
-  }, [cloneResult, repo.owner, repo.name])
+  }, [cloneResult, repo.owner, repo.name, checkWorkspaceStatus])
 
   // Sync anchor element - update whenever anchorRef or isOpen changes
   useEffect(() => {
