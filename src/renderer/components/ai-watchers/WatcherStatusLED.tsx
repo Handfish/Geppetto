@@ -60,13 +60,27 @@ const getStatusColor = (status: AiWatcher['status']) => {
 interface WatcherLEDProps {
   watcher: AiWatcher
   onClear?: (watcherId: string) => void
+  onClick?: (watcher: AiWatcher) => void
 }
 
-export function WatcherStatusLED({ watcher, onClear }: WatcherLEDProps) {
+export function WatcherStatusLED({ watcher, onClear, onClick }: WatcherLEDProps) {
   const colors = getStatusColor(watcher.status)
   const favicon = getProviderFavicon(watcher.type)
   const isActive = watcher.status === 'starting' || watcher.status === 'running' || watcher.status === 'idle'
   const isDead = watcher.status === 'stopped' || watcher.status === 'errored'
+
+  const handleClick = () => {
+    console.log('[WatcherStatusLED] Button clicked!')
+    console.log('[WatcherStatusLED] Watcher:', watcher.id, 'Status:', watcher.status)
+    console.log('[WatcherStatusLED] isDead:', isDead, 'onClick defined:', !!onClick)
+
+    if (onClick && !isDead) {
+      console.log('[WatcherStatusLED] Calling onClick handler...')
+      onClick(watcher)
+    } else {
+      console.log('[WatcherStatusLED] NOT calling onClick - isDead:', isDead, 'onClick:', !!onClick)
+    }
+  }
 
   return (
     <motion.div
@@ -77,13 +91,15 @@ export function WatcherStatusLED({ watcher, onClear }: WatcherLEDProps) {
       layout
     >
       {/* LED Square */}
-      <div
-        className="relative size-12 rounded border-2 backdrop-blur-xl transition-all duration-300"
+      <button
+        className="relative size-12 rounded border-2 backdrop-blur-xl transition-all duration-300 cursor-pointer hover:scale-110"
         style={{
           backgroundColor: colors.bg,
           borderColor: colors.border,
           boxShadow: isActive ? colors.shadow : 'none',
         }}
+        onClick={handleClick}
+        type="button"
       >
         {/* Favicon */}
         <div className="absolute inset-0 flex items-center justify-center text-lg">
@@ -112,13 +128,16 @@ export function WatcherStatusLED({ watcher, onClear }: WatcherLEDProps) {
         {isDead && onClear && (
           <button
             className="absolute -top-1 -right-1 size-4 bg-gray-700 hover:bg-red-500 rounded-full flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
-            onClick={() => onClear(watcher.id)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onClear(watcher.id)
+            }}
             type="button"
           >
             <X className="size-3 text-white" />
           </button>
         )}
-      </div>
+      </button>
 
       {/* Tooltip on hover */}
       <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">

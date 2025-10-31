@@ -277,6 +277,10 @@ export class AiWatcherClient extends Effect.Service<AiWatcherClient>()(
         (typeof IpcContracts)['ai-watcher:get-logs']['input']
       >
 
+      type SwitchTmuxInput = S.Schema.Type<
+        (typeof IpcContracts)['ai-watcher:switch-tmux']['input']
+      >
+
       return {
         createWatcher: (config: CreateWatcherInput) =>
           ipc.invoke('ai-watcher:create', config),
@@ -294,6 +298,13 @@ export class AiWatcherClient extends Effect.Service<AiWatcherClient>()(
           limit?: GetLogsInput['limit']
         ) => ipc.invoke('ai-watcher:get-logs', { watcherId, limit }),
         listTmuxSessions: () => ipc.invoke('ai-watcher:list-tmux', undefined),
+        switchToTmuxSession: (sessionName: SwitchTmuxInput['sessionName']) =>
+          Effect.gen(function* () {
+            console.log('[AiWatcherClient] switchToTmuxSession called for:', sessionName)
+            const result = yield* ipc.invoke('ai-watcher:switch-tmux', { sessionName })
+            console.log('[AiWatcherClient] switchToTmuxSession result:', result)
+            return result
+          }),
       } as const
     }),
   }

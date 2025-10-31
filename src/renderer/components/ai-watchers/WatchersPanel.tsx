@@ -1,13 +1,15 @@
 import { useAtomValue, useAtom, useAtomRefresh } from '@effect-atom/atom-react'
 import { AnimatePresence } from 'framer-motion'
-import { aiWatchersAtom, stopWatcherAtom } from '../../atoms/ai-watcher-atoms'
+import { aiWatchersAtom, stopWatcherAtom, switchToTmuxSessionAtom } from '../../atoms/ai-watcher-atoms'
 import { WatcherStatusLED } from './WatcherStatusLED'
 import { Result } from '@effect-atom/atom-react'
 import { useEffect } from 'react'
+import type { AiWatcher } from '../../../shared/schemas/ai-watchers'
 
 export function WatchersPanel() {
   const watchersResult = useAtomValue(aiWatchersAtom)
   const [, stopWatcher] = useAtom(stopWatcherAtom)
+  const [, switchToSession] = useAtom(switchToTmuxSessionAtom)
   const refreshWatchers = useAtomRefresh(aiWatchersAtom)
 
   // Poll for watcher status updates every 2 seconds
@@ -22,6 +24,19 @@ export function WatchersPanel() {
 
   const handleClearWatcher = (watcherId: string) => {
     stopWatcher(watcherId)
+  }
+
+  const handleLEDClick = (watcher: AiWatcher) => {
+    // Derive session name from watcher ID and type (matches backend pattern)
+    const sessionName = `ai-${watcher.type}-${watcher.id.slice(0, 8)}`
+    console.log('[WatchersPanel] LED clicked for watcher:', watcher.id)
+    console.log('[WatchersPanel] Derived session name:', sessionName)
+    console.log('[WatchersPanel] Calling switchToSession...')
+
+    // Use Effect-based IPC call to switch session
+    switchToSession(sessionName)
+
+    console.log('[WatchersPanel] switchToSession called')
   }
 
   // Debug logging
@@ -50,6 +65,7 @@ export function WatchersPanel() {
                   <WatcherStatusLED
                     key={watcher.id}
                     onClear={handleClearWatcher}
+                    onClick={handleLEDClick}
                     watcher={watcher}
                   />
                 )

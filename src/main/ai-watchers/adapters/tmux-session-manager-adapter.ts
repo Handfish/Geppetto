@@ -425,6 +425,25 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
             const sessionNames = sessions.split('\n').filter(Boolean)
             return sessionNames.includes(sessionName)
           }),
+
+        /**
+         * Switch the tmux client to a specific session
+         *
+         * @param sessionName - Name of the session to switch to
+         */
+        switchToSession: (sessionName: string) =>
+          Effect.gen(function* () {
+            console.log('[TmuxSessionManagerAdapter] switchToSession called for:', sessionName)
+            yield* Effect.logInfo(
+              `Switching tmux client to session "${sessionName}"`
+            )
+            console.log('[TmuxSessionManagerAdapter] Executing tmux switch-client command...')
+            const result = yield* executeTmuxCommand(`tmux switch-client -t '${sessionName}'`)
+            console.log('[TmuxSessionManagerAdapter] Command result:', result)
+            yield* Effect.logInfo(
+              `Successfully switched to session "${sessionName}"`
+            )
+          }),
       }
     }),
   }

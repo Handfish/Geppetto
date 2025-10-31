@@ -153,3 +153,21 @@ export const startWatcherAtom = aiWatcherRuntime.fn(
     reactivityKeys: ['ai-watchers:list', 'ai-watchers:watcher'],
   }
 )
+
+/**
+ * Switch to a tmux session
+ * No reactivity keys - this is a terminal UI action
+ */
+export const switchToTmuxSessionAtom = aiWatcherRuntime.fn(
+  (sessionName: string) =>
+    Effect.gen(function* () {
+      console.log('[switchToTmuxSessionAtom] Starting switch for session:', sessionName)
+      const client = yield* AiWatcherClient
+      console.log('[switchToTmuxSessionAtom] Got client, calling switchToTmuxSession...')
+      yield* client.switchToTmuxSession(sessionName)
+      console.log('[switchToTmuxSessionAtom] Switch completed successfully')
+    }),
+  {
+    reactivityKeys: [], // No data changes, just switches terminal view
+  }
+)

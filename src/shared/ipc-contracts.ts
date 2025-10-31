@@ -355,6 +355,13 @@ export const AiWatcherIpcContracts = {
     output: S.Array(TmuxSession),
     errors: S.Union(TmuxError),
   },
+
+  'ai-watcher:switch-tmux': {
+    channel: 'ai-watcher:switch-tmux' as const,
+    input: S.Struct({ sessionName: S.String }),
+    output: S.Void,
+    errors: S.Union(TmuxError),
+  },
 } as const
 
 /**
