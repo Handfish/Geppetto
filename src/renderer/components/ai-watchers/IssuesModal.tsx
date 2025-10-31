@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAtomValue, Result } from '@effect-atom/atom-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, Check, Zap, ListTodo } from 'lucide-react'
@@ -26,23 +26,54 @@ export function IssuesModal({
   repositoryId,
   onLaunchWatchers,
 }: IssuesModalProps) {
+  // Don't render anything (and don't subscribe to atoms) if modal is closed
+  // This prevents IPC spam when modal is not visible
+  if (!isOpen) {
+    return null
+  }
+
+  return (
+    <IssuesModalContent
+      accountId={accountId}
+      isOpen={isOpen}
+      onClose={onClose}
+      onLaunchWatchers={onLaunchWatchers}
+      owner={owner}
+      repo={repo}
+      repositoryId={repositoryId}
+    />
+  )
+}
+
+function IssuesModalContent({
+  isOpen,
+  onClose,
+  accountId,
+  owner,
+  repo,
+  repositoryId,
+  onLaunchWatchers,
+}: IssuesModalProps) {
   const [shortlist, setShortlist] = useState<Set<number>>(new Set())
   const [selectedProvider, setSelectedProvider] = useState<'claude-code' | 'codex' | 'cursor'>('claude-code')
 
   const { launchWatchersForIssues, isLaunching } = useAiWatcherLauncher()
 
-  // Fetch issues for the repository
-  const issuesResult = useAtomValue(
-    repositoryIssuesAtom({
+  // Use useMemo to ensure atom params are stable and prevent re-fetches
+  const issuesAtomParams = useMemo(
+    () => ({
       accountId,
       owner,
       repo,
       options: {
-        state: 'open',
+        state: 'open' as const,
         limit: 100,
       },
-    })
+    }),
+    [accountId, owner, repo]
   )
+
+  const issuesResult = useAtomValue(repositoryIssuesAtom(issuesAtomParams))
 
   // Reset shortlist when modal closes
   useEffect(() => {

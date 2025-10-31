@@ -133,8 +133,14 @@
 - Result.builder properly handles all error types from repositoryIssuesAtom
 - IssueRow displays: number, title, labels (color-coded), author, date, comments
 - AnimatePresence provides smooth backdrop and modal animations
-- onLaunchWatchers is a placeholder - will be implemented after Phase 3 watcher launcher hook
 - Compilation successful (exit code 0), bundle size 3,356 kB
+
+**Performance Fix** (IPC Spam Prevention):
+- Split component into IssuesModal (wrapper) and IssuesModalContent (actual content)
+- IssuesModal returns null when closed - prevents atom subscription when not visible
+- IssuesModalContent uses useMemo to stabilize atom params
+- This prevents IPC spam - modal only fetches issues when actually open
+- TTL caching (5min) prevents redundant fetches within same session
 
 ---
 
