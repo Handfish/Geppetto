@@ -42,9 +42,9 @@ interface ProcessInfo {
 }
 
 /**
- * Silence detection threshold - 30 seconds of no activity
+ * Silence detection threshold - 4 seconds of no activity
  */
-const SILENCE_THRESHOLD_MS = 30_000
+const SILENCE_THRESHOLD_MS = 4_000
 
 /**
  * Activity check interval - check every 5 seconds

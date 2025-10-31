@@ -95,7 +95,7 @@ const processEventToLogEntry = (
       break
     case 'silence':
       level = 'debug'
-      message = 'Process idle (30s silence detected)'
+      message = 'Process idle (4s silence detected)'
       break
   }
 

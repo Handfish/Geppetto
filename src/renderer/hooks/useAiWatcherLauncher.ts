@@ -52,12 +52,8 @@ export function useAiWatcherLauncher() {
         `[useAiWatcherLauncher] Worktree created: ${worktreeResult.worktreePath}`
       )
 
-      // Show toast notification
-      if (worktreeResult.branchExisted) {
-        toast.info(
-          `Using existing branch '${worktreeResult.branchName}' for issue #${issue.number}`
-        )
-      } else {
+      // Only show toast for newly created branches (not existing ones)
+      if (!worktreeResult.branchExisted) {
         toast.success(
           `Created new branch '${worktreeResult.branchName}' for issue #${issue.number}`
         )

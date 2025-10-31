@@ -18,8 +18,8 @@ const aiWatcherRuntime = Atom.runtime(AiWatcherClient.Default)
 
 /**
  * List all AI watchers
- * Refreshes every 3 seconds for real-time status updates
- * Use manual refresh via button or after actions for immediate updates
+ * Polling controlled by WatchersPanel (every 2 seconds)
+ * No auto-refresh TTL - manual refresh ensures fresh data
  */
 export const aiWatchersAtom = aiWatcherRuntime
   .atom(
@@ -29,8 +29,8 @@ export const aiWatchersAtom = aiWatcherRuntime
     })
   )
   .pipe(
-    Atom.withReactivity(['ai-watchers:list']),
-    Atom.setIdleTTL(Duration.seconds(3))
+    Atom.withReactivity(['ai-watchers:list'])
+    // No TTL - WatchersPanel polls every 2s via useAtomRefresh
   )
 
 /**

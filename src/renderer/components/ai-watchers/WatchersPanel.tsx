@@ -1,12 +1,24 @@
-import { useAtomValue, useAtom } from '@effect-atom/atom-react'
+import { useAtomValue, useAtom, useAtomRefresh } from '@effect-atom/atom-react'
 import { AnimatePresence } from 'framer-motion'
 import { aiWatchersAtom, stopWatcherAtom } from '../../atoms/ai-watcher-atoms'
 import { WatcherStatusLED } from './WatcherStatusLED'
 import { Result } from '@effect-atom/atom-react'
+import { useEffect } from 'react'
 
 export function WatchersPanel() {
   const watchersResult = useAtomValue(aiWatchersAtom)
   const [, stopWatcher] = useAtom(stopWatcherAtom)
+  const refreshWatchers = useAtomRefresh(aiWatchersAtom)
+
+  // Poll for watcher status updates every 2 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('[WatchersPanel] Polling for watcher updates...')
+      refreshWatchers()
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [refreshWatchers])
 
   const handleClearWatcher = (watcherId: string) => {
     stopWatcher(watcherId)
