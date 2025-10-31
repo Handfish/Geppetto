@@ -1,5 +1,5 @@
-import { Layer } from 'effect'
-import { WorkspaceService } from './workspace-service'
+import { Layer } from "effect";
+import { WorkspaceService } from "./workspace-service";
 
 /**
  * Workspace Domain Layer
@@ -27,6 +27,4 @@ import { WorkspaceService } from './workspace-service'
  * const repos = yield* workspace.discoverWorkspaceRepositories
  * ```
  */
-export const WorkspaceDomainLayer = Layer.mergeAll(
-  WorkspaceService.Default
-)
+export const WorkspaceDomainLayer = Layer.mergeAll(WorkspaceService.Default);

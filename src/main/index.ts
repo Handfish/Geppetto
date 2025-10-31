@@ -136,15 +136,14 @@ const MainLayer = Layer.mergeAll(
   // ═══════════════════════════════════════════════════════════════════════
   // Note: Provider operations use ProviderPortFactory (implemented by VCS domain)
 
-  // Source Control Domain Services with ProviderPortFactory
-  // SyncService needs ProviderPortFactory, so provide it via VcsSourceControlAdaptersWithDeps
+  // Source Control Domain Services
+  GitCommandService.Default,              // Git command execution
+  RepositoryService.Default,              // Repository discovery and management
+  CommitGraphService.Default,             // Commit graph operations
+
+  // SyncService needs ProviderPortFactory, so provide it separately
   Layer.provide(
-    Layer.mergeAll(
-      GitCommandService.Default,          // Git command execution
-      RepositoryService.Default,          // Repository discovery and management
-      CommitGraphService.Default,         // Commit graph operations
-      SyncService.Default,                // Repository synchronization (uses ProviderPortFactory)
-    ),
+    SyncService.Default,                  // Repository synchronization (uses ProviderPortFactory)
     VcsSourceControlAdaptersWithDeps      // Provides ProviderPortFactory
   ),
 

@@ -1,4 +1,4 @@
-import { Effect, Schema as S } from 'effect'
+import { Effect, Either, Schema as S } from 'effect'
 import { Path, FileSystem } from '@effect/platform'
 import { NodeFileSystem } from '@effect/platform-node'
 import Store from 'electron-store'
@@ -121,15 +121,29 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
             )
 
             if (bareRepoExists && worktreeExists) {
-              // Get repository ID from repository service
-              const repositoryService = yield* RepositoryService
-              const repository = yield* repositoryService.getRepositoryByPath(bareRepoPath)
+              // Try to get repository ID from repository service
+              // Note: Use repoParentDir which contains the bare repo, not the worktree
+              // Worktrees have .git as a file, not a directory
+              const repositoryResult = yield* Effect.either(
+                repositoryService.getRepository(repoParentDir)
+              )
 
+              if (Either.isRight(repositoryResult)) {
+                return {
+                  inWorkspace: true,
+                  bareRepoPath,
+                  worktreePath,
+                  repositoryId: repositoryResult.right.id,
+                }
+              }
+
+              // If we can't get the repository ID, still return that it's in workspace
+              // but with null repositoryId (will disable features that need it)
               return {
                 inWorkspace: true,
                 bareRepoPath,
                 worktreePath,
-                repositoryId: repository.id,
+                repositoryId: null,
               }
             }
 
