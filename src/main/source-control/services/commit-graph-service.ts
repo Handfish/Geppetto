@@ -168,7 +168,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
         Effect.catchAll((error) =>
           Effect.fail(
             new GraphBuildError({
-              repositoryId: new RepositoryId({ value: '' }),
+              repositoryId: RepositoryId.fromUUID('00000000-0000-0000-0000-000000000000'),
               reason: 'Failed to get refs for commits',
               cause: error,
             })
@@ -361,7 +361,7 @@ export class CommitGraphService extends Effect.Service<CommitGraphService>()('Co
         Effect.catchAll((error) =>
           Effect.fail(
             new GraphBuildError({
-              repositoryId: new RepositoryId({ value: '' }),
+              repositoryId: RepositoryId.fromUUID('00000000-0000-0000-0000-000000000000'),
               reason: 'Failed to get commits from repository',
               cause: error,
             })

@@ -31,7 +31,21 @@ export type RemoteUrl = S.Schema.Type<typeof RemoteUrl>
  */
 export class RepositoryId extends S.Class<RepositoryId>('RepositoryId')({
   value: RepositoryIdValue,
-}) {}
+}) {
+  /**
+   * Check if two RepositoryIds are equal
+   */
+  equals(other: RepositoryId): boolean {
+    return this.value === other.value
+  }
+
+  /**
+   * Create a RepositoryId from a UUID string
+   */
+  static fromUUID(uuid: string): RepositoryId {
+    return new RepositoryId({ value: uuid as RepositoryIdValue })
+  }
+}
 
 /**
  * RepositoryState - Serializable repository state

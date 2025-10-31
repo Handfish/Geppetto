@@ -87,7 +87,7 @@ export function GitErrorTester({ repository }: GitErrorTesterProps) {
         {
           repositoryId: repository.id,
           issueNumber: -1,
-          baseBranch: repository.defaultBranch || 'main',
+          baseBranch: repository.config?.defaultBranch || 'main',
         }
       )
       console.log('[GitErrorTester] Got result:', result)

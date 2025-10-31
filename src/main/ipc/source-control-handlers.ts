@@ -7,7 +7,6 @@ import { GitCommandService } from '../source-control/git-command-service'
 import { makeCommitHash } from '../source-control/domain/value-objects/commit-hash'
 import { makeBranchName } from '../source-control/domain/value-objects/branch-name'
 import {
-  RepositoryId as DomainRepositoryId,
   Repository,
   RepositoryMetadata,
   RepositoryDiscoveryInfo,
@@ -37,12 +36,6 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
   const commitService = yield* CommitGraphService
   const gitCommandService = yield* GitCommandService
 
-  /**
-   * Helper: Convert shared schema RepositoryId to domain RepositoryId
-   */
-  const toDomainRepositoryId = (id: { value: string }): DomainRepositoryId => {
-    return new DomainRepositoryId({ value: id.value })
-  }
 
   /**
    * Helper: Convert shared schema GraphOptions to domain GraphOptions
@@ -76,7 +69,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
    * Helper: Convert domain CommitGraph to shared schema CommitGraph
    */
   const toSharedCommitGraph = (graph: any) => ({
-    repositoryId: { value: graph.repositoryId.value },
+    repositoryId: graph.repositoryId,
     nodes: graph.nodes.map((n: any) => ({
       id: n.id.value, // CommitHash is a branded string
       commit: {
@@ -172,7 +165,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
   registerIpcHandler(
     SourceControlIpcContracts['source-control:get-repository-by-id'],
     (input) =>
-      repoService.getRepositoryById(toDomainRepositoryId(input.repositoryId)).pipe(
+      repoService.getRepositoryById(input.repositoryId).pipe(
         Effect.map(toSharedRepository)
       )
   )
@@ -180,7 +173,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
   registerIpcHandler(
     SourceControlIpcContracts['source-control:refresh-repository'],
     (input) =>
-      repoService.refreshRepository(toDomainRepositoryId(input.repositoryId)).pipe(
+      repoService.refreshRepository(input.repositoryId).pipe(
         Effect.map(toSharedRepository)
       )
   )
@@ -202,9 +195,9 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
   registerIpcHandler(
     SourceControlIpcContracts['source-control:get-repository-metadata'],
     (input) =>
-      repoService.getRepositoryMetadata(toDomainRepositoryId(input.repositoryId)).pipe(
+      repoService.getRepositoryMetadata(input.repositoryId).pipe(
         Effect.map((metadata: any) => ({
-          repositoryId: { value: metadata.repositoryId.value },
+          repositoryId: metadata.repositoryId,
           size: metadata.size,
           commitCount: metadata.commitCount,
           branchCount: metadata.branchCount,
@@ -227,7 +220,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
   registerIpcHandler(
     SourceControlIpcContracts['source-control:forget-repository'],
     (input) =>
-      repoService.forgetRepository(toDomainRepositoryId(input.repositoryId))
+      repoService.forgetRepository(input.repositoryId)
   )
 
   // ===== Commit Graph Handlers =====
@@ -237,7 +230,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     (input) =>
       commitService
         .buildCommitGraph(
-          toDomainRepositoryId(input.repositoryId),
+          input.repositoryId,
           toDomainGraphOptions(input.options)
         )
         .pipe(Effect.map(toSharedCommitGraph))
@@ -246,7 +239,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
   registerIpcHandler(
     SourceControlIpcContracts['source-control:get-commit-graph-statistics'],
     (input) =>
-      commitService.getCommitGraphStatistics(toDomainRepositoryId(input.repositoryId)).pipe(
+      commitService.getCommitGraphStatistics(input.repositoryId).pipe(
         Effect.map((stats) => ({
           totalNodes: stats.totalNodes,
           totalEdges: stats.totalEdges,
@@ -262,7 +255,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     SourceControlIpcContracts['source-control:get-commit'],
     (input) =>
       commitService
-        .getCommit(toDomainRepositoryId(input.repositoryId), makeCommitHash(input.commitHash))
+        .getCommit(input.repositoryId, makeCommitHash(input.commitHash))
         .pipe(Effect.map(toSharedCommit))
   )
 
@@ -271,7 +264,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     (input) =>
       commitService
         .getCommitWithRefs(
-          toDomainRepositoryId(input.repositoryId),
+          input.repositoryId,
           makeCommitHash(input.commitHash)
         )
         .pipe(
@@ -289,7 +282,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     (input) =>
       commitService
         .getCommitHistory(
-          toDomainRepositoryId(input.repositoryId),
+          input.repositoryId,
           makeBranchName(input.branchName),
           input.maxCount
         )
@@ -301,7 +294,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     (input) =>
       commitService
         .getCommitFiles(
-          toDomainRepositoryId(input.repositoryId),
+          input.repositoryId,
           makeCommitHash(input.commitHash)
         )
         .pipe(
@@ -380,7 +373,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     SourceControlIpcContracts['source-control:create-worktree-for-issue'],
     (input) =>
       Effect.gen(function* () {
-        const repositoryId = toDomainRepositoryId(input.repositoryId)
+        const repositoryId = input.repositoryId
         const result = yield* gitCommandService.createWorktreeForIssue(
           repositoryId,
           input.issueNumber,
@@ -394,7 +387,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     SourceControlIpcContracts['source-control:remove-worktree'],
     (input) =>
       Effect.gen(function* () {
-        const repositoryId = toDomainRepositoryId(input.repositoryId)
+        const repositoryId = input.repositoryId
         yield* gitCommandService.removeWorktree(repositoryId, input.worktreePath)
       })
   )
@@ -403,7 +396,7 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     SourceControlIpcContracts['source-control:list-worktrees'],
     (input) =>
       Effect.gen(function* () {
-        const repositoryId = toDomainRepositoryId(input.repositoryId)
+        const repositoryId = input.repositoryId
         const worktrees = yield* gitCommandService.listWorktrees(repositoryId)
         return worktrees
       })

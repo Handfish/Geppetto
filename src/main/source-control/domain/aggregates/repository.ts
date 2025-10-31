@@ -4,17 +4,13 @@ import { CommitHash } from '../value-objects/commit-hash'
 import { BranchName } from '../value-objects/branch-name'
 import { Branch } from '../entities/branch'
 import { Remote } from '../entities/remote'
+import { RepositoryId } from '../../../../shared/schemas/source-control/repository'
 
 /**
- * RepositoryId - Unique identifier for a repository
+ * RepositoryId - Re-exported from shared schemas for consistency
+ * Uses the shared schema RepositoryId with branded UUID for type safety
  */
-export class RepositoryId extends S.Class<RepositoryId>('RepositoryId')({
-  value: S.UUID,
-}) {
-  equals(other: RepositoryId): boolean {
-    return this.value === other.value
-  }
-}
+export { RepositoryId }
 
 /**
  * RepositoryState - Current state of the repository

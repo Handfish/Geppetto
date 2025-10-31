@@ -91,7 +91,6 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
               new NotFoundError({
                 message: `Repository not found: ${repositoryId}`,
                 resource: 'repository',
-                identifier: repositoryId,
               })
             )
           )
@@ -122,7 +121,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
           if (!branchExisted) {
             // Branch doesn't exist - need to create it
             // First, determine base branch if not provided
-            let effectiveBaseBranch = baseBranch ?? repo.defaultBranch
+            let effectiveBaseBranch = baseBranch ?? repo.config?.defaultBranch
 
             // If still no base branch, detect from git
             if (!effectiveBaseBranch) {
@@ -138,7 +137,8 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
               ).pipe(
                 Effect.map((result) => {
                   // Output is like "refs/remotes/origin/master"
-                  const match = result.stdout.trim().match(/refs\/remotes\/origin\/(.+)/)
+                  const stdout = result.stdout ?? ''
+                  const match = stdout.trim().match(/refs\/remotes\/origin\/(.+)/)
                   return match ? match[1] : 'main'
                 }),
                 Effect.catchAll(() => Effect.succeed('main'))
@@ -151,7 +151,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
               new GitCommandRequest({
                 id: makeCommandId(),
                 binary: 'git',
-                args: ['branch', branchName, effectiveBaseBranch],
+                args: ['branch', branchName, String(effectiveBaseBranch)],
                 worktree: new GitWorktreeContext({
                   repositoryPath: repoPath,
                 }),
@@ -236,7 +236,6 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
               new NotFoundError({
                 message: `Repository not found: ${repositoryId}`,
                 resource: 'repository',
-                identifier: repositoryId,
               })
             )
           )
@@ -275,7 +274,6 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
               new NotFoundError({
                 message: `Repository not found: ${repositoryId}`,
                 resource: 'repository',
-                identifier: repositoryId,
               })
             )
           )
@@ -300,7 +298,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
 
           // Parse porcelain output
           const worktrees: Array<{ path: string; branch: string; isMainWorktree: boolean }> = []
-          const lines = result.stdout.split('\n').filter((line) => line.trim())
+          const lines = (result.stdout ?? '').split('\n').filter((line) => line.trim())
 
           let currentWorktree: { path?: string; branch?: string; isMainWorktree?: boolean } = {}
 

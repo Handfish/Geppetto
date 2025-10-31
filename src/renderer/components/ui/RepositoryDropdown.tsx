@@ -395,7 +395,7 @@ interface MenuItemProps {
 }
 
 const MenuItem = React.forwardRef<HTMLButtonElement, MenuItemProps>(
-  ({ icon: Icon, label, badge, disabled, onClick }, ref) => {
+  ({ icon: IconComponent, label, badge, disabled, onClick }, ref) => {
     return (
       <button
         ref={ref}
@@ -405,7 +405,7 @@ const MenuItem = React.forwardRef<HTMLButtonElement, MenuItemProps>(
         type="button"
       >
       <div className="flex items-center gap-2.5">
-        <Icon className="size-4 text-gray-400 group-hover:text-teal-400 transition-colors" />
+        {React.createElement(IconComponent, { className: "size-4 text-gray-400 group-hover:text-teal-400 transition-colors" })}
         <span className="font-medium">{label}</span>
       </div>
       {badge && (

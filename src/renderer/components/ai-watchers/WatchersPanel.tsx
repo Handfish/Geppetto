@@ -1,12 +1,12 @@
+import React, { useEffect } from 'react'
 import { useAtomValue, useAtom, useAtomRefresh } from '@effect-atom/atom-react'
 import { AnimatePresence } from 'framer-motion'
 import { aiWatchersAtom, stopWatcherAtom, switchToTmuxSessionAtom } from '../../atoms/ai-watcher-atoms'
 import { WatcherStatusLED } from './WatcherStatusLED'
 import { Result } from '@effect-atom/atom-react'
-import { useEffect } from 'react'
 import type { AiWatcher } from '../../../shared/schemas/ai-watchers'
 
-export function WatchersPanel() {
+export function WatchersPanel(): React.ReactNode {
   const watchersResult = useAtomValue(aiWatchersAtom)
   const [, stopWatcher] = useAtom(stopWatcherAtom)
   const [, switchToSession] = useAtom(switchToTmuxSessionAtom)
@@ -47,8 +47,8 @@ export function WatchersPanel() {
       console.log('[WatchersPanel] Rendering Initial state')
       return null
     })
-    .onErrorTag('AiWatcherError', (error) => {
-      console.log('[WatchersPanel] Error:', error)
+    .onDefect((defect) => {
+      console.error('[WatchersPanel] Unexpected error:', defect)
       return null
     })
     .onSuccess((watchers) => {

@@ -437,13 +437,7 @@ const IssueRow = memo(function IssueRow({ issue, isShortlisted, onToggle }: Issu
           <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
             <span>Opened by {issue.user.login}</span>
             <span>•</span>
-            <span>{new Date(issue.createdAt).toLocaleDateString()}</span>
-            {issue.comments > 0 && (
-              <>
-                <span>•</span>
-                <span>{issue.comments} comment{issue.comments !== 1 ? 's' : ''}</span>
-              </>
-            )}
+            <span>{new Date(issue.created_at).toLocaleDateString()}</span>
           </div>
         </div>
       </div>

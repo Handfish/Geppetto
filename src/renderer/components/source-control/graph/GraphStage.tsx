@@ -358,7 +358,6 @@ export function GraphStage({
         backgroundColor={defaultTheme.backgroundColor}
         antialias={true}
         resolution={window.devicePixelRatio || 1}
-        style={{ display: 'block' }}
       >
         {/* Container for viewport transform (zoom/pan) */}
         <pixiContainer

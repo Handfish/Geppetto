@@ -1,3 +1,6 @@
+import type { Repository as DomainRepository } from '../source-control/domain/aggregates/repository'
+import type { Repository as SharedRepository, CommitHash, BranchName } from '../../shared/schemas/source-control/repository'
+
 /**
  * Helper functions to map between domain and shared Repository types
  */
@@ -6,15 +9,17 @@
  * Convert domain Repository to shared schema Repository
  * Maps from domain entities (with value objects) to plain data.
  * Effect Schema will automatically apply branding during encoding/validation.
+ *
+ * Note: After RepositoryId unification, the id field is already the correct type
  */
-export const toSharedRepository = (repo: any) => ({
-  id: { value: repo.id.value }, // Plain UUID string - schema will brand it
+export const toSharedRepository = (repo: DomainRepository): SharedRepository => ({
+  id: repo.id, // Already a shared RepositoryId after unification
   path: repo.path,
   name: repo.name,
   state: {
     // Extract plain strings - schema will brand them automatically
-    head: repo.state.head?.value,
-    branch: repo.state.branch?.value,
+    head: repo.state.head?.value as CommitHash | undefined,
+    branch: repo.state.branch?.value as BranchName | undefined,
     isDetached: repo.state.isDetached,
     isMerging: repo.state.isMerging,
     isRebasing: repo.state.isRebasing,

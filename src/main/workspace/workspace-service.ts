@@ -107,6 +107,7 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
                 inWorkspace: false,
                 bareRepoPath: null,
                 worktreePath: null,
+                repositoryId: null,
               }
             }
 

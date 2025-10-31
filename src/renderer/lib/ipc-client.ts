@@ -1,6 +1,7 @@
 import { Effect, Schema as S, ParseResult } from 'effect'
 import { IpcContracts, type IpcChannels } from '../../shared/ipc-contracts'
 import { NetworkError } from '../../shared/schemas/errors'
+import { RepositoryId } from '../../shared/schemas/source-control/repository'
 
 export class ElectronIpcClient extends Effect.Service<ElectronIpcClient>()(
   'ElectronIpcClient',
@@ -391,7 +392,11 @@ export class SourceControlClient extends Effect.Service<SourceControlClient>()(
             )
             const result = yield* ipc.invoke(
               'source-control:create-worktree-for-issue',
-              params
+              {
+                repositoryId: RepositoryId.fromUUID(params.repositoryId.value),
+                issueNumber: params.issueNumber,
+                baseBranch: params.baseBranch,
+              }
             )
             console.log(
               `[SourceControlClient] Worktree created at ${result.worktreePath}`
@@ -407,7 +412,10 @@ export class SourceControlClient extends Effect.Service<SourceControlClient>()(
             console.log(
               `[SourceControlClient] removeWorktree called for ${params.worktreePath}`
             )
-            yield* ipc.invoke('source-control:remove-worktree', params)
+            yield* ipc.invoke('source-control:remove-worktree', {
+              repositoryId: RepositoryId.fromUUID(params.repositoryId.value),
+              worktreePath: params.worktreePath,
+            })
             console.log(`[SourceControlClient] Worktree removed`)
           }),
 
@@ -418,7 +426,7 @@ export class SourceControlClient extends Effect.Service<SourceControlClient>()(
             )
             const result = yield* ipc.invoke(
               'source-control:list-worktrees',
-              params
+              { repositoryId: RepositoryId.fromUUID(params.repositoryId.value) }
             )
             console.log(
               `[SourceControlClient] Found ${result.length} worktrees`

@@ -176,7 +176,7 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
 
         // Create repository aggregate
         return new Repository({
-          id: new RepositoryId({ value: crypto.randomUUID() }),
+          id: RepositoryId.fromUUID(crypto.randomUUID()),
           path: repoPath,
           name,
           state,
@@ -254,7 +254,7 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
         Effect.catchAll((error) =>
           Effect.fail(
             new RepositoryOperationError({
-              repositoryId: new RepositoryId({ value: crypto.randomUUID() }),
+              repositoryId: RepositoryId.fromUUID(crypto.randomUUID()),
               operation: 'getState',
               reason: 'Failed to get repository state',
               cause: error,
@@ -329,7 +329,7 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
         Effect.catchAll((error) =>
           Effect.fail(
             new RepositoryOperationError({
-              repositoryId: new RepositoryId({ value: crypto.randomUUID() }),
+              repositoryId: RepositoryId.fromUUID(crypto.randomUUID()),
               operation: 'listBranches',
               reason: 'Failed to list branches',
               cause: error,
@@ -414,7 +414,7 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
         Effect.catchAll((error) =>
           Effect.fail(
             new RepositoryOperationError({
-              repositoryId: new RepositoryId({ value: crypto.randomUUID() }),
+              repositoryId: RepositoryId.fromUUID(crypto.randomUUID()),
               operation: 'listRemotes',
               reason: 'Failed to list remotes',
               cause: error,
@@ -539,7 +539,7 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
               yield* Ref.set(isDiscovering, false)
               return yield* Effect.fail(
                 new RepositoryOperationError({
-                  repositoryId: new RepositoryId({ value: crypto.randomUUID() }),
+                  repositoryId: RepositoryId.fromUUID(crypto.randomUUID()),
                   operation: 'discoverRepositories',
                   reason: 'Failed to discover repositories',
                   cause: error,
@@ -627,7 +627,7 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
             Effect.catchAll((error) =>
               Effect.fail(
                 new RepositoryOperationError({
-                  repositoryId: new RepositoryId({ value: crypto.randomUUID() }),
+                  repositoryId: RepositoryId.fromUUID(crypto.randomUUID()),
                   operation: 'validateRepository',
                   reason: 'Failed to check if path is a Git repository',
                   cause: error,
@@ -650,7 +650,7 @@ export class RepositoryService extends Effect.Service<RepositoryService>()('Repo
             Effect.catchAll((error) =>
               Effect.fail(
                 new RepositoryOperationError({
-                  repositoryId: new RepositoryId({ value: crypto.randomUUID() }),
+                  repositoryId: RepositoryId.fromUUID(crypto.randomUUID()),
                   operation: 'validateRepository',
                   reason: 'Failed to get Git directory',
                   cause: error,
