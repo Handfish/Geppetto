@@ -84,12 +84,18 @@ export function GraphStage({
   // Use external zoom level if provided, otherwise default
   const currentZoom = zoomLevel ?? 1.0
 
-  // Hover state for debugging
-  const [hoveredCommit, setHoveredCommit] = useState<string | null>(null)
-
   // Pan state for mouse drag
   const isPanningRef = useRef(false)
   const panStartRef = useRef({ x: 0, y: 0 })
+
+  // Hover state for debugging - disable during pan for performance
+  const [hoveredCommit, setHoveredCommit] = useState<string | null>(null)
+
+  const setHoveredCommitOptimized = useCallback((hash: string | null) => {
+    // Don't update hover state while panning (causes re-renders during drag)
+    if (isPanningRef.current) return
+    setHoveredCommit(hash)
+  }, [])
 
   // Ref for the container div to attach native wheel event and focus
   const containerRef = useRef<HTMLDivElement>(null)
@@ -103,17 +109,66 @@ export function GraphStage({
     }
   }, [])
 
-  // Make canvas wider than the visible area to account for panel opening/closing
-  // Add buffer for details panel width (typically 400-500px)
+  /**
+   * CANVAS SCALING SOLUTION
+   *
+   * Problem: When side panels (like commit details) open/close, the visible area changes but
+   * PixiJS canvas remounting causes a jarring black flash due to WebGL context recreation.
+   *
+   * Solution: Make the canvas WIDER than the visible container by adding a buffer.
+   * - Canvas width = visible width + 500px buffer
+   * - The container has overflow:hidden, clipping the extra canvas
+   * - When a panel opens and renderWidth shrinks, the canvas is already wide enough
+   * - No remount needed = no black flash
+   * - Only remount when the canvas needs to grow beyond its current size (window resize, etc.)
+   *
+   * Example:
+   * - Visible area: 1000px, Canvas: 1500px (500px hidden)
+   * - Panel opens: Visible becomes 600px, Canvas still 1500px (900px hidden now)
+   * - Result: Smooth, no flash
+   */
   const PANEL_WIDTH_BUFFER = 500
   const canvasWidth = renderWidth + PANEL_WIDTH_BUFFER
   const canvasHeight = renderHeight
 
   // Track app key for forced remounts (only on very large changes like fullscreen)
   const [appKey, setAppKey] = useState(0)
+  const [showFadeOverlay, setShowFadeOverlay] = useState(true) // Start true for initial render
   const lastRemountSizeRef = useRef({ width: canvasWidth, height: canvasHeight })
+  const isInitialMountRef = useRef(true)
 
-  // Only remount on significant canvas size changes (window resize, fullscreen, etc.)
+  /**
+   * INITIAL MOUNT FADE-IN
+   *
+   * On initial component mount, show the fade overlay and wait for PixiJS to render,
+   * then fade out to reveal the graph. This creates a polished loading experience.
+   */
+  useEffect(() => {
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false
+
+      // Wait for PixiJS to fully render the initial graph
+      setTimeout(() => {
+        setShowFadeOverlay(false)
+      }, 800)
+    }
+  }, [])
+
+  /**
+   * REMOUNT DETECTION & FADE OVERLAY
+   *
+   * Only remount the PixiJS Application when the canvas needs to grow beyond its buffer.
+   * When remounting is necessary, use a fade overlay to hide the black flash:
+   *
+   * 1. Show gray overlay (z-20) covering the canvas
+   * 2. Use two requestAnimationFrame calls to guarantee the overlay is painted
+   * 3. Remount canvas with new key (triggers WebGL context recreation)
+   * 4. Wait 800ms for PixiJS to render first frame
+   * 5. Fade out overlay over 500ms, revealing the canvas smoothly
+   *
+   * This creates a gray-to-gray transition instead of black flash.
+   * The double rAF ensures the overlay is visible BEFORE the WebGL context is destroyed.
+   */
   useEffect(() => {
     const widthDelta = Math.abs(lastRemountSizeRef.current.width - canvasWidth)
     const heightDelta = Math.abs(lastRemountSizeRef.current.height - canvasHeight)
@@ -125,8 +180,24 @@ export function GraphStage({
         to: { width: canvasWidth, height: canvasHeight }
       })
       lastRemountSizeRef.current = { width: canvasWidth, height: canvasHeight }
-      setAppKey(prev => prev + 1)
-      pixiAppRef.current = null
+
+      // Show fade overlay to hide the black flash
+      setShowFadeOverlay(true)
+
+      // Wait for overlay to render, then trigger remount
+      // Use two rAF calls to guarantee the overlay has been painted before remount
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // Now the overlay is guaranteed to be visible
+          setAppKey(prev => prev + 1)
+          pixiAppRef.current = null
+
+          // Wait for PixiJS to fully initialize and render, then fade out overlay
+          setTimeout(() => {
+            setShowFadeOverlay(false)
+          }, 800) // 800ms gives PixiJS plenty of time to fully render before fading out
+        })
+      })
     }
   }, [canvasWidth, canvasHeight])
 
@@ -329,7 +400,7 @@ export function GraphStage({
     <div className="relative w-full h-full">
       {/* Hover info overlay - for debugging */}
       {hoveredNode && (
-        <div className="absolute top-0 left-0 right-0 z-10 bg-yellow-900/90 text-yellow-100 px-3 py-2 text-xs font-mono border-b border-yellow-700">
+        <div className="absolute top-0 left-0 right-0 z-30 bg-yellow-900/90 text-yellow-100 px-3 py-2 text-xs font-mono border-b border-yellow-700">
           <div className="flex items-center gap-4">
             <span className="font-semibold">HOVERING:</span>
             <span className="text-yellow-300">{hoveredNode.commit.hash.slice(0, 7)}</span>
@@ -358,28 +429,64 @@ export function GraphStage({
       <div
         ref={containerRef}
         tabIndex={0}
-        className="border border-blue-500 rounded outline-none focus:ring-2 focus:ring-blue-500 cursor-grab overflow-hidden"
+        className="border border-blue-500 rounded outline-none focus:ring-2 focus:ring-blue-500 cursor-grab overflow-hidden relative"
         style={{
           userSelect: 'none',
           width: `${renderWidth}px`,
           height: `${renderHeight}px`,
+          backgroundColor: '#1f2937',
         }}
         onClick={() => containerRef.current?.focus()}
       >
-        <Application
-          key={appKey}
-          ref={(app) => {
-            if (app && !pixiAppRef.current) {
-              console.log('[GraphStage] PixiJS Application mounted (key:', appKey, ') - Canvas:', canvasWidth, 'x', canvasHeight, 'Visible:', renderWidth, 'x', renderHeight)
-              pixiAppRef.current = app
-            }
+        {/*
+          FADE OVERLAY FOR REMOUNT
+
+          When the canvas remounts (due to window resize beyond buffer), show this gray overlay
+          to cover the black flash that occurs during WebGL context recreation. The overlay:
+          - Appears instantly at full opacity when showFadeOverlay=true
+          - Covers the canvas (z-20, above canvas but below hover debug overlay)
+          - Fades out over 300ms once PixiJS has rendered its first frame
+          - Uses the same gray-800 color as the PixiJS background for seamless transition
+        */}
+        <div
+          className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center"
+          style={{
+            backgroundColor: '#1f2937', // gray-800, matches PixiJS backgroundColor
+            opacity: showFadeOverlay ? 1 : 0,
+            transition: showFadeOverlay ? 'none' : 'opacity 500ms cubic-bezier(0.4, 0, 0.2, 1)', // Instant on, smooth fade out
+            pointerEvents: 'none', // Never block interactions
           }}
-          width={canvasWidth}
-          height={canvasHeight}
-          backgroundColor={defaultTheme.backgroundColor}
-          antialias={true}
-          resolution={window.devicePixelRatio || 1}
         >
+          {showFadeOverlay && (
+            <div className="flex flex-col items-center gap-3">
+              {/* Spinner */}
+              <div className="relative w-10 h-10">
+                <div
+                  className="absolute inset-0 border-4 border-gray-600 border-t-blue-500 rounded-full animate-spin"
+                  style={{ animationDuration: '0.8s' }}
+                />
+              </div>
+              {/* Loading text */}
+              <div className="text-gray-400 text-sm font-medium">
+                Rendering graph...
+              </div>
+            </div>
+          )}
+        </div>
+          <Application
+            key={appKey} // Changes on remount to force React to recreate the component
+            ref={(app) => {
+              if (app && !pixiAppRef.current) {
+                console.log('[GraphStage] PixiJS Application mounted (key:', appKey, ') - Canvas:', canvasWidth, 'x', canvasHeight, 'Visible:', renderWidth, 'x', renderHeight)
+                pixiAppRef.current = app
+              }
+            }}
+            width={canvasWidth} // Canvas is wider than visible area (includes buffer)
+            height={canvasHeight}
+            backgroundColor={defaultTheme.backgroundColor}
+            antialias={true}
+            resolution={window.devicePixelRatio || 1}
+          >
       {/* Container for viewport transform (zoom/pan) */}
       <pixiContainer
         ref={pixiContainerRef}
@@ -419,7 +526,7 @@ export function GraphStage({
                 theme={defaultTheme}
                 isSelected={isSelected}
                 onSelect={onCommitSelect ?? (() => {})}
-                onHover={setHoveredCommit}
+                onHover={setHoveredCommitOptimized}
                 onContextMenu={onCommitContextMenu}
               />
             )
