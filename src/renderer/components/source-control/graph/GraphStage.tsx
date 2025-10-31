@@ -77,6 +77,10 @@ export function GraphStage({
   // Ref to the PixiJS Application for resizing
   const pixiAppRef = useRef<any>(null)
 
+  // Calculate current render dimensions
+  const renderWidth = Math.max(1, Math.round(width))
+  const renderHeight = Math.max(1, Math.round(height))
+
   // Use external zoom level if provided, otherwise default
   const currentZoom = zoomLevel ?? 1.0
 
@@ -99,28 +103,33 @@ export function GraphStage({
     }
   }, [])
 
-  // Resize PixiJS renderer when dimensions change (with debouncing)
+  // Make canvas wider than the visible area to account for panel opening/closing
+  // Add buffer for details panel width (typically 400-500px)
+  const PANEL_WIDTH_BUFFER = 500
+  const canvasWidth = renderWidth + PANEL_WIDTH_BUFFER
+  const canvasHeight = renderHeight
+
+  // Track app key for forced remounts (only on very large changes like fullscreen)
+  const [appKey, setAppKey] = useState(0)
+  const lastRemountSizeRef = useRef({ width: canvasWidth, height: canvasHeight })
+
+  // Only remount on significant canvas size changes (window resize, fullscreen, etc.)
   useEffect(() => {
-    if (!pixiAppRef.current?.renderer) {
-      return
+    const widthDelta = Math.abs(lastRemountSizeRef.current.width - canvasWidth)
+    const heightDelta = Math.abs(lastRemountSizeRef.current.height - canvasHeight)
+
+    // Only remount if canvas needs to grow beyond buffer
+    if (widthDelta > PANEL_WIDTH_BUFFER || heightDelta > 200) {
+      console.error('[GraphStage] ⚠️ FULL CANVAS RERENDER (window resize) ⚠️', {
+        from: lastRemountSizeRef.current,
+        to: { width: canvasWidth, height: canvasHeight }
+      })
+      lastRemountSizeRef.current = { width: canvasWidth, height: canvasHeight }
+      setAppKey(prev => prev + 1)
+      pixiAppRef.current = null
     }
+  }, [canvasWidth, canvasHeight])
 
-    const renderWidth = Math.max(1, Math.round(width))
-    const renderHeight = Math.max(1, Math.round(height))
-
-    // Only resize if dimensions actually changed
-    const currentWidth = pixiAppRef.current.renderer.screen.width
-    const currentHeight = pixiAppRef.current.renderer.screen.height
-
-    if (Math.abs(currentWidth - renderWidth) < 2 && Math.abs(currentHeight - renderHeight) < 2) {
-      return // Skip if change is insignificant (< 2px)
-    }
-
-    // Resize the renderer (this also resizes the canvas)
-    pixiAppRef.current.renderer.resize(renderWidth, renderHeight)
-
-    // Note: No need to call render() - PixiJS will render on next frame automatically
-  }, [width, height])
 
   // Calculate layout from backend graph
   // Memoized to avoid recalculation on every render
@@ -316,10 +325,6 @@ export function GraphStage({
   // Get hovered node info for display
   const hoveredNode = hoveredCommit ? layout.nodes.get(hoveredCommit as any) : null
 
-  // Calculate render dimensions from props
-  const renderWidth = Math.max(1, Math.round(width))
-  const renderHeight = Math.max(1, Math.round(height))
-
   return (
     <div className="relative w-full h-full">
       {/* Hover info overlay - for debugging */}
@@ -362,81 +367,83 @@ export function GraphStage({
         onClick={() => containerRef.current?.focus()}
       >
         <Application
+          key={appKey}
           ref={(app) => {
-            if (app) {
+            if (app && !pixiAppRef.current) {
+              console.log('[GraphStage] PixiJS Application mounted (key:', appKey, ') - Canvas:', canvasWidth, 'x', canvasHeight, 'Visible:', renderWidth, 'x', renderHeight)
               pixiAppRef.current = app
             }
           }}
-          width={renderWidth}
-          height={renderHeight}
+          width={canvasWidth}
+          height={canvasHeight}
           backgroundColor={defaultTheme.backgroundColor}
           antialias={true}
           resolution={window.devicePixelRatio || 1}
         >
-        {/* Container for viewport transform (zoom/pan) */}
-        <pixiContainer
-          ref={pixiContainerRef}
-          x={viewportRef.current.x}
-          y={viewportRef.current.y}
-          scale={{ x: currentZoom, y: currentZoom }}
-        >
-          {/* Render edges first (behind nodes) */}
-          {filteredEdges.map((edge, index) => {
-            const fromNode = layout.nodes.get(edge.from)
-            const toNode = layout.nodes.get(edge.to)
+      {/* Container for viewport transform (zoom/pan) */}
+      <pixiContainer
+        ref={pixiContainerRef}
+        x={viewportRef.current.x}
+        y={viewportRef.current.y}
+        scale={{ x: currentZoom, y: currentZoom }}
+      >
+        {/* Render edges first (behind nodes) */}
+        {filteredEdges.map((edge, index) => {
+          const fromNode = layout.nodes.get(edge.from)
+          const toNode = layout.nodes.get(edge.to)
 
-            // Skip if nodes not found (shouldn't happen)
-            if (!fromNode || !toNode) return null
+          // Skip if nodes not found (shouldn't happen)
+          if (!fromNode || !toNode) return null
 
+          return (
+            <CommitEdge
+              key={`edge-${index}`}
+              edge={edge}
+              theme={defaultTheme}
+              fromNode={fromNode}
+              toNode={toNode}
+            />
+          )
+        })}
+
+        {/* Render commit nodes */}
+        {/* Sort by y position to ensure render order matches visual layout */}
+        {filteredNodes
+          .sort((a, b) => a.y - b.y)
+          .map((node) => {
+            const isSelected = node.commit.hash === selectedCommit
             return (
-              <CommitEdge
-                key={`edge-${index}`}
-                edge={edge}
+              <CommitNode
+                key={node.commit.hash}
+                node={node}
                 theme={defaultTheme}
-                fromNode={fromNode}
-                toNode={toNode}
+                isSelected={isSelected}
+                onSelect={onCommitSelect ?? (() => {})}
+                onHover={setHoveredCommit}
+                onContextMenu={onCommitContextMenu}
               />
             )
           })}
 
-          {/* Render commit nodes */}
-          {/* Sort by y position to ensure render order matches visual layout */}
-          {filteredNodes
-            .sort((a, b) => a.y - b.y)
-            .map((node) => {
-              const isSelected = node.commit.hash === selectedCommit
-              return (
-                <CommitNode
-                  key={node.commit.hash}
-                  node={node}
-                  theme={defaultTheme}
-                  isSelected={isSelected}
-                  onSelect={onCommitSelect ?? (() => {})}
-                  onHover={setHoveredCommit}
-                  onContextMenu={onCommitContextMenu}
-                />
-              )
-            })}
-
-          {/* Render ref labels (branches/tags) - only if showRefs is enabled */}
-          {(!displaySettings || displaySettings.showRefs) &&
-            filteredNodes.map((node) =>
-              node.refs.map((ref, index) => (
-                <RefLabel
-                  key={`${node.commit.hash}-${ref}`}
-                  text={ref}
-                  x={node.x + defaultTheme.nodeRadius + 8}
-                  y={
-                    node.y -
-                    defaultTheme.fontSize / 2 +
-                    index * (defaultTheme.fontSize + 4)
-                  }
-                  theme={defaultTheme}
-                />
-              ))
-            )}
-        </pixiContainer>
-      </Application>
+        {/* Render ref labels (branches/tags) - only if showRefs is enabled */}
+        {(!displaySettings || displaySettings.showRefs) &&
+          filteredNodes.map((node) =>
+            node.refs.map((ref, index) => (
+              <RefLabel
+                key={`${node.commit.hash}-${ref}`}
+                text={ref}
+                x={node.x + defaultTheme.nodeRadius + 8}
+                y={
+                  node.y -
+                  defaultTheme.fontSize / 2 +
+                  index * (defaultTheme.fontSize + 4)
+                }
+                theme={defaultTheme}
+              />
+            ))
+          )}
+      </pixiContainer>
+    </Application>
       </div>
     </div>
   )

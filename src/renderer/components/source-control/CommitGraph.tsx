@@ -182,6 +182,8 @@ export function CommitGraphView({
     const width = rect.width
     const height = rect.height
 
+    console.log('[CommitGraph] updateDimensions called. Container size:', width, 'x', height)
+
     // Skip if container hasn't been laid out yet
     if (width === 0 || height === 0) return
 
@@ -195,9 +197,11 @@ export function CommitGraphView({
       const heightChanged = !prev || Math.abs(prev.height - finalHeight) > 2
 
       if (widthChanged || heightChanged) {
+        console.log('[CommitGraph] UPDATING graphDimensions from', prev, 'to', { width: finalWidth, height: finalHeight })
         return { width: finalWidth, height: finalHeight }
       }
 
+      console.log('[CommitGraph] No update needed. Change too small.')
       return prev
     })
   }, [])
