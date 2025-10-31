@@ -12,11 +12,14 @@ import { makeAppId } from 'shared/utils'
 ignoreConsoleWarnings(['Manifest version 2 is deprecated'])
 
 export async function makeAppSetup(createWindow: () => Promise<BrowserWindow>) {
+  // Install React DevTools in parallel (don't block window creation)
   if (ENVIRONMENT.IS_DEV) {
-    await installExtension([REACT_DEVELOPER_TOOLS], {
+    installExtension([REACT_DEVELOPER_TOOLS], {
       loadExtensionOptions: {
         allowFileAccess: true,
       },
+    }).catch((error) => {
+      console.warn('[makeAppSetup] Failed to install React DevTools:', error)
     })
   }
 

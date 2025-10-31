@@ -179,10 +179,9 @@ function createMainWindow() {
   mainWindow.webContents.on('did-finish-load', () => {
     mainWindow.show()
 
-    // Open DevTools for debugging (can be toggled with F12)
-    if (process.env.NODE_ENV === 'development') {
-      mainWindow.webContents.openDevTools({ mode: 'detach' })
-    }
+    // Don't automatically open dev tools for main window
+    // Console window will handle dev tools separately
+    // Use F12 to toggle if needed
   })
 
   // F12 to toggle DevTools for main window
@@ -196,13 +195,15 @@ function createMainWindow() {
     }
   })
 
-  // Silence unnecessary Autofill errors in dev tools
-  mainWindow.webContents.on('console-message', (event, level, message) => {
+  // Silence unnecessary Autofill errors in dev tools (using new API)
+  mainWindow.webContents.on('console-message', (_event, _level, message) => {
+    // Suppress common Autofill warnings that clutter console
     if (
       message.includes('Autofill.enable') ||
       message.includes('Autofill.setAddresses')
     ) {
-      event.preventDefault()
+      // Just ignore these messages - they're harmless Chrome internals
+      return
     }
   })
 
@@ -265,30 +266,16 @@ app.whenReady().then(async () => {
   // Create main window first (needed for KeyboardLayerManager)
   mainWindow = await makeAppSetup(async () => createMainWindow())
 
-  // Create KeyboardLayerManager layer with mainWindow reference
+  // Create minimal KeyboardLayerManager layer (no dependencies on heavy services)
   const KeyboardLayerManagerLayer = KeyboardLayerManager.Live({ mainWindow })
 
-  // Combine with MainLayer for IPC handlers
-  const MainLayerWithKeyboard = Layer.mergeAll(MainLayer, KeyboardLayerManagerLayer)
-
-  // Wait for IPC handlers to be fully set up
+  // Register keyboard handlers IMMEDIATELY (< 50ms) - don't wait for heavy layers
   await Effect.runPromise(
-    Effect.gen(function* () {
-      yield* setupAccountIpcHandlers
-      yield* setupProviderIpcHandlers
-      yield* setupGitHubIssueIpcHandlers
-      yield* setupAiProviderIpcHandlers
-      yield* setupAiWatcherIpcHandlers
-      yield* setupSourceControlIpcHandlers
-      yield* setupWorkspaceIpcHandlers
-      yield* setupKeyboardLayerIpcHandlers
-    }).pipe(Effect.provide(MainLayerWithKeyboard))
+    setupKeyboardLayerIpcHandlers.pipe(
+      Effect.provide(KeyboardLayerManagerLayer)
+    )
   )
-
-  // Create console window in development mode
-  if (process.env.NODE_ENV === 'development') {
-    consoleWindow = createConsoleWindow()
-  }
+  console.log('[Main] ✓ Keyboard layer handlers registered (fast path)')
 
   // Track focus state
   let isMainWindowFocused = true
@@ -303,8 +290,9 @@ app.whenReady().then(async () => {
         mainWindow.setIgnoreMouseEvents(true, { forward: true })
         mainWindow.webContents.send('window:unfocus')
 
-        // Unregister ALL global shortcuts when window unfocuses
-        globalShortcut.unregisterAll()
+        // Unregister arrow keys when window unfocuses (but keep Ctrl+Shift+G active!)
+        globalShortcut.unregister('Left')
+        globalShortcut.unregister('Right')
 
         // Wait for CSS fade animation (500ms) before hiding
         setTimeout(() => {
@@ -336,11 +324,7 @@ app.whenReady().then(async () => {
         mainWindow.focus()
         mainWindow.webContents.send('window:focus')
 
-        // Re-register toggle shortcut and notify KeyboardLayerManager to restore arrow keys
-        const toggleShortcut = 'CommandOrControl+Shift+G'
-        globalShortcut.register(toggleShortcut, toggleWindowFocus)
-
-        // Send IPC to renderer to reset keyboard layer (will trigger KeyboardLayerManager)
+        // Send IPC to renderer to reset keyboard layer (will re-register arrow keys)
         mainWindow.webContents.send('window:focus')
 
         console.log(
@@ -350,7 +334,7 @@ app.whenReady().then(async () => {
     }
   }
 
-  // Register global shortcut to toggle focus (Cmd/Ctrl + Shift + G for Geppetto)
+  // Register global shortcut to toggle focus
   const toggleShortcut = 'CommandOrControl+Shift+G'
   const registered = globalShortcut.register(toggleShortcut, toggleWindowFocus)
 
@@ -363,6 +347,33 @@ app.whenReady().then(async () => {
   }
 
   console.log('[Main] KeyboardLayerManager initialized - arrow keys managed by layer stack')
+
+  // Construct full MainLayer with keyboard in background (lazy)
+  const MainLayerWithKeyboard = Layer.mergeAll(MainLayer, KeyboardLayerManagerLayer)
+
+  // Register remaining IPC handlers in parallel (non-blocking for keyboard)
+  Effect.runPromise(
+    Effect.all(
+      [
+        setupAccountIpcHandlers,
+        setupProviderIpcHandlers,
+        setupGitHubIssueIpcHandlers,
+        setupAiProviderIpcHandlers,
+        setupAiWatcherIpcHandlers,
+        setupSourceControlIpcHandlers,
+        setupWorkspaceIpcHandlers,
+      ],
+      { concurrency: 'unbounded' }
+    ).pipe(Effect.provide(MainLayerWithKeyboard))
+  ).catch((error) => {
+    console.error('[Main] Failed to setup IPC handlers:', error)
+  })
+  console.log('[Main] ⏳ Other IPC handlers registering in background...')
+
+  // Create console window in development mode
+  if (process.env.NODE_ENV === 'development') {
+    consoleWindow = createConsoleWindow()
+  }
 })
 
 // Handle OAuth callback URLs on macOS
