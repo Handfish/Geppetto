@@ -1,7 +1,20 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo, useRef } from 'react'
 import { useAtomValue, Result } from '@effect-atom/atom-react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { X, Check, Zap, ListTodo } from 'lucide-react'
+import {
+  useFloating,
+  autoUpdate,
+  offset,
+  flip,
+  shift,
+  useRole,
+  useDismiss,
+  useInteractions,
+  FloatingPortal,
+  FloatingFocusManager,
+  size,
+} from '@floating-ui/react'
 import { repositoryIssuesAtom } from '../../atoms/github-issue-atoms'
 import { useAiWatcherLauncher } from '../../hooks/useAiWatcherLauncher'
 import type { AccountId } from '../../../shared/schemas/account-context'
@@ -14,6 +27,7 @@ interface IssuesModalProps {
   owner: string
   repo: string
   repositoryId: { value: string }
+  anchorPosition: DOMRect | null
   onLaunchWatchers?: (issueNumbers: number[]) => void
 }
 
@@ -24,6 +38,7 @@ export function IssuesModal({
   owner,
   repo,
   repositoryId,
+  anchorPosition,
   onLaunchWatchers,
 }: IssuesModalProps) {
   // Don't render anything (and don't subscribe to atoms) if modal is closed
@@ -35,6 +50,7 @@ export function IssuesModal({
   return (
     <IssuesModalContent
       accountId={accountId}
+      anchorPosition={anchorPosition}
       isOpen={isOpen}
       onClose={onClose}
       onLaunchWatchers={onLaunchWatchers}
@@ -52,12 +68,54 @@ function IssuesModalContent({
   owner,
   repo,
   repositoryId,
+  anchorPosition,
   onLaunchWatchers,
 }: IssuesModalProps) {
+  const shouldReduceMotion = useReducedMotion()
   const [shortlist, setShortlist] = useState<Set<number>>(new Set())
   const [selectedProvider, setSelectedProvider] = useState<'claude-code' | 'codex' | 'cursor'>('claude-code')
 
   const { launchWatchersForIssues, isLaunching } = useAiWatcherLauncher()
+
+  // Create virtual element from saved position
+  const virtualElement = useMemo(() => {
+    if (!anchorPosition) return null
+    return {
+      getBoundingClientRect: () => anchorPosition,
+    }
+  }, [anchorPosition])
+
+  // Floating UI setup
+  const { refs, floatingStyles, context } = useFloating({
+    open: isOpen,
+    onOpenChange: onClose,
+    placement: 'bottom-start',
+    middleware: [
+      offset(8),
+      flip(),
+      shift({ padding: 8 }),
+      size({
+        apply({ availableHeight, elements }) {
+          Object.assign(elements.floating.style, {
+            maxHeight: `${Math.min(600, availableHeight - 16)}px`,
+          })
+        },
+      }),
+    ],
+    whileElementsMounted: autoUpdate,
+    strategy: 'fixed',
+  })
+
+  const role = useRole(context)
+  const dismiss = useDismiss(context)
+  const { getReferenceProps, getFloatingProps } = useInteractions([role, dismiss])
+
+  // Set virtual element as reference
+  useEffect(() => {
+    if (virtualElement && isOpen) {
+      refs.setReference(virtualElement)
+    }
+  }, [virtualElement, refs, isOpen])
 
   // Use useMemo to ensure atom params are stable and prevent re-fetches
   const issuesAtomParams = useMemo(
@@ -67,7 +125,7 @@ function IssuesModalContent({
       repo,
       options: {
         state: 'open' as const,
-        limit: 100,
+        limit: 50, // Reduced from 100 to improve performance
       },
     }),
     [accountId, owner, repo]
@@ -82,7 +140,8 @@ function IssuesModalContent({
     }
   }, [isOpen])
 
-  const toggleShortlist = (issueNumber: number) => {
+  // Memoize toggle callback to prevent IssueRow re-renders
+  const toggleShortlist = useCallback((issueNumber: number) => {
     setShortlist((prev) => {
       const next = new Set(prev)
       if (next.has(issueNumber)) {
@@ -92,7 +151,7 @@ function IssuesModalContent({
       }
       return next
     })
-  }
+  }, [])
 
   const handleLaunch = async () => {
     if (shortlist.size === 0) return
@@ -144,30 +203,34 @@ function IssuesModalContent({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, shortlist, onClose])
 
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-            exit={{ opacity: 0 }}
-            initial={{ opacity: 0 }}
-            onClick={onClose}
-          />
+  // Animation config
+  const animationConfig = shouldReduceMotion
+    ? { duration: 0.2, ease: [0.16, 1, 0.3, 1] as const }
+    : { duration: 0.25, ease: [0.16, 1, 0.3, 1] as const }
 
-          {/* Modal */}
-          <motion.div
-            animate={{ opacity: 1, scale: 1 }}
-            className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none p-4"
-            exit={{ opacity: 0, scale: 0.95 }}
-            initial={{ opacity: 0, scale: 0.95 }}
-          >
+  if (!anchorPosition) return null
+
+  return (
+    <FloatingPortal>
+      <AnimatePresence>
+        {isOpen && (
+          <FloatingFocusManager context={context} modal={false}>
             <div
-              className="w-full max-w-4xl h-[80vh] bg-gradient-to-b from-gray-800/95 to-gray-900/95 border border-gray-700/50 rounded-lg shadow-2xl backdrop-blur-xl pointer-events-auto flex flex-col"
+              ref={refs.setFloating}
+              style={floatingStyles}
+              {...getFloatingProps()}
+              className="z-50"
               onClick={(e) => e.stopPropagation()}
             >
+              <motion.div
+                animate={{ opacity: 1, scale: 1 }}
+                className="w-[600px] max-h-[600px] bg-gradient-to-b from-gray-800/95 to-gray-900/95 border border-gray-700/50 rounded-lg shadow-2xl backdrop-blur-xl flex flex-col"
+                exit={{ opacity: 0, scale: 0.95 }}
+                initial={{ opacity: 0, scale: 0.95 }}
+                style={{ transformOrigin: 'top left' }}
+                transition={animationConfig}
+                onClick={(e) => e.stopPropagation()}
+              >
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
                 <div className="flex items-center gap-3">
@@ -239,7 +302,7 @@ function IssuesModalContent({
                               isShortlisted={shortlist.has(issue.number)}
                               issue={issue}
                               key={issue.number}
-                              onToggle={() => toggleShortlist(issue.number)}
+                              onToggle={toggleShortlist}
                             />
                           ))}
                         </div>
@@ -293,21 +356,23 @@ function IssuesModalContent({
                   )}
                 </button>
               </div>
-            </div>
-          </motion.div>
-        </>
+            </motion.div>
+          </div>
+        </FloatingFocusManager>
       )}
     </AnimatePresence>
+  </FloatingPortal>
   )
 }
 
 interface IssueRowProps {
   issue: GitHubIssue
   isShortlisted: boolean
-  onToggle: () => void
+  onToggle: (issueNumber: number) => void
 }
 
-function IssueRow({ issue, isShortlisted, onToggle }: IssueRowProps) {
+// Memoize IssueRow to prevent re-renders when other issues change
+const IssueRow = memo(function IssueRow({ issue, isShortlisted, onToggle }: IssueRowProps) {
   return (
     <button
       className={`
@@ -318,7 +383,7 @@ function IssueRow({ issue, isShortlisted, onToggle }: IssueRowProps) {
             : 'border-gray-700/50 bg-gray-800/30 hover:bg-gray-700/40'
         }
       `}
-      onClick={onToggle}
+      onClick={() => onToggle(issue.number)}
       type="button"
     >
       <div className="flex items-start gap-3">
@@ -384,4 +449,4 @@ function IssueRow({ issue, isShortlisted, onToggle }: IssueRowProps) {
       </div>
     </button>
   )
-}
+})

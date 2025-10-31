@@ -121,10 +121,15 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
             )
 
             if (bareRepoExists && worktreeExists) {
+              // Get repository ID from repository service
+              const repositoryService = yield* RepositoryService
+              const repository = yield* repositoryService.getRepositoryByPath(bareRepoPath)
+
               return {
                 inWorkspace: true,
                 bareRepoPath,
                 worktreePath,
+                repositoryId: repository.id,
               }
             }
 
@@ -132,6 +137,7 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
               inWorkspace: false,
               bareRepoPath: null,
               worktreePath: null,
+              repositoryId: null,
             }
           }),
 

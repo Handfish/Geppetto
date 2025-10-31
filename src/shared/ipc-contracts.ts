@@ -273,6 +273,7 @@ export const WorkspaceIpcContracts = {
       inWorkspace: S.Boolean,
       bareRepoPath: S.NullOr(S.String),
       worktreePath: S.NullOr(S.String),
+      repositoryId: S.NullOr(RepositoryId), // Internal repository UUID (null if not in workspace)
     }),
     errors: S.Union(NetworkError),
   },

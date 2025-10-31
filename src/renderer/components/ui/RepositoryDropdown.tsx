@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   useFloating,
@@ -52,7 +52,10 @@ export function RepositoryDropdown({
   const [isInWorkspace, setIsInWorkspace] = useState(false)
   const [isCheckingWorkspace, setIsCheckingWorkspace] = useState(false)
   const [showIssuesModal, setShowIssuesModal] = useState(false)
+  const [workspaceRepositoryId, setWorkspaceRepositoryId] = useState<{ value: string } | null>(null)
   const [cloneResult, cloneToWorkspace] = useAtom(cloneToWorkspaceAtom)
+  const issuesButtonRef = useRef<HTMLButtonElement>(null)
+  const savedButtonPositionRef = useRef<DOMRect | null>(null)
 
   const { refs, floatingStyles, context, middlewareData, placement } =
     useFloating({
@@ -96,12 +99,14 @@ export function RepositoryDropdown({
     Effect.runPromise(
       checkWorkspace.pipe(Effect.provide(WorkspaceClient.Default))
     )
-      .then(inWorkspace => {
-        setIsInWorkspace(inWorkspace)
+      .then(result => {
+        setIsInWorkspace(result.inWorkspace)
+        setWorkspaceRepositoryId(result.repositoryId)
         setIsCheckingWorkspace(false)
       })
       .catch(() => {
         setIsInWorkspace(false)
+        setWorkspaceRepositoryId(null)
         setIsCheckingWorkspace(false)
       })
   }, [isOpen, repo.owner, repo.name])
@@ -174,6 +179,7 @@ export function RepositoryDropdown({
       refs.setReference(anchorRef.current)
     }
   }, [anchorRef, refs, isOpen, repo.repositoryId]) // Re-sync when repo changes
+
 
   // Don't render if anchor is not available or if hidden by middleware
   const isHidden = middlewareData.hide?.referenceHidden
@@ -293,12 +299,24 @@ export function RepositoryDropdown({
                     onClick={handleClone}
                   />
                   <MenuItem
+                    disabled={!isInWorkspace || isCheckingWorkspace}
                     icon={ListTodo}
-                    label="View Issues"
+                    label={
+                      isCheckingWorkspace
+                        ? 'Checking...'
+                        : !isInWorkspace
+                          ? 'View Issues (Clone First)'
+                          : 'View Issues'
+                    }
                     onClick={() => {
+                      // Save button position before closing dropdown
+                      if (issuesButtonRef.current) {
+                        savedButtonPositionRef.current = issuesButtonRef.current.getBoundingClientRect()
+                      }
                       setShowIssuesModal(true)
                       onOpenChange(false) // Close dropdown
                     }}
+                    ref={issuesButtonRef}
                   />
                   <MenuItem
                     icon={ExternalLink}
@@ -343,18 +361,21 @@ export function RepositoryDropdown({
       </AnimatePresence>
     </FloatingPortal>
 
-    {/* Issues Modal */}
-    <IssuesModal
-      accountId={repo.accountId}
-      isOpen={showIssuesModal}
-      owner={repo.owner}
-      repo={repo.name}
-      repositoryId={{ value: repo.repositoryId }}
-      onClose={() => setShowIssuesModal(false)}
-      onLaunchWatchers={(issueNumbers) => {
-        console.log('[RepositoryDropdown] AI watchers launched for issues:', issueNumbers)
-      }}
-    />
+    {/* Issues Modal - only show if repository is in workspace */}
+    {workspaceRepositoryId && (
+      <IssuesModal
+        accountId={repo.accountId}
+        anchorPosition={savedButtonPositionRef.current}
+        isOpen={showIssuesModal}
+        owner={repo.owner}
+        repo={repo.name}
+        repositoryId={workspaceRepositoryId}
+        onClose={() => setShowIssuesModal(false)}
+        onLaunchWatchers={(issueNumbers) => {
+          console.log('[RepositoryDropdown] AI watchers launched for issues:', issueNumbers)
+        }}
+      />
+    )}
   </>
   )
 }
@@ -367,14 +388,16 @@ interface MenuItemProps {
   onClick?: () => void
 }
 
-function MenuItem({ icon: Icon, label, badge, disabled, onClick }: MenuItemProps) {
-  return (
-    <button
-      className="w-full px-3 py-2 flex items-center justify-between gap-3 text-sm text-gray-200 hover:bg-gray-700/40 hover:text-white transition-colors cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
-      disabled={disabled}
-      onClick={onClick}
-      type="button"
-    >
+const MenuItem = React.forwardRef<HTMLButtonElement, MenuItemProps>(
+  ({ icon: Icon, label, badge, disabled, onClick }, ref) => {
+    return (
+      <button
+        ref={ref}
+        className="w-full px-3 py-2 flex items-center justify-between gap-3 text-sm text-gray-200 hover:bg-gray-700/40 hover:text-white transition-colors cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={disabled}
+        onClick={onClick}
+        type="button"
+      >
       <div className="flex items-center gap-2.5">
         <Icon className="size-4 text-gray-400 group-hover:text-teal-400 transition-colors" />
         <span className="font-medium">{label}</span>
@@ -391,5 +414,7 @@ function MenuItem({ icon: Icon, label, badge, disabled, onClick }: MenuItemProps
         </div>
       )}
     </button>
-  )
-}
+    )
+  }
+)
+MenuItem.displayName = 'MenuItem'
