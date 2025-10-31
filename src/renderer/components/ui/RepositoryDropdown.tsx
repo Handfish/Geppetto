@@ -33,6 +33,7 @@ import { cloneToWorkspaceAtom } from '../../atoms/workspace-atoms'
 import { WorkspaceClient } from '../../lib/ipc-client'
 import { Effect } from 'effect'
 import { toast } from 'sonner'
+import { IssuesModal } from '../ai-watchers/IssuesModal'
 
 interface RepositoryDropdownProps {
   repo: ProviderRepository
@@ -203,6 +204,7 @@ export function RepositoryDropdown({
       }
 
   return (
+    <>
     <FloatingPortal>
       <AnimatePresence>
         {isOpen && (
@@ -340,6 +342,20 @@ export function RepositoryDropdown({
         )}
       </AnimatePresence>
     </FloatingPortal>
+
+    {/* Issues Modal */}
+    <IssuesModal
+      accountId={repo.accountId}
+      isOpen={showIssuesModal}
+      owner={repo.owner}
+      repo={repo.name}
+      repositoryId={{ value: repo.repositoryId }}
+      onClose={() => setShowIssuesModal(false)}
+      onLaunchWatchers={(issueNumbers) => {
+        console.log('[RepositoryDropdown] AI watchers launched for issues:', issueNumbers)
+      }}
+    />
+  </>
   )
 }
 

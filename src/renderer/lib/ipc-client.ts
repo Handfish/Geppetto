@@ -357,3 +357,64 @@ export class GitHubIssueClient extends Effect.Service<GitHubIssueClient>()(
     }),
   }
 ) {}
+
+/**
+ * Source Control Client - IPC operations for git worktree operations
+ */
+export class SourceControlClient extends Effect.Service<SourceControlClient>()(
+  'SourceControlClient',
+  {
+    dependencies: [ElectronIpcClient.Default],
+    effect: Effect.gen(function* () {
+      const ipc = yield* ElectronIpcClient
+
+      return {
+        createWorktreeForIssue: (params: {
+          repositoryId: { value: string }
+          issueNumber: number
+          baseBranch?: string
+        }) =>
+          Effect.gen(function* () {
+            console.log(
+              `[SourceControlClient] createWorktreeForIssue called for issue #${params.issueNumber}`
+            )
+            const result = yield* ipc.invoke(
+              'source-control:create-worktree-for-issue',
+              params
+            )
+            console.log(
+              `[SourceControlClient] Worktree created at ${result.worktreePath}`
+            )
+            return result
+          }),
+
+        removeWorktree: (params: {
+          repositoryId: { value: string }
+          worktreePath: string
+        }) =>
+          Effect.gen(function* () {
+            console.log(
+              `[SourceControlClient] removeWorktree called for ${params.worktreePath}`
+            )
+            yield* ipc.invoke('source-control:remove-worktree', params)
+            console.log(`[SourceControlClient] Worktree removed`)
+          }),
+
+        listWorktrees: (params: { repositoryId: { value: string } }) =>
+          Effect.gen(function* () {
+            console.log(
+              `[SourceControlClient] listWorktrees called for repo ${params.repositoryId.value}`
+            )
+            const result = yield* ipc.invoke(
+              'source-control:list-worktrees',
+              params
+            )
+            console.log(
+              `[SourceControlClient] Found ${result.length} worktrees`
+            )
+            return result
+          }),
+      } as const
+    }),
+  }
+) {}

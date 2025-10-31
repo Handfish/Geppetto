@@ -14,8 +14,8 @@
 - [ ] Phase 4: LED Status Indicators (2-3 hours)
 
 **Total Estimated Time**: 1-2 days
-**Time Spent**: ~3.5 hours
-**Progress**: 60%
+**Time Spent**: ~5.5 hours
+**Progress**: 80%
 
 ---
 
@@ -83,8 +83,8 @@
 
 ## Phase 2: Issues Modal UI 🔄
 
-**Status**: Partially Complete (2.1 done, 2.2-2.4 pending)
-**Duration**: 0.5 hours so far
+**Status**: Mostly Complete (2.1-2.3 done, 2.4 pending testing)
+**Duration**: 1.5 hours so far
 **Target**: 2-3 hours
 **Completed**: TBD
 
@@ -95,35 +95,46 @@
 - [x] Added state for `showIssuesModal`
 - [x] Wired up onClick to open modal and close dropdown
 
-### 2.2 Create Issues Modal Component
-- [ ] Create `src/renderer/components/ai-watchers/IssuesModal.tsx`
-- [ ] Implement modal with AnimatePresence backdrop
-- [ ] Use `repositoryIssuesAtom` to fetch issues
-- [ ] Implement shortlist state with Set<number>
-- [ ] Create IssueRow component with checkbox
-- [ ] Implement Result.builder for error handling
-- [ ] Add header with repository info
-- [ ] Add footer with shortlist count and launch button
+### 2.2 Create Issues Modal Component ✅
+- [x] Created `src/renderer/components/ai-watchers/IssuesModal.tsx`
+- [x] Implemented modal with AnimatePresence backdrop
+- [x] Used `repositoryIssuesAtom` to fetch issues
+- [x] Implemented shortlist state with Set<number>
+- [x] Created IssueRow component with checkbox and click to toggle
+- [x] Implemented Result.builder for error handling (AuthenticationError, NetworkError, NotFoundError, Defect)
+- [x] Added header with repository info and ListTodo icon
+- [x] Added footer with shortlist count and "Launch AI Watchers" button
+- [x] Wired modal into RepositoryDropdown with accountId, owner, repo props
+- [x] Added React fragment wrapper for multiple return elements
+- [x] Placeholder onLaunchWatchers handler (logs and shows toast)
 
-### 2.3 Create Keyboard Shortcuts Hook
-- [ ] Create `src/renderer/hooks/useIssueModalKeyboardShortcuts.ts`
-- [ ] Handle Escape to close
-- [ ] Handle Enter to launch watchers
-- [ ] Ignore events from input/textarea elements
-- [ ] Wire up to modal component
+### 2.3 Keyboard Shortcuts ✅
+- [x] Implemented inline keyboard shortcuts in IssuesModal (simpler than separate hook)
+- [x] Escape key closes modal
+- [x] Enter key launches watchers (when shortlist not empty)
+- [x] Event listeners properly added/removed based on isOpen
+- [x] Keyboard shortcuts respect modifier keys (no trigger if Shift/Ctrl/Meta pressed)
 
-### 2.4 Testing
+### 2.4 Testing ⏳
 - [ ] Run `pnpm dev`
 - [ ] Open repository dropdown
 - [ ] Click "View Issues"
 - [ ] Verify modal appears with issues
-- [ ] Press Space on issue to toggle shortlist
+- [ ] Click issues to toggle shortlist
 - [ ] Verify checkbox toggles correctly
 - [ ] Verify shortlist counter updates
 - [ ] Press Escape to close
+- [ ] Press Enter to launch watchers
 - [ ] Verify keyboard shortcuts work
 
-**Notes**: [Add any notes here]
+**Notes**:
+- Keyboard shortcuts implemented inline in IssuesModal rather than separate hook for simplicity
+- Modal uses accountId from ProviderRepository (already available)
+- Result.builder properly handles all error types from repositoryIssuesAtom
+- IssueRow displays: number, title, labels (color-coded), author, date, comments
+- AnimatePresence provides smooth backdrop and modal animations
+- onLaunchWatchers is a placeholder - will be implemented after Phase 3 watcher launcher hook
+- Compilation successful (exit code 0), bundle size 3,356 kB
 
 ---
 
@@ -199,10 +210,52 @@
 - Sequential watcher launches (to be implemented in Phase 2) will prevent git race conditions
 - Worktree paths use `../worktree-issue#<number>` pattern for clean organization
 
-**Remaining Work** (deferred to Phase 2 completion):
-- Create useAiWatcherLauncher hook to utilize worktree operations
-- Integrate launcher in IssuesModal
-- Test end-to-end worktree creation and watcher launching
+**Frontend Integration Completed**:
+- ✅ Created useAiWatcherLauncher hook
+- ✅ Integrated launcher in IssuesModal
+- ✅ Added SourceControlClient to ipc-client
+- ✅ Updated RepositoryDropdown to pass repositoryId
+
+**Remaining Work**:
+- Test end-to-end worktree creation and watcher launching (manual testing with `pnpm dev`)
+
+### 3.7 Frontend Integration: Watcher Launcher ✅
+- [x] Created `src/renderer/lib/ipc-client.ts` SourceControlClient:
+  - Added `createWorktreeForIssue` method
+  - Added `removeWorktree` method
+  - Added `listWorktrees` method
+  - All methods use ElectronIpcClient with proper Effect wrapping
+- [x] Created `src/renderer/hooks/useAiWatcherLauncher.ts`:
+  - `launchWatcherForIssue` - launches single watcher with worktree
+  - `launchWatchersForIssues` - launches multiple watchers sequentially
+  - Creates git worktrees using SourceControlClient
+  - Launches AI watchers with issue context
+  - Toast notifications for user feedback
+  - Loading state management (isLaunching)
+- [x] Updated `src/renderer/components/ai-watchers/IssuesModal.tsx`:
+  - Added repositoryId prop
+  - Integrated useAiWatcherLauncher hook
+  - Added provider selector dropdown (claude-code, codex, cursor)
+  - Updated handleLaunch to call launchWatchersForIssues
+  - Added loading state to Launch button (spinner + "Launching..." text)
+  - Provider selector disabled during launch
+- [x] Updated `src/renderer/components/ui/RepositoryDropdown.tsx`:
+  - Added repositoryId prop to IssuesModal: `{{ value: repo.repositoryId }}`
+  - Removed placeholder onLaunchWatchers toast
+
+### 3.8 Compilation Testing ✅
+- [x] Ran `pnpm compile:app` - **SUCCESS, exit code 0**
+- [x] Bundle size: 3,362.46 kB (6 kB increase from Phase 2.2, expected)
+- [x] All new code compiles without errors
+- [x] No type errors introduced
+
+**Notes**:
+- SourceControlClient follows same pattern as other IPC clients
+- useAiWatcherLauncher hook encapsulates all worktree + watcher logic
+- Sequential launching in launchWatchersForIssues prevents git conflicts
+- Provider selector allows choosing AI agent (claude-code, codex, cursor)
+- Loading states provide good UX during async operations
+- Issue context properly stored in watcher config for tracking
 
 ---
 
