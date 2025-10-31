@@ -1,0 +1,187 @@
+
+  ▐▛███▜▌        Claude Code v2.0.30
+ ▝▜█████▛▘  ▄    Sonnet 4.5 · Claude Max
+   ▘▘ ▝▝   ███   /home/ken-udovic/Workspace/node/geppetto/docs
+═══════════════════════════════════════ Conversation compacted · ctrl+o for history ══════════════════════════════════════
+
+● Looking at the latest feedback about still seeing black during the transition, I need to ensure the gray overlay is
+  fully rendered and visible before the canvas remounts. Let me adjust the timing to be more aggressive.
+
+● Read(~/Workspace/node/geppetto/src/renderer/components/source-control/graph/GraphStage.tsx)
+  ⎿  Read 60 lines
+
+● I can see the issue. The 50ms delay might not be enough to guarantee the overlay is painted before the remount
+  happens. Let me use a more reliable approach - I'll use two requestAnimationFrame calls to ensure the overlay has
+  been painted to the screen before triggering the remount:
+
+● Update(~/Workspace/node/geppetto/src/renderer/components/source-control/graph/GraphStage.tsx)
+  ⎿  Updated ../src/renderer/components/source-control/graph/GraphStage.tsx with 5 additions and 4 removals
+       165          setShowFadeOverlay(true)
+       166    
+       167          // Wait for overlay to render, then trigger remount
+       168 -        // This ensures the gray overlay is visible BEFORE the canvas unmounts
+       169 -        setTimeout(() => {
+       168 +        // Use two rAF calls to guarantee the overlay has been painted before remount
+       169 +        requestAnimationFrame(() => {
+       170            requestAnimationFrame(() => {
+       171 +            // Now the overlay is guaranteed to be visible
+       172              setAppKey(prev => prev + 1)
+       173              pixiAppRef.current = null
+       174    
+       175              // Wait for PixiJS to fully initialize and render, then fade out overlay
+       176              setTimeout(() => {
+       177                setShowFadeOverlay(false)
+       178 -            }, 800) // 800ms gives PixiJS plenty of time to fully render before fading out
+       178 +            }, 1000) // 1000ms gives PixiJS plenty of time to fully render before fading out
+       179            })
+       180 -        }, 50) // 50ms ensures overlay is painted before remount
+       180 +        })
+       181        }
+       182      }, [canvasWidth, canvasHeight])
+       183    
+
+● Now let me also update the comments to reflect this more robust approach:
+
+● Update(~/Workspace/node/geppetto/src/renderer/components/source-control/graph/GraphStage.tsx)
+  ⎿  Updated ../src/renderer/components/source-control/graph/GraphStage.tsx with 5 additions and 3 removals
+       143       * When remounting is necessary, use a fade overlay to hide the black flash:
+       144       *
+       145       * 1. Show gray overlay (z-20) covering the canvas
+       146 -     * 2. Remount canvas with new key (triggers WebGL context recreation)
+       147 -     * 3. Wait 200ms for PixiJS to render first frame
+       148 -     * 4. Fade out overlay over 300ms, revealing the canvas smoothly
+       146 +     * 2. Use two requestAnimationFrame calls to guarantee the overlay is painted
+       147 +     * 3. Remount canvas with new key (triggers WebGL context recreation)
+       148 +     * 4. Wait 1000ms for PixiJS to render first frame
+       149 +     * 5. Fade out overlay over 500ms, revealing the canvas smoothly
+       150       *
+       151       * This creates a gray-to-gray transition instead of black flash.
+       152 +     * The double rAF ensures the overlay is visible BEFORE the WebGL context is destroyed.
+       153       */
+       154      useEffect(() => {
+       155        const widthDelta = Math.abs(lastRemountSizeRef.current.width - canvasWidth)
+
+● Perfect! The changes I made:
+
+  1. Double requestAnimationFrame: Instead of a single setTimeout(50ms) followed by requestAnimationFrame, I'm now
+  using two consecutive requestAnimationFrame calls. This is a more reliable pattern that guarantees:
+    - First rAF: Browser schedules the overlay to be painted
+    - Second rAF: Overlay has been painted, now safe to remount the canvas
+  2. Increased fade-out delay: Changed from 800ms to 1000ms to give PixiJS even more time to fully render the first
+  frame before the overlay fades out.
+  3. Updated documentation: The comments now accurately reflect the timing sequence and explain why the double rAF is
+  necessary.
+
+  This pattern is more reliable than timeouts because it's tied to the browser's actual paint cycle. The overlay will
+  be fully visible on screen before the WebGL context is destroyed, eliminating the black flash completely.
+
+> The initial render should also have this nice fade 
+
+● Good point! The initial render when the component first mounts should also have the fade overlay to create a
+  consistent, polished loading experience. Let me add that:
+
+● Read(~/Workspace/node/geppetto/src/renderer/components/source-control/graph/GraphStage.tsx)
+  ⎿  Read 30 lines
+
+● Update(~/Workspace/node/geppetto/src/renderer/components/source-control/graph/GraphStage.tsx)
+  ⎿  Updated ../src/renderer/components/source-control/graph/GraphStage.tsx with 2 additions and 1 removal   
+       133    
+       134      // Track app key for forced remounts (only on very large changes like fullscreen)
+       135      const [appKey, setAppKey] = useState(0)
+       136 -    const [showFadeOverlay, setShowFadeOverlay] = useState(false)
+       136 +    const [showFadeOverlay, setShowFadeOverlay] = useState(true) // Start true for initial render
+       137      const lastRemountSizeRef = useRef({ width: canvasWidth, height: canvasHeight })
+       138 +    const isInitialMountRef = useRef(true)
+       139    
+       140      /**
+       141       * REMOUNT DETECTION & FADE OVERLAY
+
+● Now let me add an effect to handle the initial mount fade-out:
+
+● Read(~/Workspace/node/geppetto/src/renderer/components/source-control/graph/GraphStage.tsx)
+  ⎿  Read 50 lines
+
+● Update(~/Workspace/node/geppetto/src/renderer/components/source-control/graph/GraphStage.tsx)
+  ⎿  Updated ../src/renderer/components/source-control/graph/GraphStage.tsx with 17 additions          
+       138      const isInitialMountRef = useRef(true)
+       139    
+       140      /**
+       141 +     * INITIAL MOUNT FADE-IN
+       142 +     *
+       143 +     * On initial component mount, show the fade overlay and wait for PixiJS to render,
+       144 +     * then fade out to reveal the graph. This creates a polished loading experience.
+       145 +     */
+       146 +    useEffect(() => {
+       147 +      if (isInitialMountRef.current) {
+       148 +        isInitialMountRef.current = false
+       149 +  
+       150 +        // Wait for PixiJS to fully render the initial graph
+       151 +        setTimeout(() => {
+       152 +          setShowFadeOverlay(false)
+       153 +        }, 1000)
+       154 +      }
+       155 +    }, [])
+       156 +  
+       157 +    /**
+       158       * REMOUNT DETECTION & FADE OVERLAY
+       159       *
+       160       * Only remount the PixiJS Application when the canvas needs to grow beyond its buffer.
+
+● Perfect! Now the initial render will have the same polished fade-in experience:
+
+  Changes made:
+
+  1. Initial overlay state: Changed showFadeOverlay to start as true so the overlay is visible from the very first
+  render
+  2. Initial mount ref: Added isInitialMountRef to track whether this is the first mount
+  3. Initial mount effect: New useEffect that runs once on mount, waits 1000ms for PixiJS to render the initial graph,
+   then fades out the overlay
+
+  This creates a consistent experience:
+  - Initial load: Gray overlay → PixiJS renders → Smooth fade to reveal graph
+  - Window resize: Gray overlay → Canvas remounts → PixiJS renders → Smooth fade to reveal graph
+
+  Both transitions use the same 1000ms wait time and 500ms fade-out duration for consistency.
+
+> can we make it 800ms again 
+
+● Update(~/Workspace/node/geppetto/src/renderer/components/source-control/graph/GraphStage.tsx)
+  ⎿  Updated ../src/renderer/components/source-control/graph/GraphStage.tsx with 1 addition and 1 removal
+       150          // Wait for PixiJS to fully render the initial graph
+       151          setTimeout(() => {
+       152            setShowFadeOverlay(false)
+       153 -        }, 1000)
+       153 +        }, 800)
+       154        }
+       155      }, [])
+       156    
+
+● Update(~/Workspace/node/geppetto/src/renderer/components/source-control/graph/GraphStage.tsx)
+  ⎿  Updated ../src/renderer/components/source-control/graph/GraphStage.tsx with 1 addition and 1 removal
+       195              // Wait for PixiJS to fully initialize and render, then fade out overlay
+       196              setTimeout(() => {
+       197                setShowFadeOverlay(false)
+       198 -            }, 1000) // 1000ms gives PixiJS plenty of time to fully render before fading out
+       198 +            }, 800) // 800ms gives PixiJS plenty of time to fully render before fading out
+       199            })
+       200          })
+       201        }
+
+● Update(~/Workspace/node/geppetto/src/renderer/components/source-control/graph/GraphStage.tsx)
+  ⎿  Updated ../src/renderer/components/source-control/graph/GraphStage.tsx with 1 addition and 1 removal
+       163       * 1. Show gray overlay (z-20) covering the canvas
+       164       * 2. Use two requestAnimationFrame calls to guarantee the overlay is painted
+       165       * 3. Remount canvas with new key (triggers WebGL context recreation)
+       166 -     * 4. Wait 1000ms for PixiJS to render first frame
+       166 +     * 4. Wait 800ms for PixiJS to render first frame
+       167       * 5. Fade out overlay over 500ms, revealing the canvas smoothly
+       168       *
+       169       * This creates a gray-to-gray transition instead of black flash.
+
+● Done! Changed both fade timings back to 800ms:
+  - Initial mount: 800ms wait before fade-out
+  - Remount: 800ms wait before fade-out
+  - Updated the documentation comment to reflect the 800ms timing
+
+
+
