@@ -97,7 +97,7 @@ const aiProviderUsageQueryAtom = Atom.family((provider: AiProviderType) =>
         `ai-provider:${provider}:usage`,
         'ai-provider:usage',
       ]),
-      Atom.setIdleTTL(Duration.minutes(5))
+      Atom.setIdleTTL(Duration.minutes(10))
     )
 )
 

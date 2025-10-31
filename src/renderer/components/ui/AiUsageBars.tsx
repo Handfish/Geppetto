@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import {
   useFloating,
@@ -293,9 +293,22 @@ interface UsageBarProps {
 }
 
 function ProviderUsageBars({ provider, isEnabled }: UsageBarProps) {
-  const { usageResult } = useAiProviderUsage(provider, { enabled: isEnabled })
+  const { usageResult, refreshUsage } = useAiProviderUsage(provider, { enabled: isEnabled })
   const Icon = getProviderIcon(provider)
   const color = getProviderColor(provider)
+
+  // Poll for updates every 5 minutes
+  useEffect(() => {
+    if (!isEnabled) return
+
+    const POLL_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
+
+    const intervalId = setInterval(() => {
+      refreshUsage()
+    }, POLL_INTERVAL_MS)
+
+    return () => clearInterval(intervalId)
+  }, [isEnabled, refreshUsage])
 
   /**
    * Silent error handling: Usage bars are optional UI enhancements.

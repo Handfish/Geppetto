@@ -76,10 +76,14 @@ export function useAiProviderUsage(
   const enabled = options?.enabled ?? true
   const usageAtom = selectAiProviderUsageAtom(provider, enabled)
   const usageResult = useAtomValue(usageAtom)
+  const refreshUsage = useAtomRefresh(usageAtom)
 
   return {
     // Primary: Full Result for exhaustive error handling
     usageResult,
+
+    // Actions
+    refreshUsage,
 
     // Computed convenience property
     isLoading: usageResult._tag === 'Initial' && usageResult.waiting,
