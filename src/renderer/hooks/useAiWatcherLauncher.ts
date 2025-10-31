@@ -3,7 +3,7 @@ import { useAtom } from '@effect-atom/atom-react'
 import { createWatcherAtom } from '../atoms/ai-watcher-atoms'
 import type { GitHubIssue } from '../../shared/schemas/github/issue'
 import type { AiWatcherConfig } from '../../main/ai-watchers/schemas'
-import { SourceControlClient } from '../lib/ipc-client'
+import { SourceControlClient, WorkspaceClient } from '../lib/ipc-client'
 import { Effect } from 'effect'
 import { toast } from 'sonner'
 
@@ -28,21 +28,45 @@ export function useAiWatcherLauncher() {
   const launchWatcherForIssue = async (
     issue: GitHubIssue,
     provider: 'claude-code' | 'codex' | 'cursor',
-    repositoryId: { value: string },
+    repositoryId: { value: string } | null,
     owner: string,
-    repo: string
+    repo: string,
+    repoProvider: string = 'github',
+    defaultBranch: string = 'main'
   ) => {
     setIsCreatingWorktree(true)
 
     try {
-      // Step 1: Create worktree for the issue
+      // Step 1: Get fresh repository ID from workspace (handles cache invalidation)
+      console.log(`[useAiWatcherLauncher] Checking workspace for ${owner}/${repo}`)
+
+      const workspaceCheck = await Effect.runPromise(
+        Effect.gen(function* () {
+          const client = yield* WorkspaceClient
+          return yield* client.checkRepositoryInWorkspace({
+            owner,
+            repoName: repo,
+            provider: repoProvider,
+            defaultBranch,
+          })
+        }).pipe(Effect.provide(WorkspaceClient.Default))
+      )
+
+      if (!workspaceCheck.inWorkspace || !workspaceCheck.repositoryId) {
+        throw new Error(`Repository ${owner}/${repo} not found in workspace`)
+      }
+
+      const currentRepositoryId = workspaceCheck.repositoryId
+      console.log(`[useAiWatcherLauncher] Using current repository ID: ${currentRepositoryId.value}`)
+
+      // Step 2: Create worktree for the issue
       console.log(`[useAiWatcherLauncher] Creating worktree for issue #${issue.number}`)
 
       const worktreeResult = await Effect.runPromise(
         Effect.gen(function* () {
           const client = yield* SourceControlClient
           return yield* client.createWorktreeForIssue({
-            repositoryId,
+            repositoryId: currentRepositoryId,
             issueNumber: issue.number,
           })
         }).pipe(Effect.provide(SourceControlClient.Default))
@@ -59,7 +83,7 @@ export function useAiWatcherLauncher() {
         )
       }
 
-      // Step 2: Create AI watcher config with worktree path
+      // Step 3: Create AI watcher config with worktree path
       const config: AiWatcherConfig = {
         type: provider,
         name: `${provider}: #${issue.number} ${issue.title}`,
@@ -72,7 +96,7 @@ export function useAiWatcherLauncher() {
         },
       }
 
-      // Step 3: Launch the watcher
+      // Step 4: Launch the watcher
       console.log(`[useAiWatcherLauncher] Launching ${provider} watcher`)
       createWatcher(config)
 

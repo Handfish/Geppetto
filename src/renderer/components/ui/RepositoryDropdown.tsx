@@ -467,6 +467,8 @@ export function RepositoryDropdown({
         owner={repo.owner}
         repo={repo.name}
         repositoryId={workspaceRepositoryId}
+        provider={repo.provider}
+        defaultBranch={repo.defaultBranch}
         onClose={() => setShowIssuesModal(false)}
         onLaunchWatchers={(issueNumbers) => {
           console.log('[RepositoryDropdown] AI watchers launched for issues:', issueNumbers)

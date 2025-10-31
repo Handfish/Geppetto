@@ -28,7 +28,9 @@ interface IssuesModalProps {
   accountId: AccountId
   owner: string
   repo: string
-  repositoryId: { value: string }
+  repositoryId: { value: string } | null
+  provider: string
+  defaultBranch: string
   anchorPosition: DOMRect | null
   onLaunchWatchers?: (issueNumbers: number[]) => void
 }
@@ -40,6 +42,8 @@ export function IssuesModal({
   owner,
   repo,
   repositoryId,
+  provider,
+  defaultBranch,
   anchorPosition,
   onLaunchWatchers,
 }: IssuesModalProps) {
@@ -59,6 +63,8 @@ export function IssuesModal({
       owner={owner}
       repo={repo}
       repositoryId={repositoryId}
+      provider={provider}
+      defaultBranch={defaultBranch}
     />
   )
 }
@@ -70,6 +76,8 @@ function IssuesModalContent({
   owner,
   repo,
   repositoryId,
+  provider,
+  defaultBranch,
   anchorPosition,
   onLaunchWatchers,
 }: IssuesModalProps) {
@@ -238,7 +246,9 @@ function IssuesModalContent({
           agent,
           repositoryId,
           owner,
-          repo
+          repo,
+          provider,
+          defaultBranch
         )
       }
 
