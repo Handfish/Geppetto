@@ -154,7 +154,7 @@ export function RepositoryDropdown({
     }
   }, [focusedItemIndex, isOpen])
 
-  // Keyboard navigation hook
+  // Keyboard navigation hook - disable when issues modal is open
   useDropdownKeyboardNavigation({
     isOpen,
     itemCount: menuItems.length,
@@ -164,7 +164,7 @@ export function RepositoryDropdown({
       // Trigger onClick for focused item
       menuItems[focusedItemIndex]?.onClick()
     },
-    enabled: isOpen,
+    enabled: isOpen && !showIssuesModal, // CRITICAL: Disable when modal is open
   })
 
   // Function to check workspace status

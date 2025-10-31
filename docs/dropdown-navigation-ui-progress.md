@@ -255,11 +255,32 @@
 
 Document any issues discovered during implementation:
 
-### Issue 1: [Title]
-- **Phase**: [Phase number]
-- **Description**: [What went wrong]
-- **Solution**: [How it was fixed]
-- **Impact**: [Effect on implementation]
+### Issue 1: Event Listener Separation and Layering
+- **Phase**: Post-Phase 4 (discovered during manual testing)
+- **Description**: Three critical issues with keyboard event handling:
+  1. Up/down arrows not navigating the dropdown menu
+  2. Dropdown receiving left/right arrow events when issues modal was open
+  3. Spacebar on issues panel was opening/closing the dropdown menu
+
+  **Root Cause**: Both hooks used global `document.addEventListener` without proper layer awareness. The dropdown hook remained active even when the issues modal was open, and events were propagating from the modal back to the dropdown trigger.
+
+- **Solution**: Implemented Modal Stack Pattern with two-layer approach:
+  1. **IssuesModal Hook** (`useIssueModalKeyboardNavigation.ts:103`):
+     - Added `event.stopPropagation()` to prevent events from bubbling to parent listeners
+     - Added handledKeys check to only process relevant keys (`['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', ' ', 'Enter', 'Escape']`)
+     - Prevents all modal keyboard events from reaching the dropdown listener
+
+  2. **RepositoryDropdown Component** (`RepositoryDropdown.tsx:167`):
+     - Changed `enabled: isOpen` to `enabled: isOpen && !showIssuesModal`
+     - Explicitly disables dropdown navigation when issues modal is open
+     - Ensures only one layer handles keyboard events at a time
+
+- **Impact**:
+  - ✅ Dropdown navigation now works correctly (up/down arrows navigate menu items)
+  - ✅ No event bleeding between layers (modal blocks dropdown listeners)
+  - ✅ Spacebar only affects issues panel when modal is open
+  - ✅ Compilation successful (exit code 0)
+  - **Pattern established**: Modal Stack Pattern for layered keyboard navigation
 
 ---
 
@@ -267,10 +288,36 @@ Document any issues discovered during implementation:
 
 Document insights and patterns discovered:
 
-1. **[Lesson Title]**
-   - What we learned
-   - Why it matters
-   - How to apply it
+1. **Modal Stack Pattern for Keyboard Navigation**
+   - **What we learned**: When implementing multiple layers of keyboard-interactive UI (dropdowns, modals, panels), you need explicit layer awareness to prevent event conflicts. Global `document.addEventListener` alone is insufficient - you need both:
+     - Modal hooks should `stopPropagation()` on handled keys to block parent listeners
+     - Parent listeners should be conditionally disabled based on child modal state
+
+   - **Why it matters**: Without proper layer separation, keyboard events bleed between UI layers causing:
+     - Background components responding to events meant for foreground modals
+     - Inconsistent navigation behavior (keys not working as expected)
+     - Confusing UX where multiple components react to the same keypress
+
+   - **How to apply it**: For any new layered keyboard navigation:
+     1. Use `enabled` prop in keyboard hooks to disable based on modal state
+     2. Call `event.stopPropagation()` in modal hooks after handling keys
+     3. Filter handled keys early (check `handledKeys` array before processing)
+     4. Pass modal state down from parent to child components
+     5. Test event flow: modal → parent → global listeners
+
+2. **Capture Phase Event Listeners**
+   - **What we learned**: Using `{ capture: true }` in `addEventListener` ensures keyboard hooks catch events before they bubble, but doesn't prevent conflicts between multiple capture-phase listeners
+
+   - **Why it matters**: Capture phase alone doesn't provide layer separation - you still need explicit coordination between listeners (enabled/disabled, stopPropagation)
+
+   - **How to apply it**: Always combine capture-phase listeners with conditional enabling and propagation control
+
+3. **Per-Component State vs Global State**
+   - **What we learned**: The `showIssuesModal` state lived in RepositoryDropdown (parent), which allowed us to disable dropdown navigation when modal opened - this parent-child state pattern enables proper layer coordination
+
+   - **Why it matters**: If modal state was global/separate, we'd need a more complex coordination mechanism (context, events, etc.)
+
+   - **How to apply it**: Keep modal state in the nearest common ancestor that needs to coordinate with it
 
 ---
 

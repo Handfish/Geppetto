@@ -92,6 +92,16 @@ export function useIssueModalKeyboardNavigation({
         return
       }
 
+      // Check if this is a key we handle
+      const handledKeys = ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', ' ', 'Enter', 'Escape']
+      if (!handledKeys.includes(event.key)) {
+        return
+      }
+
+      // CRITICAL: Stop propagation to prevent parent listeners from receiving this event
+      // This prevents dropdown from receiving events when modal is open
+      event.stopPropagation()
+
       switch (event.key) {
         case 'ArrowDown':
           event.preventDefault()

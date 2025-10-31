@@ -341,6 +341,16 @@ The application provides comprehensive keyboard navigation for enhanced UX:
 - Handle wrapping with modulo for circular navigation
 - Provide visual feedback (focus rings, hint text)
 
+**Modal Stack Pattern** (for layered keyboard navigation):
+- **Problem**: Multiple keyboard listeners (dropdown, modal) can conflict when both are active
+- **Solution**: Implement explicit layer awareness:
+  1. Modal hooks call `event.stopPropagation()` after handling keys to block parent listeners
+  2. Parent listeners disable via `enabled` prop when child modal is open (e.g., `enabled: isOpen && !showIssuesModal`)
+  3. Filter handled keys early (check `handledKeys` array before processing)
+  4. Keep modal state in nearest common ancestor for coordination
+- **Example**: `RepositoryDropdown.tsx:167` disables navigation when `showIssuesModal` is true, `useIssueModalKeyboardNavigation.ts:103` stops propagation to prevent events from reaching dropdown
+- **Reference**: See `docs/dropdown-navigation-ui-progress.md` Issue 1 for detailed implementation notes
+
 **Per-Issue Agent Selection**:
 - Each shortlisted issue can have its own AI agent type
 - Stored in `Map<number, AgentType>` for O(1) lookup
