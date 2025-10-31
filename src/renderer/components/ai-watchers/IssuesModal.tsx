@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, memo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, memo, useRef } from 'react'
 import { useAtomValue, Result } from '@effect-atom/atom-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { X, Check, Zap, ListTodo } from 'lucide-react'
@@ -17,6 +17,7 @@ import {
 } from '@floating-ui/react'
 import { repositoryIssuesAtom } from '../../atoms/github-issue-atoms'
 import { useAiWatcherLauncher } from '../../hooks/useAiWatcherLauncher'
+import { useIssueModalKeyboardNavigation } from '../../hooks/useIssueModalKeyboardNavigation'
 import type { AccountId } from '../../../shared/schemas/account-context'
 import type { GitHubIssue } from '../../../shared/schemas/github/issue'
 
@@ -75,7 +76,52 @@ function IssuesModalContent({
   const [shortlist, setShortlist] = useState<Set<number>>(new Set())
   const [selectedProvider, setSelectedProvider] = useState<'claude-code' | 'codex' | 'cursor'>('claude-code')
 
-  const { launchWatchersForIssues, isLaunching } = useAiWatcherLauncher()
+  const { launchWatcherForIssue, isLaunching } = useAiWatcherLauncher()
+
+  // Issue navigation state
+  const [focusedIssueIndex, setFocusedIssueIndex] = useState(0)
+  const issueRowRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+  // Per-issue agent selection (Map of issue number → AI agent type)
+  const [issueAgents, setIssueAgents] = useState<Map<number, 'claude-code' | 'codex' | 'cursor'>>(
+    new Map()
+  )
+
+  // Helper to get effective agent for an issue (falls back to global selectedProvider)
+  const getIssueAgent = useCallback(
+    (issueNumber: number): 'claude-code' | 'codex' | 'cursor' => {
+      return issueAgents.get(issueNumber) ?? selectedProvider
+    },
+    [issueAgents, selectedProvider]
+  )
+
+  // Helper to cycle agent for an issue
+  const cycleIssueAgent = useCallback(
+    (issueNumber: number, direction: 'left' | 'right') => {
+      const agents: Array<'claude-code' | 'codex' | 'cursor'> = [
+        'claude-code',
+        'codex',
+        'cursor',
+      ]
+
+      const currentAgent = getIssueAgent(issueNumber)
+      const currentIndex = agents.indexOf(currentAgent)
+
+      let nextIndex: number
+      if (direction === 'right') {
+        nextIndex = (currentIndex + 1) % agents.length
+      } else {
+        nextIndex = (currentIndex - 1 + agents.length) % agents.length
+      }
+
+      setIssueAgents((prev) => {
+        const next = new Map(prev)
+        next.set(issueNumber, agents[nextIndex])
+        return next
+      })
+    },
+    [getIssueAgent]
+  )
 
   // Create virtual element from saved position
   const virtualElement = useMemo(() => {
@@ -133,12 +179,27 @@ function IssuesModalContent({
 
   const issuesResult = useAtomValue(repositoryIssuesAtom(issuesAtomParams))
 
-  // Reset shortlist when modal closes
+  // Reset shortlist, focus, and per-issue agents when modal closes
   useEffect(() => {
     if (!isOpen) {
       setShortlist(new Set())
+      setFocusedIssueIndex(0)
+      setIssueAgents(new Map())
     }
   }, [isOpen])
+
+  // Get issues array for navigation
+  const issues = Result.getOrElse(issuesResult, () => [] as GitHubIssue[])
+
+  // Scroll focused issue into view
+  useEffect(() => {
+    if (isOpen && issues.length > 0 && issueRowRefs.current[focusedIssueIndex]) {
+      issueRowRefs.current[focusedIssueIndex]?.scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth',
+      })
+    }
+  }, [focusedIssueIndex, isOpen, issues.length])
 
   // Memoize toggle callback to prevent IssueRow re-renders
   const toggleShortlist = useCallback((issueNumber: number) => {
@@ -164,13 +225,18 @@ function IssuesModalContent({
 
     try {
       // Launch watchers sequentially to avoid git conflicts
-      await launchWatchersForIssues(
-        shortlistedIssues,
-        selectedProvider,
-        repositoryId,
-        owner,
-        repo
-      )
+      // Each issue uses its individually selected agent (or defaults to global provider)
+      for (const issue of shortlistedIssues) {
+        const agent = getIssueAgent(issue.number)
+
+        await launchWatcherForIssue(
+          issue,
+          agent,
+          repositoryId,
+          owner,
+          repo
+        )
+      }
 
       // Call optional callback with issue numbers
       if (onLaunchWatchers) {
@@ -185,23 +251,33 @@ function IssuesModalContent({
     }
   }
 
-  // Keyboard shortcuts - handled in separate hook (Phase 2.3)
-  useEffect(() => {
-    if (!isOpen) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose()
-      } else if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault()
-        handleLaunch()
+  // Keyboard navigation hook
+  useIssueModalKeyboardNavigation({
+    isOpen,
+    issueCount: issues.length,
+    focusedIndex: focusedIssueIndex,
+    onNavigate: setFocusedIssueIndex,
+    onToggleSelection: () => {
+      if (issues[focusedIssueIndex]) {
+        toggleShortlist(issues[focusedIssueIndex].number)
       }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, shortlist, onClose])
+    },
+    onCycleAgentLeft: () => {
+      const issue = issues[focusedIssueIndex]
+      if (issue && shortlist.has(issue.number)) {
+        cycleIssueAgent(issue.number, 'left')
+      }
+    },
+    onCycleAgentRight: () => {
+      const issue = issues[focusedIssueIndex]
+      if (issue && shortlist.has(issue.number)) {
+        cycleIssueAgent(issue.number, 'right')
+      }
+    },
+    onLaunch: handleLaunch,
+    onClose: onClose,
+    enabled: isOpen,
+  })
 
   // Animation config
   const animationConfig = shouldReduceMotion
@@ -240,7 +316,7 @@ function IssuesModalContent({
                       Issues: {owner}/{repo}
                     </h2>
                     <p className="text-xs text-gray-400 mt-1">
-                      Click issues to add to shortlist • Enter to launch watchers
+                      ↑↓ Navigate • Space Select • ←→ Change Agent • Enter Launch • Esc Close
                     </p>
                   </div>
                 </div>
@@ -297,12 +373,15 @@ function IssuesModalContent({
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          {issues.map((issue) => (
+                          {issues.map((issue, index) => (
                             <IssueRow
+                              isFocused={index === focusedIssueIndex}
                               isShortlisted={shortlist.has(issue.number)}
                               issue={issue}
                               key={issue.number}
                               onToggle={toggleShortlist}
+                              ref={(el) => (issueRowRefs.current[index] = el)}
+                              selectedAgent={getIssueAgent(issue.number)}
                             />
                           ))}
                         </div>
@@ -368,24 +447,32 @@ function IssuesModalContent({
 interface IssueRowProps {
   issue: GitHubIssue
   isShortlisted: boolean
+  isFocused?: boolean
+  selectedAgent?: 'claude-code' | 'codex' | 'cursor'
   onToggle: (issueNumber: number) => void
 }
 
 // Memoize IssueRow to prevent re-renders when other issues change
-const IssueRow = memo(function IssueRow({ issue, isShortlisted, onToggle }: IssueRowProps) {
-  return (
-    <button
-      className={`
-        w-full p-3 rounded-lg border transition-all text-left
-        ${
-          isShortlisted
-            ? 'border-teal-500/50 bg-teal-500/10'
-            : 'border-gray-700/50 bg-gray-800/30 hover:bg-gray-700/40'
-        }
-      `}
-      onClick={() => onToggle(issue.number)}
-      type="button"
-    >
+const IssueRow = memo(
+  React.forwardRef<HTMLButtonElement, IssueRowProps>(function IssueRow(
+    { issue, isShortlisted, isFocused, selectedAgent, onToggle },
+    ref
+  ) {
+    return (
+      <button
+        ref={ref}
+        className={`
+          w-full p-3 rounded-lg border transition-all text-left
+          ${
+            isShortlisted
+              ? 'border-teal-500/50 bg-teal-500/10'
+              : 'border-gray-700/50 bg-gray-800/30 hover:bg-gray-700/40'
+          }
+          ${isFocused ? 'ring-2 ring-teal-500/50' : ''}
+        `}
+        onClick={() => onToggle(issue.number)}
+        type="button"
+      >
       <div className="flex items-start gap-3">
         {/* Checkbox */}
         <div
@@ -439,8 +526,22 @@ const IssueRow = memo(function IssueRow({ issue, isShortlisted, onToggle }: Issu
             <span>•</span>
             <span>{new Date(issue.created_at).toLocaleDateString()}</span>
           </div>
+
+          {/* Agent Badge (only shown when shortlisted) */}
+          {isShortlisted && selectedAgent && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs text-gray-400">Agent:</span>
+              <span className="px-2 py-0.5 rounded text-xs font-medium bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                {selectedAgent === 'claude-code' ? 'Claude Code' : selectedAgent === 'codex' ? 'Codex' : 'Cursor'}
+              </span>
+              {isFocused && (
+                <span className="text-xs text-gray-500 ml-1">← → to change</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </button>
-  )
-})
+    )
+  })
+)

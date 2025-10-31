@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   useFloating,
@@ -34,6 +34,7 @@ import { WorkspaceClient } from '../../lib/ipc-client'
 import { Effect } from 'effect'
 import { toast } from 'sonner'
 import { IssuesModal } from '../ai-watchers/IssuesModal'
+import { useDropdownKeyboardNavigation } from '../../hooks/useDropdownKeyboardNavigation'
 
 interface RepositoryDropdownProps {
   repo: ProviderRepository
@@ -57,6 +58,10 @@ export function RepositoryDropdown({
   const issuesButtonRef = useRef<HTMLButtonElement>(null)
   const savedButtonPositionRef = useRef<DOMRect | null>(null)
 
+  // Keyboard navigation state
+  const [focusedItemIndex, setFocusedItemIndex] = useState(0)
+  const menuItemRefs = useRef<(HTMLButtonElement | null)[]>([])
+
   const { refs, floatingStyles, context, middlewareData, placement } =
     useFloating({
       open: isOpen,
@@ -78,6 +83,89 @@ export function RepositoryDropdown({
     role,
     dismiss,
   ])
+
+  // Define handleClone before menuItems that references it
+  const handleClone = useCallback(() => {
+    cloneToWorkspace({
+      cloneUrl: repo.cloneUrl,
+      repoName: repo.name,
+      owner: repo.owner,
+      defaultBranch: repo.defaultBranch,
+      provider: repo.provider,
+    })
+    onOpenChange(false)
+  }, [repo, cloneToWorkspace, onOpenChange])
+
+  // Define navigable menu items
+  interface MenuItem {
+    label: string
+    onClick: () => void
+    disabled?: boolean
+  }
+
+  const menuItems = useMemo<MenuItem[]>(() => {
+    const items: MenuItem[] = [
+      {
+        label: isCheckingWorkspace
+          ? 'Checking Workspace...'
+          : cloneResult.waiting
+            ? 'Cloning...'
+            : isInWorkspace
+              ? 'Already in Workspace'
+              : 'Clone to Workspace',
+        onClick: () => handleClone(),
+        disabled: isInWorkspace || cloneResult.waiting || isCheckingWorkspace,
+      },
+      {
+        label: isCheckingWorkspace
+          ? 'Checking...'
+          : !isInWorkspace
+            ? 'View Issues (Clone First)'
+            : 'View Issues',
+        onClick: () => {
+          if (issuesButtonRef.current) {
+            savedButtonPositionRef.current = issuesButtonRef.current.getBoundingClientRect()
+          }
+          setShowIssuesModal(true)
+          onOpenChange(false)
+        },
+        disabled: !isInWorkspace || isCheckingWorkspace,
+      },
+    ]
+
+    // Filter out disabled items for navigation
+    return items.filter(item => !item.disabled)
+  }, [isCheckingWorkspace, isInWorkspace, cloneResult.waiting, handleClone, onOpenChange])
+
+  // Reset focus when dropdown opens
+  useEffect(() => {
+    if (isOpen) {
+      setFocusedItemIndex(0)
+    }
+  }, [isOpen])
+
+  // Scroll focused item into view
+  useEffect(() => {
+    if (isOpen && menuItemRefs.current[focusedItemIndex]) {
+      menuItemRefs.current[focusedItemIndex]?.scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth',
+      })
+    }
+  }, [focusedItemIndex, isOpen])
+
+  // Keyboard navigation hook
+  useDropdownKeyboardNavigation({
+    isOpen,
+    itemCount: menuItems.length,
+    focusedIndex: focusedItemIndex,
+    onNavigate: setFocusedItemIndex,
+    onSelect: () => {
+      // Trigger onClick for focused item
+      menuItems[focusedItemIndex]?.onClick()
+    },
+    enabled: isOpen,
+  })
 
   // Function to check workspace status
   const checkWorkspaceStatus = useCallback(() => {
@@ -114,17 +202,6 @@ export function RepositoryDropdown({
     if (!isOpen) return
     checkWorkspaceStatus()
   }, [isOpen, checkWorkspaceStatus])
-
-  const handleClone = () => {
-    cloneToWorkspace({
-      cloneUrl: repo.cloneUrl,
-      repoName: repo.name,
-      owner: repo.owner,
-      defaultBranch: repo.defaultBranch,
-      provider: repo.provider,
-    })
-    onOpenChange(false)
-  }
 
   // Show success/error toast when clone completes - only once per operation
   const prevWaitingRef = useRef(false)
@@ -293,6 +370,7 @@ export function RepositoryDropdown({
                     }
                     disabled={isInWorkspace || cloneResult.waiting || isCheckingWorkspace}
                     icon={Download}
+                    isFocused={!( isInWorkspace || cloneResult.waiting || isCheckingWorkspace) && focusedItemIndex === 0}
                     label={
                       isCheckingWorkspace
                         ? 'Checking Workspace...'
@@ -303,10 +381,16 @@ export function RepositoryDropdown({
                             : 'Clone to Workspace'
                     }
                     onClick={handleClone}
+                    ref={(el) => {
+                      if (!(isInWorkspace || cloneResult.waiting || isCheckingWorkspace)) {
+                        menuItemRefs.current[0] = el
+                      }
+                    }}
                   />
                   <MenuItem
                     disabled={!isInWorkspace || isCheckingWorkspace}
                     icon={ListTodo}
+                    isFocused={isInWorkspace && !isCheckingWorkspace && focusedItemIndex === (isInWorkspace || cloneResult.waiting || isCheckingWorkspace ? 0 : 1)}
                     label={
                       isCheckingWorkspace
                         ? 'Checking...'
@@ -322,7 +406,13 @@ export function RepositoryDropdown({
                       setShowIssuesModal(true)
                       onOpenChange(false) // Close dropdown
                     }}
-                    ref={issuesButtonRef}
+                    ref={(el) => {
+                      issuesButtonRef.current = el
+                      if (isInWorkspace && !isCheckingWorkspace) {
+                        const index = (isInWorkspace || cloneResult.waiting || isCheckingWorkspace) ? 0 : 1
+                        menuItemRefs.current[index] = el
+                      }
+                    }}
                   />
                   <MenuItem
                     icon={ExternalLink}
@@ -392,14 +482,21 @@ interface MenuItemProps {
   badge?: React.ReactNode
   disabled?: boolean
   onClick?: () => void
+  isFocused?: boolean
 }
 
 const MenuItem = React.forwardRef<HTMLButtonElement, MenuItemProps>(
-  ({ icon: IconComponent, label, badge, disabled, onClick }, ref) => {
+  ({ icon: IconComponent, label, badge, disabled, onClick, isFocused }, ref) => {
     return (
       <button
         ref={ref}
-        className="w-full px-3 py-2 flex items-center justify-between gap-3 text-sm text-gray-200 hover:bg-gray-700/40 hover:text-white transition-colors cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
+        className={`
+          w-full px-3 py-2 flex items-center justify-between gap-3 text-sm text-gray-200
+          hover:bg-gray-700/40 hover:text-white
+          transition-colors cursor-pointer group
+          disabled:opacity-50 disabled:cursor-not-allowed
+          ${isFocused ? 'bg-gray-700/60 ring-2 ring-inset ring-teal-500/50' : ''}
+        `}
         disabled={disabled}
         onClick={onClick}
         type="button"

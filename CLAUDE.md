@@ -316,6 +316,38 @@ Use `Redacted<T>` for tokens/secrets to prevent accidental logging
 ### 7. Type Safety
 **NO `any` types**. Use `unknown` only at validation boundaries
 
+### 8. Keyboard Navigation
+
+The application provides comprehensive keyboard navigation for enhanced UX:
+
+**Repository Dropdown**:
+- `↑` / `↓`: Navigate menu items
+- `Enter`: Select focused item
+- `Esc`: Close dropdown
+- `Home` / `End`: Jump to first/last item
+
+**Issues Modal**:
+- `↑` / `↓`: Navigate issues
+- `Space`: Toggle issue selection
+- `←` / `→`: Cycle AI agent (selected issues only)
+- `Enter`: Launch AI watchers
+- `Esc`: Close modal
+
+**Implementation Pattern**:
+- Use dedicated keyboard hooks per component (`useDropdownKeyboardNavigation`, `useIssueModalKeyboardNavigation`)
+- Follow pattern from `useGraphKeyboardShortcuts`
+- Use capture phase event listeners: `{ capture: true }`
+- Check for input/textarea focus to avoid conflicts
+- Handle wrapping with modulo for circular navigation
+- Provide visual feedback (focus rings, hint text)
+
+**Per-Issue Agent Selection**:
+- Each shortlisted issue can have its own AI agent type
+- Stored in `Map<number, AgentType>` for O(1) lookup
+- Defaults to global provider selector
+- Visual badge shows selected agent on shortlisted issues
+- Launch uses per-issue agent, not global selector
+
 ## Environment Variables
 
 Required in `.env`:
