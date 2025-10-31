@@ -37,6 +37,8 @@ import {
   CoreSecureStoreLayer,
 } from "./core-infrastructure-layer"
 import { BroadcastService } from './broadcast/broadcast-service'
+import { KeyboardLayerManager } from './keyboard/keyboard-layer-manager'
+import { setupKeyboardLayerIpcHandlers } from './ipc/keyboard-layer-handlers'
 
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
@@ -247,7 +249,16 @@ let mainWindow: BrowserWindow | null = null
 let consoleWindow: BrowserWindow | null = null
 
 app.whenReady().then(async () => {
-  // Wait for IPC handlers to be fully set up before creating the window
+  // Create main window first (needed for KeyboardLayerManager)
+  mainWindow = await makeAppSetup(async () => createMainWindow())
+
+  // Create KeyboardLayerManager layer with mainWindow reference
+  const KeyboardLayerManagerLayer = KeyboardLayerManager.Live({ mainWindow })
+
+  // Combine with MainLayer for IPC handlers
+  const MainLayerWithKeyboard = Layer.mergeAll(MainLayer, KeyboardLayerManagerLayer)
+
+  // Wait for IPC handlers to be fully set up
   await Effect.runPromise(
     Effect.gen(function* () {
       yield* setupAccountIpcHandlers
@@ -257,10 +268,9 @@ app.whenReady().then(async () => {
       yield* setupAiWatcherIpcHandlers
       yield* setupSourceControlIpcHandlers
       yield* setupWorkspaceIpcHandlers
-    }).pipe(Effect.provide(MainLayer))
+      yield* setupKeyboardLayerIpcHandlers
+    }).pipe(Effect.provide(MainLayerWithKeyboard))
   )
-
-  mainWindow = await makeAppSetup(async () => createMainWindow())
 
   // Create console window in development mode
   if (process.env.NODE_ENV === 'development') {
@@ -269,31 +279,6 @@ app.whenReady().then(async () => {
 
   // Track focus state
   let isMainWindowFocused = true
-
-  // Helper functions to manage arrow key shortcuts
-  const registerArrowKeys = () => {
-    globalShortcut.register('Left', () => {
-      console.log('[Hotkey] Left arrow pressed')
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('carousel:prev')
-      }
-    })
-
-    globalShortcut.register('Right', () => {
-      console.log('[Hotkey] Right arrow pressed')
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('carousel:next')
-      }
-    })
-
-    console.log('[Hotkeys] Registered: Left, Right for carousel navigation')
-  }
-
-  const unregisterArrowKeys = () => {
-    globalShortcut.unregister('Left')
-    globalShortcut.unregister('Right')
-    console.log('[Hotkeys] Unregistered: Left, Right for carousel navigation')
-  }
 
   // Helper function to toggle window focus
   const toggleWindowFocus = () => {
@@ -304,7 +289,9 @@ app.whenReady().then(async () => {
         isMainWindowFocused = false
         mainWindow.setIgnoreMouseEvents(true, { forward: true })
         mainWindow.webContents.send('window:unfocus')
-        unregisterArrowKeys()
+
+        // Unregister ALL global shortcuts when window unfocuses
+        globalShortcut.unregisterAll()
 
         // Wait for CSS fade animation (500ms) before hiding
         setTimeout(() => {
@@ -335,9 +322,16 @@ app.whenReady().then(async () => {
         mainWindow.setIgnoreMouseEvents(false)
         mainWindow.focus()
         mainWindow.webContents.send('window:focus')
-        registerArrowKeys()
+
+        // Re-register toggle shortcut and notify KeyboardLayerManager to restore arrow keys
+        const toggleShortcut = 'CommandOrControl+Shift+G'
+        globalShortcut.register(toggleShortcut, toggleWindowFocus)
+
+        // Send IPC to renderer to reset keyboard layer (will trigger KeyboardLayerManager)
+        mainWindow.webContents.send('window:focus')
+
         console.log(
-          '[Window] Focused - window shown, click-through disabled, arrow keys captured'
+          '[Window] Focused - window shown, click-through disabled'
         )
       }
     }
@@ -355,8 +349,7 @@ app.whenReady().then(async () => {
     console.error(`[Hotkeys] Failed to register: ${toggleShortcut}`)
   }
 
-  // Register arrow key shortcuts initially (since we start in focused state)
-  registerArrowKeys()
+  console.log('[Main] KeyboardLayerManager initialized - arrow keys managed by layer stack')
 })
 
 // Handle OAuth callback URLs on macOS

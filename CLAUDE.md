@@ -341,14 +341,24 @@ The application provides comprehensive keyboard navigation for enhanced UX:
 - Handle wrapping with modulo for circular navigation
 - Provide visual feedback (focus rings, hint text)
 
-**Modal Stack Pattern** (for layered keyboard navigation):
-- **Problem**: Multiple keyboard listeners (dropdown, modal) can conflict when both are active
-- **Solution**: Implement explicit layer awareness:
+**Keyboard Layer Management** (for Electron global shortcuts):
+- **Problem**: Electron global shortcuts (main process) intercept keys before renderer, causing conflicts with modals/dropdowns
+- **Solution**: Centralized layer stack system coordinating main ↔ renderer:
+  1. Renderer components declare layer needs: `useKeyboardLayer('modal', isOpen)`
+  2. Main process (`KeyboardLayerManager`) maintains layer stack, adjusts global shortcuts
+  3. Top of stack determines active shortcuts (modal blocks carousel, dropdown blocks carousel, carousel enables arrows)
+  4. IPC communication pushes/pops layers automatically on mount/unmount
+- **Layers** (priority high → low): `modal` (full control), `dropdown` (partial control), `carousel` (default)
+- **Example**: `IssuesModal.tsx` calls `useKeyboardLayer('modal', isOpen)` → Main unregisters Left/Right arrows → Modal handles keys
+- **Reference**: See `docs/KEYBOARD_LAYER_MANAGEMENT.md` for complete implementation guide
+
+**Renderer-Only Keyboard Navigation** (for components without Electron shortcuts):
+- **Pattern**: Use dedicated keyboard hooks with `stopPropagation()` for layer separation
+- **Solution**:
   1. Modal hooks call `event.stopPropagation()` after handling keys to block parent listeners
   2. Parent listeners disable via `enabled` prop when child modal is open (e.g., `enabled: isOpen && !showIssuesModal`)
   3. Filter handled keys early (check `handledKeys` array before processing)
-  4. Keep modal state in nearest common ancestor for coordination
-- **Example**: `RepositoryDropdown.tsx:167` disables navigation when `showIssuesModal` is true, `useIssueModalKeyboardNavigation.ts:103` stops propagation to prevent events from reaching dropdown
+- **Example**: `useIssueModalKeyboardNavigation.ts:103` stops propagation to prevent events from reaching dropdown
 - **Reference**: See `docs/dropdown-navigation-ui-progress.md` Issue 1 for detailed implementation notes
 
 **Per-Issue Agent Selection**:

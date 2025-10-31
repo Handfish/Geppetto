@@ -700,6 +700,42 @@ export const GitHubIssueIpcContracts = {
 } as const
 
 /**
+ * Keyboard Layer IPC Contracts
+ *
+ * Centralized keyboard layer management for coordinating global shortcuts
+ * between main and renderer processes.
+ */
+export const KeyboardLayerIpcContracts = {
+  'keyboard-layer:push': {
+    channel: 'keyboard-layer:push' as const,
+    input: S.Struct({
+      layer: S.Literal('carousel', 'dropdown', 'modal'),
+    }),
+    output: S.Void,
+    errors: S.Never,
+  },
+
+  'keyboard-layer:pop': {
+    channel: 'keyboard-layer:pop' as const,
+    input: S.Struct({
+      layer: S.Literal('carousel', 'dropdown', 'modal'),
+    }),
+    output: S.Void,
+    errors: S.Never,
+  },
+
+  'keyboard-layer:get-state': {
+    channel: 'keyboard-layer:get-state' as const,
+    input: S.Void,
+    output: S.Struct({
+      activeLayer: S.Literal('carousel', 'dropdown', 'modal'),
+      layerStack: S.Array(S.Literal('carousel', 'dropdown', 'modal')),
+    }),
+    errors: S.Never,
+  },
+} as const
+
+/**
  * Combined IPC Contracts
  */
 export const IpcContracts = {
@@ -710,6 +746,7 @@ export const IpcContracts = {
   ...AiWatcherIpcContracts,
   ...SourceControlIpcContracts,
   ...GitHubIssueIpcContracts,
+  ...KeyboardLayerIpcContracts,
 } as const
 
 export type IpcContracts = typeof IpcContracts

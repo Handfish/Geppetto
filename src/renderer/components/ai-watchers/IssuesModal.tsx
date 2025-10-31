@@ -18,6 +18,7 @@ import {
 import { repositoryIssuesAtom } from '../../atoms/github-issue-atoms'
 import { useAiWatcherLauncher } from '../../hooks/useAiWatcherLauncher'
 import { useIssueModalKeyboardNavigation } from '../../hooks/useIssueModalKeyboardNavigation'
+import { useKeyboardLayer } from '../../hooks/useKeyboardLayer'
 import type { AccountId } from '../../../shared/schemas/account-context'
 import type { GitHubIssue } from '../../../shared/schemas/github/issue'
 
@@ -250,6 +251,9 @@ function IssuesModalContent({
       console.error('[IssuesModal] Failed to launch watchers:', error)
     }
   }
+
+  // Centralized keyboard layer management - push 'modal' layer when open
+  useKeyboardLayer('modal', isOpen)
 
   // Keyboard navigation hook
   useIssueModalKeyboardNavigation({

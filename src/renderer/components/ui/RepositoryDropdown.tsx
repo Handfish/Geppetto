@@ -35,6 +35,7 @@ import { Effect } from 'effect'
 import { toast } from 'sonner'
 import { IssuesModal } from '../ai-watchers/IssuesModal'
 import { useDropdownKeyboardNavigation } from '../../hooks/useDropdownKeyboardNavigation'
+import { useKeyboardLayer } from '../../hooks/useKeyboardLayer'
 
 interface RepositoryDropdownProps {
   repo: ProviderRepository
@@ -153,6 +154,9 @@ export function RepositoryDropdown({
       })
     }
   }, [focusedItemIndex, isOpen])
+
+  // Centralized keyboard layer management - push 'dropdown' layer when open
+  useKeyboardLayer('dropdown', isOpen && !showIssuesModal)
 
   // Keyboard navigation hook - disable when issues modal is open
   useDropdownKeyboardNavigation({
