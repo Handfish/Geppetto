@@ -32,6 +32,7 @@ import {
   clearConsoleError,
 } from '../lib/console-error-channel'
 import { WorkspaceSelector } from '../components/WorkspaceSelector'
+import { WatchersPanel } from '../components/ai-watchers/WatchersPanel'
 import { toast } from 'sonner'
 import { useCrossWindowSync } from '../hooks/useCrossWindowSync'
 
@@ -176,6 +177,9 @@ export function MainScreen() {
 
         {/* Workspace Selector - positioned in top right */}
         <WorkspaceSelector />
+
+        {/* AI Watcher Status LEDs - positioned in top right below workspace selector */}
+        <WatchersPanel />
 
         {userName && activeAccountId && (
           <div

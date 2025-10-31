@@ -18,6 +18,13 @@ const getProviderFavicon = (type: string) => {
 
 const getStatusColor = (status: AiWatcher['status']) => {
   switch (status) {
+    case 'starting':
+      return {
+        bg: '#3b82f650',
+        border: '#3b82f6',
+        glow: '#3b82f680',
+        shadow: '0 0 20px #3b82f680',
+      }
     case 'running':
       return {
         bg: '#10b98150',
@@ -58,7 +65,7 @@ interface WatcherLEDProps {
 export function WatcherStatusLED({ watcher, onClear }: WatcherLEDProps) {
   const colors = getStatusColor(watcher.status)
   const favicon = getProviderFavicon(watcher.type)
-  const isActive = watcher.status === 'running' || watcher.status === 'idle'
+  const isActive = watcher.status === 'starting' || watcher.status === 'running' || watcher.status === 'idle'
   const isDead = watcher.status === 'stopped' || watcher.status === 'errored'
 
   return (
@@ -114,7 +121,7 @@ export function WatcherStatusLED({ watcher, onClear }: WatcherLEDProps) {
       </div>
 
       {/* Tooltip on hover */}
-      <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+      <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
         <div className="bg-gray-900/95 border border-gray-700/50 rounded px-2 py-1 text-xs text-white backdrop-blur-xl">
           <div className="font-medium">{watcher.name}</div>
           <div className="text-gray-400 capitalize">{watcher.status}</div>

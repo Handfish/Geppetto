@@ -9,6 +9,11 @@ import { GitCommandService } from '../source-control/git-command-service'
 import { GitCommandRequest, GitWorktreeContext, GitCommandId } from '../../shared/schemas/source-control/command'
 import { RepositoryService } from '../source-control/services/repository-service'
 
+// Helper to create a properly branded GitCommandId
+const makeCommandId = (): GitCommandId => {
+  return S.decodeSync(GitCommandId)(randomUUID())
+}
+
 /**
  * WorkspaceService - Manages workspace directory configuration
  *
@@ -198,7 +203,7 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
             // Step 1: Clone with --no-checkout and bare config
             // Git will create the directory for us
             const cloneRequest = new GitCommandRequest({
-              id: randomUUID() as GitCommandId,
+              id: makeCommandId(),
               binary: 'git',
               args: ['clone', '--no-checkout', '-c', 'core.bare=true', cloneUrl, `${owner}-${provider}-${repoName}`],
               worktree: new GitWorktreeContext({
@@ -223,7 +228,7 @@ export class WorkspaceService extends Effect.Service<WorkspaceService>()(
             // Step 2: cd into directory and add worktree
             console.log('[WorkspaceService] Starting worktree add...')
             const worktreeRequest = new GitCommandRequest({
-              id: randomUUID() as GitCommandId,
+              id: makeCommandId(),
               binary: 'git',
               args: ['worktree', 'add', defaultBranch, defaultBranch],
               worktree: new GitWorktreeContext({

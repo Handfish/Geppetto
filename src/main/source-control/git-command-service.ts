@@ -1,4 +1,4 @@
-import { Effect, Stream, Scope } from 'effect'
+import { Effect, Stream, Scope, Schema as S } from 'effect'
 import type {
   GitCommandEvent,
   GitCommandResult,
@@ -12,6 +12,11 @@ import { RepositoryId } from './domain/aggregates/repository'
 import { NotFoundError, GitOperationError } from '../../shared/schemas/errors'
 import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
+
+// Helper to create a properly branded GitCommandId
+const makeCommandId = (): GitCommandId => {
+  return S.decodeSync(GitCommandId)(randomUUID())
+}
 
 /**
  * Application service orchestrating command executions via the runner port.
@@ -93,12 +98,14 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
 
           const branchName = `issue#${issueNumber}`
           const repoPath = repo.path
-          const worktreePath = path.resolve(path.dirname(repoPath), `worktree-${branchName}`)
+          // repo.path points to the parent directory (e.g., .../Handfish-github-Basic_React_Application)
+          // Create worktree in the same directory as the main worktree
+          const worktreePath = path.join(repoPath, branchName)
 
           // Check if branch exists
           const branchCheckResult = yield* runToCompletion(
             new GitCommandRequest({
-              id: randomUUID() as GitCommandId,
+              id: makeCommandId(),
               binary: 'git',
               args: ['rev-parse', '--verify', branchName],
               worktree: new GitWorktreeContext({
@@ -121,7 +128,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             if (!effectiveBaseBranch) {
               const defaultBranchResult = yield* runToCompletion(
                 new GitCommandRequest({
-                  id: randomUUID() as GitCommandId,
+                  id: makeCommandId(),
                   binary: 'git',
                   args: ['symbolic-ref', 'refs/remotes/origin/HEAD'],
                   worktree: new GitWorktreeContext({
@@ -142,7 +149,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             // Create new branch from base branch
             yield* runToCompletion(
               new GitCommandRequest({
-                id: randomUUID() as GitCommandId,
+                id: makeCommandId(),
                 binary: 'git',
                 args: ['branch', branchName, effectiveBaseBranch],
                 worktree: new GitWorktreeContext({
@@ -159,10 +166,41 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             )
           }
 
+          // Check if worktree already exists and prune if needed
+          const existingWorktrees = yield* listWorktrees(repositoryId).pipe(
+            Effect.catchAll(() => Effect.succeed([]))
+          )
+
+          const existingWorktree = existingWorktrees.find(w => w.branch === branchName)
+          if (existingWorktree) {
+            // If worktree exists at the correct path, just return it
+            if (existingWorktree.path === worktreePath) {
+              return {
+                worktreePath,
+                branchName,
+                branchExisted,
+              }
+            }
+
+            // Otherwise, prune stale worktrees before creating new one
+            yield* runToCompletion(
+              new GitCommandRequest({
+                id: makeCommandId(),
+                binary: 'git',
+                args: ['worktree', 'prune'],
+                worktree: new GitWorktreeContext({
+                  repositoryPath: repoPath,
+                }),
+              })
+            ).pipe(
+              Effect.catchAll(() => Effect.void) // Ignore prune errors
+            )
+          }
+
           // Create worktree
           yield* runToCompletion(
             new GitCommandRequest({
-              id: randomUUID() as GitCommandId,
+              id: makeCommandId(),
               binary: 'git',
               args: ['worktree', 'add', worktreePath, branchName],
               worktree: new GitWorktreeContext({
@@ -205,7 +243,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
 
           yield* runToCompletion(
             new GitCommandRequest({
-              id: randomUUID() as GitCommandId,
+              id: makeCommandId(),
               binary: 'git',
               args: ['worktree', 'remove', worktreePath, '--force'],
               worktree: new GitWorktreeContext({
@@ -244,7 +282,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
 
           const result = yield* runToCompletion(
             new GitCommandRequest({
-              id: randomUUID() as GitCommandId,
+              id: makeCommandId(),
               binary: 'git',
               args: ['worktree', 'list', '--porcelain'],
               worktree: new GitWorktreeContext({

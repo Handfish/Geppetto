@@ -9,7 +9,6 @@ import { ErrorTester } from './components/dev/ErrorTester'
 import { AiWatcherDevPanel } from './components/dev/AiWatcherDevPanel'
 import { WorkspaceSelector } from './components/WorkspaceSelector'
 import { SourceControlDevPanel } from './components/dev/SourceControlDevPanel'
-import { WatchersPanel } from './components/ai-watchers/WatchersPanel'
 
 export function App() {
   const { isAuthenticated } = useProviderAuth('github')
@@ -18,7 +17,6 @@ export function App() {
     <div className="min-h-screen bg-gray-900 p-6 relative">
       <ToastViewport />
       <WorkspaceSelector />
-      <WatchersPanel />
       {process.env.NODE_ENV === 'development' && (
         <>
           <AiWatcherDevPanel />

@@ -18,7 +18,7 @@ const aiWatcherRuntime = Atom.runtime(AiWatcherClient.Default)
 
 /**
  * List all AI watchers
- * Refreshes every 30 seconds (reduced from 5s to minimize IPC spam)
+ * Refreshes every 3 seconds for real-time status updates
  * Use manual refresh via button or after actions for immediate updates
  */
 export const aiWatchersAtom = aiWatcherRuntime
@@ -30,7 +30,7 @@ export const aiWatchersAtom = aiWatcherRuntime
   )
   .pipe(
     Atom.withReactivity(['ai-watchers:list']),
-    Atom.setIdleTTL(Duration.seconds(30))
+    Atom.setIdleTTL(Duration.seconds(3))
   )
 
 /**
