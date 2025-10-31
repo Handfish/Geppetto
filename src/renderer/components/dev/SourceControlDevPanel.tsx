@@ -20,8 +20,9 @@ import type {
   Repository,
   RepositoryId,
 } from '../../../shared/schemas/source-control'
+import { GitErrorTester } from './GitErrorTester'
 
-type TabType = 'repositories' | 'commits' | 'branches' | 'status'
+type TabType = 'repositories' | 'commits' | 'branches' | 'status' | 'errors'
 
 export function SourceControlDevPanel() {
   const [showPanel, setShowPanel] = useState(true)
@@ -109,6 +110,7 @@ export function SourceControlDevPanel() {
     { id: 'commits', label: 'Commits', icon: '🔀' },
     { id: 'branches', label: 'Branches', icon: '🌿' },
     { id: 'status', label: 'Status', icon: '📝' },
+    { id: 'errors', label: 'Error Testing', icon: '🔴' },
   ]
 
   return (
@@ -185,7 +187,7 @@ export function SourceControlDevPanel() {
                   : 'text-gray-400 hover:text-gray-200'
               }
             `}
-            disabled={!selectedRepository && tab.id !== 'repositories'}
+            disabled={!selectedRepository && tab.id !== 'repositories' && tab.id !== 'errors'}
           >
             <span className="mr-2">{tab.icon}</span>
             {tab.label}
@@ -240,7 +242,11 @@ export function SourceControlDevPanel() {
           </div>
         )}
 
-        {!selectedRepository && activeTab !== 'repositories' && (
+        {activeTab === 'errors' && (
+          <GitErrorTester repository={selectedRepository} />
+        )}
+
+        {!selectedRepository && activeTab !== 'repositories' && activeTab !== 'errors' && (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <p className="text-gray-400 mb-2">No repository selected</p>

@@ -87,13 +87,18 @@ export class ToastErrorPresenter implements ErrorPresenter {
   }
 
   /**
-   * Format error message with optional provider prefix
+   * Format error message with optional provider prefix and stderr
    */
   private formatErrorMessage(error: IpcError, context?: ErrorContext): string {
     // Include provider context if available
     const prefix = context?.provider
       ? `[${context.provider.toUpperCase()}] `
       : ''
+
+    // For git errors, include stderr if available
+    if (isGitError(error) && error.stderr) {
+      return `${prefix}${error.message}\n\nGit output:\n${error.stderr}`
+    }
 
     return `${prefix}${error.message}`
   }

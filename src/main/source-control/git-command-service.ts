@@ -160,7 +160,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
               Effect.mapError((error) =>
                 new GitOperationError({
                   message: `Failed to create branch ${branchName} from ${effectiveBaseBranch}`,
-                  stderr: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
+                  stderr: error._tag === 'GitCommandFailedError' ? error.stderr : String(error),
                 })
               )
             )
@@ -211,7 +211,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             Effect.mapError((error) =>
               new GitOperationError({
                 message: `Failed to create worktree at ${worktreePath}`,
-                stderr: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
+                stderr: error._tag === 'GitCommandFailedError' ? error.stderr : String(error),
               })
             )
           )
@@ -254,7 +254,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             Effect.mapError((error) =>
               new GitOperationError({
                 message: `Failed to remove worktree at ${worktreePath}`,
-                stderr: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
+                stderr: error._tag === 'GitCommandFailedError' ? error.stderr : String(error),
               })
             )
           )
@@ -293,7 +293,7 @@ export class GitCommandService extends Effect.Service<GitCommandService>()(
             Effect.mapError((error) =>
               new GitOperationError({
                 message: 'Failed to list worktrees',
-                stderr: error._tag === 'GitCommandExecutionError' ? error.stderr : String(error),
+                stderr: error._tag === 'GitCommandFailedError' ? error.stderr : String(error),
               })
             )
           )

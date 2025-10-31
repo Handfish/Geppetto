@@ -88,12 +88,18 @@ export function useAiWatcherLauncher() {
       )
     } catch (error) {
       console.error('[useAiWatcherLauncher] Failed to launch watcher:', error)
-      toast.error(
-        `Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`,
-        {
-          duration: 6000,
-        }
-      )
+
+      // Extract error message and stderr if available
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const stderr = (error as any)?.stderr || (error as any)?.error?.stderr
+
+      const fullMessage = stderr
+        ? `${errorMessage}\n\nGit output:\n${stderr}`
+        : errorMessage
+
+      toast.error(`Failed to create worktree: ${fullMessage}`, {
+        duration: 8000, // Longer for stderr
+      })
       throw error
     } finally {
       setIsCreatingWorktree(false)
