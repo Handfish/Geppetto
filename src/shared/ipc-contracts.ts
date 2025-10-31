@@ -601,6 +601,46 @@ export const SourceControlIpcContracts = {
     output: WorkingTree,
     errors: S.Union(NotFoundError, GitOperationError),
   },
+
+  'source-control:create-worktree-for-issue': {
+    channel: 'source-control:create-worktree-for-issue' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      issueNumber: S.Number,
+      baseBranch: S.optional(S.String), // defaults to main/master
+    }),
+    output: S.Struct({
+      worktreePath: S.String,
+      branchName: S.String,
+      branchExisted: S.Boolean,
+    }),
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:remove-worktree': {
+    channel: 'source-control:remove-worktree' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      worktreePath: S.String,
+    }),
+    output: S.Void,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:list-worktrees': {
+    channel: 'source-control:list-worktrees' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+    }),
+    output: S.Array(
+      S.Struct({
+        path: S.String,
+        branch: S.String,
+        isMainWorktree: S.Boolean,
+      })
+    ),
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
 } as const
 
 /**

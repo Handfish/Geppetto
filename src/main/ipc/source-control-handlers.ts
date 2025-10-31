@@ -3,6 +3,7 @@ import { registerIpcHandler } from './ipc-handler-setup'
 import { SourceControlIpcContracts } from '../../shared/ipc-contracts'
 import { RepositoryService } from '../source-control/services/repository-service'
 import { CommitGraphService } from '../source-control/services/commit-graph-service'
+import { GitCommandService } from '../source-control/git-command-service'
 import { makeCommitHash } from '../source-control/domain/value-objects/commit-hash'
 import { makeBranchName } from '../source-control/domain/value-objects/branch-name'
 import {
@@ -34,6 +35,7 @@ import type { CommitOperationsPort } from '../source-control/ports/primary/commi
 export const setupSourceControlIpcHandlers = Effect.gen(function* () {
   const repoService = yield* RepositoryService
   const commitService = yield* CommitGraphService
+  const gitCommandService = yield* GitCommandService
 
   /**
    * Helper: Convert shared schema RepositoryId to domain RepositoryId
@@ -371,5 +373,39 @@ export const setupSourceControlIpcHandlers = Effect.gen(function* () {
     SourceControlIpcContracts['source-control:pop-stash'],
     () =>
       Effect.fail(new Error('Working tree operations not yet implemented')) as any
+  )
+
+  // Worktree Operations
+  registerIpcHandler(
+    SourceControlIpcContracts['source-control:create-worktree-for-issue'],
+    (input) =>
+      Effect.gen(function* () {
+        const repositoryId = toDomainRepositoryId(input.repositoryId)
+        const result = yield* gitCommandService.createWorktreeForIssue(
+          repositoryId,
+          input.issueNumber,
+          input.baseBranch
+        )
+        return result
+      })
+  )
+
+  registerIpcHandler(
+    SourceControlIpcContracts['source-control:remove-worktree'],
+    (input) =>
+      Effect.gen(function* () {
+        const repositoryId = toDomainRepositoryId(input.repositoryId)
+        yield* gitCommandService.removeWorktree(repositoryId, input.worktreePath)
+      })
+  )
+
+  registerIpcHandler(
+    SourceControlIpcContracts['source-control:list-worktrees'],
+    (input) =>
+      Effect.gen(function* () {
+        const repositoryId = toDomainRepositoryId(input.repositoryId)
+        const worktrees = yield* gitCommandService.listWorktrees(repositoryId)
+        return worktrees
+      })
   )
 })

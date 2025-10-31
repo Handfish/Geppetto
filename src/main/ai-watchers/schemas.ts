@@ -43,6 +43,14 @@ export class AiWatcherConfig extends S.Class<AiWatcherConfig>('AiWatcherConfig')
   command: S.optional(S.String), // Custom command for 'custom' type
   args: S.optional(S.Array(S.String)), // Custom args for 'custom' type
   processHandle: S.optional(ProcessHandle), // For attaching to existing processes
+  issueContext: S.optional(
+    S.Struct({
+      owner: S.String,
+      repo: S.String,
+      issueNumber: S.Number,
+      issueTitle: S.String,
+    })
+  ), // GitHub issue context when watcher is launched from issue
 }) {}
 
 /**

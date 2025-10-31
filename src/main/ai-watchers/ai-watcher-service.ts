@@ -54,7 +54,7 @@ const getAiAgentCommand = (
   // Default commands for known AI agent types
   switch (config.type) {
     case 'claude-code':
-      return { command: 'claude-code' }
+      return { command: 'claude' } // ✅ FIXED: bash process is 'claude', not 'claude-code'
     case 'codex':
       return { command: 'codex' }
     case 'cursor':
