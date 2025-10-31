@@ -14,6 +14,7 @@ import { makeAppSetup } from '../lib/electron-app/factories/app/setup'
 import { ProviderRegistryService } from './vcs/provider-registry'
 import { VcsProviderService } from './vcs/vcs-provider-service'
 import { setupProviderIpcHandlers } from './ipc/provider-handlers'
+import { setupGitHubIssueIpcHandlers } from './ipc/github-issue-handlers'
 import { AiAccountContextService } from './ai/account-context-service'
 import { AiAdaptersLayer } from './ai/adapters-layer'
 import { AiProviderRegistryService } from './ai/registry'
@@ -252,6 +253,7 @@ app.whenReady().then(async () => {
     Effect.gen(function* () {
       yield* setupAccountIpcHandlers
       yield* setupProviderIpcHandlers
+      yield* setupGitHubIssueIpcHandlers
       yield* setupAiProviderIpcHandlers
       yield* setupAiWatcherIpcHandlers
       yield* setupSourceControlIpcHandlers

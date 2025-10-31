@@ -25,6 +25,7 @@ import {
   Settings,
   Check,
   Download,
+  ListTodo,
 } from 'lucide-react'
 import type { ProviderRepository } from '../../../shared/schemas/provider'
 import { useAtom, Result } from '@effect-atom/atom-react'
@@ -49,6 +50,7 @@ export function RepositoryDropdown({
   const shouldReduceMotion = useReducedMotion()
   const [isInWorkspace, setIsInWorkspace] = useState(false)
   const [isCheckingWorkspace, setIsCheckingWorkspace] = useState(false)
+  const [showIssuesModal, setShowIssuesModal] = useState(false)
   const [cloneResult, cloneToWorkspace] = useAtom(cloneToWorkspaceAtom)
 
   const { refs, floatingStyles, context, middlewareData, placement } =
@@ -287,6 +289,14 @@ export function RepositoryDropdown({
                             : 'Clone to Workspace'
                     }
                     onClick={handleClone}
+                  />
+                  <MenuItem
+                    icon={ListTodo}
+                    label="View Issues"
+                    onClick={() => {
+                      setShowIssuesModal(true)
+                      onOpenChange(false) // Close dropdown
+                    }}
                   />
                   <MenuItem
                     icon={ExternalLink}

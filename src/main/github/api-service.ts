@@ -5,6 +5,7 @@ import {
   GitHubIssue,
   GitHubPullRequest,
 } from '../../shared/schemas'
+import { GitHubIssueComment } from '../../shared/schemas/github/issue'
 import { GitHubHttpService } from './http-service'
 import { SecureStoreService } from './store-service'
 import type { AccountId } from '../../shared/schemas/account-context'
@@ -66,15 +67,67 @@ export class GitHubApiService extends Effect.Service<GitHubApiService>()(
           accountId: AccountId,
           owner: string,
           repo: string,
-          state: 'open' | 'closed' | 'all' = 'open'
+          options?: {
+            state?: 'open' | 'closed' | 'all'
+            labels?: readonly string[]
+            assignee?: string
+            limit?: number
+          }
+        ) =>
+          Effect.gen(function* () {
+            const token = yield* getTokenForAccount(accountId)
+
+            const queryParams = new URLSearchParams({
+              state: options?.state ?? 'open',
+              per_page: String(options?.limit ?? 100),
+            })
+
+            if (options?.labels && options.labels.length > 0) {
+              queryParams.set('labels', options.labels.join(','))
+            }
+
+            if (options?.assignee) {
+              queryParams.set('assignee', options.assignee)
+            }
+
+            const endpoint = `/repos/${owner}/${repo}/issues?${queryParams.toString()}`
+
+            return yield* httpService.makeAuthenticatedRequest(
+              endpoint,
+              token,
+              S.Array(GitHubIssue)
+            )
+          }),
+
+        getIssueForAccount: (
+          accountId: AccountId,
+          owner: string,
+          repo: string,
+          issueNumber: number
         ) =>
           Effect.gen(function* () {
             const token = yield* getTokenForAccount(accountId)
 
             return yield* httpService.makeAuthenticatedRequest(
-              `/repos/${owner}/${repo}/issues?state=${state}`,
+              `/repos/${owner}/${repo}/issues/${issueNumber}`,
               token,
-              S.Array(GitHubIssue)
+              GitHubIssue
+            )
+          }),
+
+        getIssueCommentsForAccount: (
+          accountId: AccountId,
+          owner: string,
+          repo: string,
+          issueNumber: number
+        ) =>
+          Effect.gen(function* () {
+            const token = yield* getTokenForAccount(accountId)
+
+            return yield* httpService.makeAuthenticatedRequest(
+              `/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+              token,
+              S.Array(GitHubIssueComment)
             )
           }),
 

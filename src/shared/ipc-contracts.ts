@@ -5,6 +5,7 @@ import {
   ProviderAuthStatus,
   ProviderAccountRepositories,
 } from './schemas/provider'
+import { GitHubIssue, GitHubIssueComment } from './schemas/github/issue'
 import {
   AiProviderSignInResult,
   AiProviderAuthStatus,
@@ -603,6 +604,54 @@ export const SourceControlIpcContracts = {
 } as const
 
 /**
+ * GitHub Issue IPC Contracts
+ */
+export const GitHubIssueIpcContracts = {
+  'github:list-repository-issues': {
+    channel: 'github:list-repository-issues' as const,
+    input: S.Struct({
+      accountId: AccountId,
+      owner: S.String,
+      repo: S.String,
+      options: S.optional(
+        S.Struct({
+          state: S.optional(S.Literal('open', 'closed', 'all')),
+          labels: S.optional(S.Array(S.String)),
+          assignee: S.optional(S.String),
+          limit: S.optional(S.Number),
+        })
+      ),
+    }),
+    output: S.Array(GitHubIssue),
+    errors: S.Union(AuthenticationError, NetworkError, NotFoundError),
+  },
+
+  'github:get-issue': {
+    channel: 'github:get-issue' as const,
+    input: S.Struct({
+      accountId: AccountId,
+      owner: S.String,
+      repo: S.String,
+      issueNumber: S.Number,
+    }),
+    output: GitHubIssue,
+    errors: S.Union(AuthenticationError, NetworkError, NotFoundError),
+  },
+
+  'github:get-issue-comments': {
+    channel: 'github:get-issue-comments' as const,
+    input: S.Struct({
+      accountId: AccountId,
+      owner: S.String,
+      repo: S.String,
+      issueNumber: S.Number,
+    }),
+    output: S.Array(GitHubIssueComment),
+    errors: S.Union(AuthenticationError, NetworkError, NotFoundError),
+  },
+} as const
+
+/**
  * Combined IPC Contracts
  */
 export const IpcContracts = {
@@ -612,6 +661,7 @@ export const IpcContracts = {
   ...WorkspaceIpcContracts,
   ...AiWatcherIpcContracts,
   ...SourceControlIpcContracts,
+  ...GitHubIssueIpcContracts,
 } as const
 
 export type IpcContracts = typeof IpcContracts

@@ -298,3 +298,62 @@ export class AiWatcherClient extends Effect.Service<AiWatcherClient>()(
     }),
   }
 ) {}
+
+export class GitHubIssueClient extends Effect.Service<GitHubIssueClient>()(
+  'GitHubIssueClient',
+  {
+    dependencies: [ElectronIpcClient.Default],
+    effect: Effect.gen(function* () {
+      const ipc = yield* ElectronIpcClient
+      type ListIssuesInput = S.Schema.Type<
+        (typeof IpcContracts)['github:list-repository-issues']['input']
+      >
+      type GetIssueInput = S.Schema.Type<
+        (typeof IpcContracts)['github:get-issue']['input']
+      >
+      type GetCommentsInput = S.Schema.Type<
+        (typeof IpcContracts)['github:get-issue-comments']['input']
+      >
+
+      return {
+        listRepositoryIssues: (params: ListIssuesInput) =>
+          Effect.gen(function* () {
+            console.log(
+              `[GitHubIssueClient] listRepositoryIssues called for ${params.owner}/${params.repo}`
+            )
+            const result = yield* ipc.invoke(
+              'github:list-repository-issues',
+              params
+            )
+            console.log(
+              `[GitHubIssueClient] listRepositoryIssues completed: ${result.length} issues`
+            )
+            return result
+          }),
+        getIssue: (params: GetIssueInput) =>
+          Effect.gen(function* () {
+            console.log(
+              `[GitHubIssueClient] getIssue called for ${params.owner}/${params.repo}#${params.issueNumber}`
+            )
+            const result = yield* ipc.invoke('github:get-issue', params)
+            console.log(`[GitHubIssueClient] getIssue completed: #${result.number}`)
+            return result
+          }),
+        getIssueComments: (params: GetCommentsInput) =>
+          Effect.gen(function* () {
+            console.log(
+              `[GitHubIssueClient] getIssueComments called for ${params.owner}/${params.repo}#${params.issueNumber}`
+            )
+            const result = yield* ipc.invoke(
+              'github:get-issue-comments',
+              params
+            )
+            console.log(
+              `[GitHubIssueClient] getIssueComments completed: ${result.length} comments`
+            )
+            return result
+          }),
+      } as const
+    }),
+  }
+) {}
