@@ -57,18 +57,8 @@ export function useDropdownKeyboardNavigation({
 }: DropdownKeyboardNavigationOptions) {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      console.log('[useDropdownKeyboardNavigation] Key pressed:', event.key, {
-        enabled,
-        isOpen,
-        itemCount,
-        focusedIndex,
-      })
-
       // Only handle keys when enabled and dropdown is open
-      if (!enabled || !isOpen || itemCount === 0) {
-        console.log('[useDropdownKeyboardNavigation] Ignoring - not enabled/open or no items')
-        return
-      }
+      if (!enabled || !isOpen || itemCount === 0) return
 
       // Don't trigger if typing in input/textarea
       const target = event.target as HTMLElement
@@ -77,20 +67,17 @@ export function useDropdownKeyboardNavigation({
         target.tagName === 'TEXTAREA' ||
         target.isContentEditable
       ) {
-        console.log('[useDropdownKeyboardNavigation] Ignoring - in input/textarea')
         return
       }
 
       switch (event.key) {
         case 'ArrowDown':
-          console.log('[useDropdownKeyboardNavigation] ArrowDown - navigating to next')
           event.preventDefault()
           // Move to next item (wrap to first if at end)
           onNavigate((focusedIndex + 1) % itemCount)
           break
 
         case 'ArrowUp':
-          console.log('[useDropdownKeyboardNavigation] ArrowUp - navigating to previous')
           event.preventDefault()
           // Move to previous item (wrap to last if at beginning)
           onNavigate((focusedIndex - 1 + itemCount) % itemCount)

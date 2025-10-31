@@ -58,7 +58,7 @@ const getAiAgentCommand = (
     case 'codex':
       return { command: 'codex' }
     case 'cursor':
-      return { command: 'cursor' }
+      return { command: 'cursor-agent' } // ✅ FIXED: cursor CLI is 'cursor-agent', not 'cursor'
     case 'custom':
       return { command: 'bash' }
     default:
