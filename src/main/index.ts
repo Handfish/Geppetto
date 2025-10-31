@@ -179,8 +179,21 @@ function createMainWindow() {
   mainWindow.webContents.on('did-finish-load', () => {
     mainWindow.show()
 
-    // Don't automatically open dev tools for main window
-    // Console window will handle dev tools separately
+    // Open DevTools for debugging (can be toggled with F12)
+    if (process.env.NODE_ENV === 'development') {
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
+    }
+  })
+
+  // F12 to toggle DevTools for main window
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      if (mainWindow.webContents.isDevToolsOpened()) {
+        mainWindow.webContents.closeDevTools()
+      } else {
+        mainWindow.webContents.openDevTools({ mode: 'detach' })
+      }
+    }
   })
 
   // Silence unnecessary Autofill errors in dev tools

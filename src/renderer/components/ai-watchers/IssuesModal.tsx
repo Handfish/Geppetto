@@ -136,15 +136,18 @@ function IssuesModalContent({
   const { refs, floatingStyles, context } = useFloating({
     open: isOpen,
     onOpenChange: onClose,
-    placement: 'bottom-start',
+    placement: 'top-start', // Position above the anchor to avoid going off bottom
     middleware: [
-      offset(8),
-      flip(),
-      shift({ padding: 8 }),
+      offset(12), // Increased offset to move it up more
+      flip({
+        fallbackPlacements: ['top-end', 'bottom-start', 'bottom-end'],
+      }),
+      shift({ padding: 16 }), // More padding from viewport edges
       size({
         apply({ availableHeight, elements }) {
+          // Fixed height instead of max-height to prevent growth
           Object.assign(elements.floating.style, {
-            maxHeight: `${Math.min(600, availableHeight - 16)}px`,
+            height: `${Math.min(500, availableHeight - 32)}px`, // Fixed height, slightly smaller
           })
         },
       }),
@@ -304,7 +307,7 @@ function IssuesModalContent({
             >
               <motion.div
                 animate={{ opacity: 1, scale: 1 }}
-                className="w-[600px] max-h-[600px] bg-gradient-to-b from-gray-800/95 to-gray-900/95 border border-gray-700/50 rounded-lg shadow-2xl backdrop-blur-xl flex flex-col"
+                className="w-[600px] h-full bg-gradient-to-b from-gray-800/95 to-gray-900/95 border border-gray-700/50 rounded-lg shadow-2xl backdrop-blur-xl flex flex-col"
                 exit={{ opacity: 0, scale: 0.95 }}
                 initial={{ opacity: 0, scale: 0.95 }}
                 style={{ transformOrigin: 'top left' }}

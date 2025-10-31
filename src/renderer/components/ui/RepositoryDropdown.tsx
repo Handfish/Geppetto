@@ -102,11 +102,14 @@ export function RepositoryDropdown({
     label: string
     onClick: () => void
     disabled?: boolean
+    icon: React.ElementType
+    badge?: React.ReactNode
   }
 
   const menuItems = useMemo<MenuItem[]>(() => {
     const items: MenuItem[] = [
       {
+        icon: Download,
         label: isCheckingWorkspace
           ? 'Checking Workspace...'
           : cloneResult.waiting
@@ -116,8 +119,12 @@ export function RepositoryDropdown({
               : 'Clone to Workspace',
         onClick: () => handleClone(),
         disabled: isInWorkspace || cloneResult.waiting || isCheckingWorkspace,
+        badge: isCheckingWorkspace ? (
+          <span className="text-xs text-gray-500">Checking...</span>
+        ) : undefined,
       },
       {
+        icon: ListTodo,
         label: isCheckingWorkspace
           ? 'Checking...'
           : !isInWorkspace
@@ -132,11 +139,58 @@ export function RepositoryDropdown({
         },
         disabled: !isInWorkspace || isCheckingWorkspace,
       },
+      {
+        icon: ExternalLink,
+        label: `Open in ${repo.provider}`,
+        onClick: () => {
+          // TODO: Implement open in provider
+          console.log('[RepositoryDropdown] Open in provider')
+        },
+        disabled: false,
+      },
+      {
+        icon: GitBranch,
+        label: 'View Branches',
+        onClick: () => {
+          // TODO: Implement view branches
+          console.log('[RepositoryDropdown] View branches')
+        },
+        disabled: false,
+        badge: 'main',
+      },
+      {
+        icon: FileText,
+        label: 'View README',
+        onClick: () => {
+          // TODO: Implement view README
+          console.log('[RepositoryDropdown] View README')
+        },
+        disabled: false,
+      },
+      {
+        icon: Settings,
+        label: 'Repository Settings',
+        onClick: () => {
+          // TODO: Implement repository settings
+          console.log('[RepositoryDropdown] Repository settings')
+        },
+        disabled: false,
+      },
+      {
+        icon: Star,
+        label: 'Starred',
+        onClick: () => {
+          // TODO: Implement toggle star
+          console.log('[RepositoryDropdown] Toggle star')
+        },
+        disabled: false,
+        badge: <Check className="size-3 text-teal-400" />,
+      },
     ]
 
     // Filter out disabled items for navigation
     return items.filter(item => !item.disabled)
-  }, [isCheckingWorkspace, isInWorkspace, cloneResult.waiting, handleClone, onOpenChange])
+  }, [isCheckingWorkspace, isInWorkspace, cloneResult.waiting, handleClone, onOpenChange, repo.provider])
 
   // Reset focus when dropdown opens
   useEffect(() => {
@@ -364,83 +418,26 @@ export function RepositoryDropdown({
                   </div>
                 </div>
 
-                {/* Actions Menu */}
+                {/* Actions Menu - Dynamically rendered from menuItems array */}
                 <div className="py-1.5">
-                  <MenuItem
-                    badge={
-                      isCheckingWorkspace ? (
-                        <span className="text-xs text-gray-500">Checking...</span>
-                      ) : undefined
-                    }
-                    disabled={isInWorkspace || cloneResult.waiting || isCheckingWorkspace}
-                    icon={Download}
-                    isFocused={!( isInWorkspace || cloneResult.waiting || isCheckingWorkspace) && focusedItemIndex === 0}
-                    label={
-                      isCheckingWorkspace
-                        ? 'Checking Workspace...'
-                        : cloneResult.waiting
-                          ? 'Cloning...'
-                          : isInWorkspace
-                            ? 'Already in Workspace'
-                            : 'Clone to Workspace'
-                    }
-                    onClick={handleClone}
-                    ref={(el) => {
-                      if (!(isInWorkspace || cloneResult.waiting || isCheckingWorkspace)) {
-                        menuItemRefs.current[0] = el
-                      }
-                    }}
-                  />
-                  <MenuItem
-                    disabled={!isInWorkspace || isCheckingWorkspace}
-                    icon={ListTodo}
-                    isFocused={isInWorkspace && !isCheckingWorkspace && focusedItemIndex === (isInWorkspace || cloneResult.waiting || isCheckingWorkspace ? 0 : 1)}
-                    label={
-                      isCheckingWorkspace
-                        ? 'Checking...'
-                        : !isInWorkspace
-                          ? 'View Issues (Clone First)'
-                          : 'View Issues'
-                    }
-                    onClick={() => {
-                      // Save button position before closing dropdown
-                      if (issuesButtonRef.current) {
-                        savedButtonPositionRef.current = issuesButtonRef.current.getBoundingClientRect()
-                      }
-                      setShowIssuesModal(true)
-                      onOpenChange(false) // Close dropdown
-                    }}
-                    ref={(el) => {
-                      issuesButtonRef.current = el
-                      if (isInWorkspace && !isCheckingWorkspace) {
-                        const index = (isInWorkspace || cloneResult.waiting || isCheckingWorkspace) ? 0 : 1
+                  {menuItems.map((item, index) => (
+                    <MenuItem
+                      key={item.label}
+                      badge={item.badge}
+                      disabled={item.disabled}
+                      icon={item.icon}
+                      isFocused={focusedItemIndex === index}
+                      label={item.label}
+                      onClick={item.onClick}
+                      ref={(el) => {
                         menuItemRefs.current[index] = el
-                      }
-                    }}
-                  />
-                  <MenuItem
-                    icon={ExternalLink}
-                    label={`Open in ${repo.provider}`}
-                  />
-                  <MenuItem
-                    badge="main"
-                    icon={GitBranch}
-                    label="View Branches"
-                  />
-                  <MenuItem icon={FileText} label="View README" />
-                </div>
-
-                {/* Separator */}
-                <div className="h-px bg-gray-700/50 my-1" />
-
-                {/* Settings */}
-                <div className="py-1.5">
-                  <MenuItem icon={Settings} label="Repository Settings" />
-                  <MenuItem
-                    badge={<Check className="size-3 text-teal-400" />}
-                    icon={Star}
-                    label="Starred"
-                  />
+                        // Special ref for "View Issues" button (index 1)
+                        if (index === 1) {
+                          issuesButtonRef.current = el
+                        }
+                      }}
+                    />
+                  ))}
                 </div>
 
                 {/* Language Badge */}
