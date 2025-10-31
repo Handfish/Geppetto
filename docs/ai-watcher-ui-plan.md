@@ -828,11 +828,13 @@ pnpm dev
 
 ---
 
-## Phase 3: AI Watcher Integration
+## Phase 3: AI Watcher Integration with Git Worktrees
 
-**Duration**: 1-2 hours
-**Risk**: Low
-**Impact**: Launch watchers from shortlisted issues
+**Duration**: 2-3 hours
+**Risk**: Medium (git operations)
+**Impact**: Launch watchers from shortlisted issues in isolated worktrees
+
+**Key Workflow**: Each AI watcher runs in a dedicated git worktree with a branch named `issue#<number>`. If the branch doesn't exist, it's created from the default branch. This ensures complete isolation between issues.
 
 ### 3.1 Fix Command Bug
 
@@ -850,7 +852,183 @@ case 'claude-code':
   return { command: 'claude' }  // ✅ CORRECT - actual bash command
 ```
 
-### 3.2 Add Issue Context to Watcher Config
+### 3.2 Add Git Worktree Operations
+
+**File**: `src/shared/ipc-contracts.ts` (add to SourceControlIpcContracts)
+```typescript
+export const SourceControlIpcContracts = {
+  // ... existing contracts
+
+  'source-control:create-worktree-for-issue': {
+    channel: 'source-control:create-worktree-for-issue' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      issueNumber: S.Number,
+      baseBranch: S.optional(S.String), // defaults to main/master
+    }),
+    output: S.Struct({
+      worktreePath: S.String,
+      branchName: S.String,
+      branchExisted: S.Boolean,
+    }),
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:remove-worktree': {
+    channel: 'source-control:remove-worktree' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+      worktreePath: S.String,
+    }),
+    output: S.Void,
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+
+  'source-control:list-worktrees': {
+    channel: 'source-control:list-worktrees' as const,
+    input: S.Struct({
+      repositoryId: RepositoryId,
+    }),
+    output: S.Array(
+      S.Struct({
+        path: S.String,
+        branch: S.String,
+        head: S.String,
+      })
+    ),
+    errors: S.Union(NotFoundError, GitOperationError),
+  },
+} as const
+```
+
+**File**: `src/main/source-control/git-command-service.ts` (add methods)
+```typescript
+export class GitCommandService extends Effect.Service<GitCommandService>() {
+  // ... existing methods
+
+  /**
+   * Create a git worktree for an issue
+   * Branch naming: issue#<number>
+   * Creates branch from baseBranch if it doesn't exist
+   */
+  createWorktreeForIssue: (params: {
+    repositoryPath: string
+    issueNumber: number
+    baseBranch?: string
+  }) =>
+    Effect.gen(function* () {
+      const branchName = `issue#${params.issueNumber}`
+      const worktreePath = path.join(
+        params.repositoryPath,
+        '..',
+        `worktree-${branchName}`
+      )
+
+      // Check if branch exists
+      const branchExists = yield* Effect.tryPromise({
+        try: () =>
+          execPromise(`git -C "${params.repositoryPath}" rev-parse --verify ${branchName}`)
+            .then(() => true)
+            .catch(() => false),
+        catch: () => new GitOperationError({ message: 'Failed to check branch' }),
+      })
+
+      if (branchExists) {
+        // Branch exists - create worktree from existing branch
+        yield* Effect.tryPromise({
+          try: () =>
+            execPromise(
+              `git -C "${params.repositoryPath}" worktree add "${worktreePath}" ${branchName}`
+            ),
+          catch: (error) =>
+            new GitOperationError({
+              message: `Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`,
+            }),
+        })
+      } else {
+        // Branch doesn't exist - create from base branch
+        const baseBranch =
+          params.baseBranch ??
+          (yield* Effect.tryPromise({
+            try: () =>
+              execPromise(
+                `git -C "${params.repositoryPath}" symbolic-ref refs/remotes/origin/HEAD`
+              ).then((out) => out.trim().replace('refs/remotes/origin/', '')),
+            catch: () => 'main', // fallback to 'main'
+          }))
+
+        yield* Effect.tryPromise({
+          try: () =>
+            execPromise(
+              `git -C "${params.repositoryPath}" worktree add -b ${branchName} "${worktreePath}" ${baseBranch}`
+            ),
+          catch: (error) =>
+            new GitOperationError({
+              message: `Failed to create worktree with new branch: ${error instanceof Error ? error.message : String(error)}`,
+            }),
+        })
+      }
+
+      return {
+        worktreePath,
+        branchName,
+        branchExisted: branchExists,
+      }
+    }),
+
+  /**
+   * Remove a git worktree
+   */
+  removeWorktree: (worktreePath: string) =>
+    Effect.gen(function* () {
+      yield* Effect.tryPromise({
+        try: () => execPromise(`git worktree remove "${worktreePath}" --force`),
+        catch: (error) =>
+          new GitOperationError({
+            message: `Failed to remove worktree: ${error instanceof Error ? error.message : String(error)}`,
+          }),
+      })
+    }),
+
+  /**
+   * List all worktrees for a repository
+   */
+  listWorktrees: (repositoryPath: string) =>
+    Effect.gen(function* () {
+      const output = yield* Effect.tryPromise({
+        try: () =>
+          execPromise(
+            `git -C "${repositoryPath}" worktree list --porcelain`
+          ),
+        catch: (error) =>
+          new GitOperationError({
+            message: `Failed to list worktrees: ${error instanceof Error ? error.message : String(error)}`,
+          }),
+      })
+
+      // Parse worktree list output
+      const worktrees: Array<{ path: string; branch: string; head: string }> = []
+      const lines = output.trim().split('\n')
+      let current: Partial<{ path: string; branch: string; head: string }> = {}
+
+      for (const line of lines) {
+        if (line.startsWith('worktree ')) {
+          if (current.path) worktrees.push(current as any)
+          current = { path: line.substring(9) }
+        } else if (line.startsWith('branch ')) {
+          current.branch = line.substring(7).replace('refs/heads/', '')
+        } else if (line.startsWith('HEAD ')) {
+          current.head = line.substring(5)
+        }
+      }
+      if (current.path) worktrees.push(current as any)
+
+      return worktrees
+    }),
+}
+```
+
+### 3.3 Add Issue Context to Watcher Config
 
 **File**: `src/shared/schemas/ai-watchers.ts` (update AiWatcherConfig)
 ```typescript
@@ -859,68 +1037,147 @@ export class AiWatcherConfig extends Schema.Class<AiWatcherConfig>('AiWatcherCon
   issueContext: Schema.optional(Schema.Struct({
     owner: Schema.String,
     repo: Schema.String,
+    repositoryId: Schema.String, // Repository ID for worktree operations
     issueNumber: Schema.Number,
     issueTitle: Schema.String,
+    worktreePath: Schema.optional(Schema.String), // Path to the worktree
+    branchName: Schema.optional(Schema.String), // Branch name (e.g., 'issue#202')
   })),
 }) {}
 ```
 
-### 3.3 Create Watcher Launcher Hook
+### 3.4 Create Watcher Launcher Hook with Worktree Support
 
 **File**: `src/renderer/hooks/useAiWatcherLauncher.ts`
 ```typescript
+import { useState } from 'react'
 import { useAtom } from '@effect-atom/atom-react'
 import { createWatcherAtom } from '../atoms/ai-watcher-atoms'
-import type { Issue } from '../../shared/schemas/github/issue'
+import type { GitHubIssue } from '../../shared/schemas/github/issue'
 import type { AiWatcherConfig } from '../../shared/schemas/ai-watchers'
+import type { RepositoryId } from '../../shared/schemas/source-control/repository'
+import { SourceControlClient } from '../lib/ipc-client'
+import { Effect } from 'effect'
+import { toast } from 'sonner'
 
 export function useAiWatcherLauncher() {
   const [createResult, createWatcher] = useAtom(createWatcherAtom)
+  const [isCreatingWorktree, setIsCreatingWorktree] = useState(false)
 
-  const launchWatcherForIssue = (
-    issue: Issue,
+  const launchWatcherForIssue = async (
+    issue: GitHubIssue,
     provider: 'claude-code' | 'codex',
-    workingDirectory: string
+    repositoryId: RepositoryId,
+    owner: string,
+    repo: string
   ) => {
-    const config: AiWatcherConfig = {
-      type: provider,
-      name: `${provider}: #${issue.number} ${issue.title}`,
-      workingDirectory,
-      issueContext: {
-        owner: issue.owner,
-        repo: issue.repo,
-        issueNumber: issue.number,
-        issueTitle: issue.title,
-      },
-    }
+    setIsCreatingWorktree(true)
 
-    createWatcher(config)
+    try {
+      // Step 1: Create worktree for the issue
+      console.log(`[useAiWatcherLauncher] Creating worktree for issue #${issue.number}`)
+
+      const worktreeResult = await Effect.runPromise(
+        Effect.gen(function* () {
+          const client = yield* SourceControlClient
+          return yield* client.createWorktreeForIssue({
+            repositoryId,
+            issueNumber: issue.number,
+          })
+        }).pipe(Effect.provide(SourceControlClient.Default))
+      )
+
+      console.log(
+        `[useAiWatcherLauncher] Worktree created: ${worktreeResult.worktreePath}`
+      )
+
+      // Show toast notification
+      if (worktreeResult.branchExisted) {
+        toast.info(
+          `Using existing branch '${worktreeResult.branchName}' for issue #${issue.number}`
+        )
+      } else {
+        toast.success(
+          `Created new branch '${worktreeResult.branchName}' for issue #${issue.number}`
+        )
+      }
+
+      // Step 2: Create AI watcher config with worktree path
+      const config: AiWatcherConfig = {
+        type: provider,
+        name: `${provider}: #${issue.number} ${issue.title}`,
+        workingDirectory: worktreeResult.worktreePath,
+        issueContext: {
+          owner,
+          repo,
+          repositoryId,
+          issueNumber: issue.number,
+          issueTitle: issue.title,
+          worktreePath: worktreeResult.worktreePath,
+          branchName: worktreeResult.branchName,
+        },
+      }
+
+      // Step 3: Launch the watcher
+      console.log(`[useAiWatcherLauncher] Launching ${provider} watcher`)
+      createWatcher(config)
+    } catch (error) {
+      console.error('[useAiWatcherLauncher] Failed to launch watcher:', error)
+      toast.error(
+        `Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`
+      )
+    } finally {
+      setIsCreatingWorktree(false)
+    }
   }
 
   return {
     launchWatcherForIssue,
-    isLaunching: createResult.waiting,
+    isLaunching: createResult.waiting || isCreatingWorktree,
     createResult,
   }
 }
 ```
 
-### 3.4 Integrate Launcher in Modal
+### 3.5 Integrate Launcher in Modal
 
 **File**: `src/renderer/components/ai-watchers/IssuesModal.tsx` (update)
 ```typescript
 import { useAiWatcherLauncher } from '../../hooks/useAiWatcherLauncher'
 
-export function IssuesModal({ ... }: IssuesModalProps) {
-  const { launchWatcherForIssue } = useAiWatcherLauncher()
+interface IssuesModalProps {
+  isOpen: boolean
+  onClose: () => void
+  owner: string
+  repo: string
+  repositoryId: RepositoryId // Add repository ID
+  onLaunchWatchers?: (issueNumbers: number[]) => void
+}
+
+export function IssuesModal({
+  isOpen,
+  onClose,
+  owner,
+  repo,
+  repositoryId,
+  onLaunchWatchers,
+}: IssuesModalProps) {
+  const { launchWatcherForIssue, isLaunching } = useAiWatcherLauncher()
   const [selectedProvider, setSelectedProvider] = useState<'claude-code' | 'codex'>('claude-code')
 
-  const handleLaunchWatchers = () => {
+  const handleLaunchWatchers = async () => {
     const shortlistedIssues = issues.filter(issue => shortlist.has(issue.number))
 
-    shortlistedIssues.forEach(issue => {
-      launchWatcherForIssue(issue, selectedProvider, repo.cloneUrl)
-    })
+    // Launch watchers sequentially to avoid git conflicts
+    for (const issue of shortlistedIssues) {
+      await launchWatcherForIssue(
+        issue,
+        selectedProvider,
+        repositoryId,
+        owner,
+        repo
+      )
+    }
 
     onClose()
   }
@@ -939,6 +1196,7 @@ export function IssuesModal({ ... }: IssuesModalProps) {
           value={selectedProvider}
           onChange={(e) => setSelectedProvider(e.target.value as 'claude-code' | 'codex')}
           className="px-3 py-1 bg-gray-800 border border-gray-700 rounded text-sm text-white"
+          disabled={isLaunching}
         >
           <option value="claude-code">Claude Code</option>
           <option value="codex">Codex</option>
@@ -947,17 +1205,43 @@ export function IssuesModal({ ... }: IssuesModalProps) {
 
       <button
         onClick={handleLaunchWatchers}
-        disabled={shortlist.size === 0}
-        // ... rest of button props
+        disabled={shortlist.size === 0 || isLaunching}
+        className="px-4 py-2 bg-teal-500 hover:bg-teal-600 disabled:bg-gray-600 text-white rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        type="button"
       >
-        Launch AI Watchers
+        <Zap className="size-4" />
+        {isLaunching ? 'Creating Worktrees...' : 'Launch AI Watchers'}
       </button>
     </div>
   )
 }
 ```
 
-### 3.5 Testing
+**File**: `src/renderer/components/ui/RepositoryDropdown.tsx` (update to pass repositoryId)
+```typescript
+// In RepositoryDropdown component
+<MenuItem
+  icon={ListTodo}
+  label="View Issues"
+  onClick={() => {
+    setShowIssuesModal(true)
+    onOpenChange(false)
+  }}
+/>
+
+{/* Issues Modal - add at end of component */}
+{showIssuesModal && (
+  <IssuesModal
+    isOpen={showIssuesModal}
+    onClose={() => setShowIssuesModal(false)}
+    owner={repo.owner}
+    repo={repo.name}
+    repositoryId={repo.repositoryId}
+  />
+)}
+```
+
+### 3.6 Testing
 
 ```bash
 # Run app
@@ -965,18 +1249,36 @@ pnpm dev
 
 # Manual verification:
 # - Open issues modal
-# - Shortlist multiple issues
+# - Shortlist multiple issues (e.g., #101, #202, #303)
 # - Select Claude Code provider
 # - Click "Launch AI Watchers"
-# - Verify watchers created with correct command
+
+# Verify git worktrees:
+cd /path/to/repo
+git worktree list
+# Should show:
+# /path/to/worktree-issue#101  abc1234 [issue#101]
+# /path/to/worktree-issue#202  def5678 [issue#202]
+# /path/to/worktree-issue#303  ghi9012 [issue#303]
+
+# Verify watchers:
 # - Check watcher names include issue context
+# - Verify watchers are running in worktree directories
+# - Verify command is 'claude' not 'claude-code'
+# - Test that existing branches are reused (create issue#101 manually first)
 ```
 
 **Success Criteria**:
-- ✅ Command bug fixed
+- ✅ Command bug fixed (`claude` not `claude-code`)
 - ✅ Watchers launch with correct command
 - ✅ Issue context preserved in watcher config
-- ✅ Multiple watchers can launch for shortlist
+- ✅ Git worktrees created for each issue
+- ✅ Branch naming follows `issue#<number>` pattern
+- ✅ New branches created from default branch (main/master)
+- ✅ Existing branches are reused (not recreated)
+- ✅ Watchers run in isolated worktree directories
+- ✅ Multiple watchers can launch sequentially
+- ✅ Toast notifications show worktree creation status
 
 ---
 

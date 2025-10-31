@@ -7,7 +7,7 @@ These prompts help you implement the AI Watcher UI enhancement in incremental, m
 ## 1. Initial Implementation Prompt
 
 ```
-Implement the AI Watcher UI Enhancement following the plan in `/docs/ai-watcher-ui-plan.md`. Start with Phase 1: Backend - GitHub Issues Integration. Create the hexagonal architecture ports and adapters for GitHub Issues (Port → Schema → Adapter → Service → IPC → Atoms). Follow the hexagonal architecture patterns from CLAUDE.md exactly - use Schema.parse not validate, implement proper error handling with Effect, keep ports abstract and adapters concrete. After Phase 1, continue with Phase 2: Issues Modal UI, then Phase 3: AI Watcher Integration, and finally Phase 4: LED Status Indicators. Update `/docs/ai-watcher-ui-progress.md` after completing each phase, checking off items as you finish. Test thoroughly after each phase to ensure no regressions.
+Implement the AI Watcher UI Enhancement following the plan in `/docs/ai-watcher-ui-plan.md`. Start with Phase 1: Backend - GitHub Issues Integration. Create the hexagonal architecture ports and adapters for GitHub Issues (Port → Schema → Adapter → Service → IPC → Atoms). Follow the hexagonal architecture patterns from CLAUDE.md exactly - use Schema.parse not validate, implement proper error handling with Effect, keep ports abstract and adapters concrete. After Phase 1, continue with Phase 2: Issues Modal UI, then Phase 3: AI Watcher Integration with Git Worktrees (CRITICAL: each watcher must run in an isolated git worktree with branch name `issue#<number>`, creating the branch from main/default if it doesn't exist), and finally Phase 4: LED Status Indicators. Update `/docs/ai-watcher-ui-progress.md` after completing each phase, checking off items as you finish. Test thoroughly after each phase to ensure no regressions.
 ```
 
 **When to use**: Starting the feature implementation from scratch
@@ -18,7 +18,8 @@ Implement the AI Watcher UI Enhancement following the plan in `/docs/ai-watcher-
 - Creates IPC contracts and handlers following type-safe patterns
 - Builds atoms for reactive state management
 - Creates Issues Modal UI with keyboard shortcuts
-- Integrates AI watcher launching from shortlisted issues
+- **Implements git worktree operations** - creates isolated worktrees per issue with branch name `issue#<number>`
+- Integrates AI watcher launching from shortlisted issues **in dedicated worktrees**
 - Fixes 'claude-code' command bug (should use 'claude' bash process)
 - Implements LED status indicators in top-right quadrant
 - Updates progress tracker after each phase
@@ -28,7 +29,8 @@ Implement the AI Watcher UI Enhancement following the plan in `/docs/ai-watcher-
 **Expected outcome**:
 - ✅ GitHub Issues integration complete with hexagonal architecture
 - ✅ Issues modal with keyboard-driven shortlist
-- ✅ AI watchers launchable from issue shortlist
+- ✅ **Git worktree creation** - isolated worktrees for each issue with proper branch management
+- ✅ AI watchers launchable from issue shortlist **in dedicated worktrees**
 - ✅ Command bug fixed
 - ✅ Beautiful LED status indicators showing watcher states
 - ✅ All phases marked complete in progress tracker
@@ -60,7 +62,7 @@ Continue implementing the AI Watcher UI Enhancement from where you left off. Fir
 **Phases it might continue**:
 - Phase 1: Backend - GitHub Issues Integration
 - Phase 2: Issues Modal UI
-- Phase 3: AI Watcher Integration
+- Phase 3: AI Watcher Integration with Git Worktrees
 - Phase 4: LED Status Indicators
 
 ---
@@ -95,8 +97,10 @@ Resume the AI Watcher UI Enhancement implementation. First, analyze the current 
 - `src/main/github/issues/ports.ts` - IssuePort definition
 - `src/main/github/issues/issue-service.ts` - Issue orchestration
 - `src/shared/schemas/github/issue.ts` - Issue schemas
-- `src/shared/ipc-contracts.ts` - Issue IPC contracts
+- `src/shared/ipc-contracts.ts` - Issue & worktree IPC contracts
 - `src/renderer/atoms/github-issue-atoms.ts` - Issue atoms
+- `src/main/source-control/git-command-service.ts` - **Git worktree operations**
+- `src/renderer/hooks/useAiWatcherLauncher.ts` - **Watcher launcher with worktree support**
 - `src/renderer/components/ai-watchers/IssuesModal.tsx` - Modal UI
 - `src/renderer/components/ai-watchers/WatcherStatusLED.tsx` - LED indicators
 - `src/main/ai-watchers/ai-watcher-service.ts` - Command fix
