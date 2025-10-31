@@ -185,14 +185,14 @@ export function CommitGraphView({
     // Skip if container hasn't been laid out yet
     if (width === 0 || height === 0) return
 
-    // Ensure minimum dimensions and account for padding/borders
-    const finalWidth = Math.max(width - 8, 400)
-    const finalHeight = Math.max(height - 8, 400)
+    // Use full container dimensions (GraphStage handles its own borders)
+    const finalWidth = Math.max(width, 400)
+    const finalHeight = Math.max(height, 400)
 
     // Only update if dimensions changed significantly (or first measurement)
     setGraphDimensions((prev) => {
-      const widthChanged = !prev || Math.abs(prev.width - finalWidth) > 1
-      const heightChanged = !prev || Math.abs(prev.height - finalHeight) > 1
+      const widthChanged = !prev || Math.abs(prev.width - finalWidth) > 2
+      const heightChanged = !prev || Math.abs(prev.height - finalHeight) > 2
 
       if (widthChanged || heightChanged) {
         return { width: finalWidth, height: finalHeight }
@@ -216,9 +216,18 @@ export function CommitGraphView({
 
     if (!container) return
 
-    // Create ResizeObserver to automatically detect size changes
+    let debounceTimeout: NodeJS.Timeout | null = null
+
+    // Create ResizeObserver with aggressive debouncing for best performance
     const resizeObserver = new ResizeObserver(() => {
-      updateDimensions()
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout)
+      }
+      // Debounce by 150ms for optimal performance
+      // Only updates after user stops resizing for 150ms
+      debounceTimeout = setTimeout(() => {
+        updateDimensions()
+      }, 150)
     })
 
     resizeObserverRef.current = resizeObserver
@@ -227,6 +236,11 @@ export function CommitGraphView({
     // Initial measurement and delayed retry for layout completion
     updateDimensions()
     timeoutsRef.current.push(setTimeout(updateDimensions, 100))
+
+    // Store debounce timeout for cleanup
+    if (debounceTimeout) {
+      timeoutsRef.current.push(debounceTimeout)
+    }
   }, [updateDimensions])
 
   // REMOVED: Manual dimension update on selectedCommit change

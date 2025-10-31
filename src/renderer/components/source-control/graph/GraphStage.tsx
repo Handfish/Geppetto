@@ -77,9 +77,6 @@ export function GraphStage({
   // Ref to the PixiJS Application for resizing
   const pixiAppRef = useRef<any>(null)
 
-  // Boolean state to trigger resize effect when app is ready
-  const [pixiAppReady, setPixiAppReady] = useState(false)
-
   // Use external zoom level if provided, otherwise default
   const currentZoom = zoomLevel ?? 1.0
 
@@ -102,12 +99,28 @@ export function GraphStage({
     }
   }, [])
 
-  // Resize PixiJS renderer when dimensions change
+  // Resize PixiJS renderer when dimensions change (with debouncing)
   useEffect(() => {
-    if (pixiAppReady && pixiAppRef.current?.renderer) {
-      pixiAppRef.current.renderer.resize(width, height)
+    if (!pixiAppRef.current?.renderer) {
+      return
     }
-  }, [width, height, pixiAppReady])
+
+    const renderWidth = Math.max(1, Math.round(width))
+    const renderHeight = Math.max(1, Math.round(height))
+
+    // Only resize if dimensions actually changed
+    const currentWidth = pixiAppRef.current.renderer.screen.width
+    const currentHeight = pixiAppRef.current.renderer.screen.height
+
+    if (Math.abs(currentWidth - renderWidth) < 2 && Math.abs(currentHeight - renderHeight) < 2) {
+      return // Skip if change is insignificant (< 2px)
+    }
+
+    // Resize the renderer (this also resizes the canvas)
+    pixiAppRef.current.renderer.resize(renderWidth, renderHeight)
+
+    // Note: No need to call render() - PixiJS will render on next frame automatically
+  }, [width, height])
 
   // Calculate layout from backend graph
   // Memoized to avoid recalculation on every render
@@ -303,8 +316,12 @@ export function GraphStage({
   // Get hovered node info for display
   const hoveredNode = hoveredCommit ? layout.nodes.get(hoveredCommit as any) : null
 
+  // Calculate render dimensions from props
+  const renderWidth = Math.max(1, Math.round(width))
+  const renderHeight = Math.max(1, Math.round(height))
+
   return (
-    <div className="relative">
+    <div className="relative w-full h-full">
       {/* Hover info overlay - for debugging */}
       {hoveredNode && (
         <div className="absolute top-0 left-0 right-0 z-10 bg-yellow-900/90 text-yellow-100 px-3 py-2 text-xs font-mono border-b border-yellow-700">
@@ -336,29 +353,26 @@ export function GraphStage({
       <div
         ref={containerRef}
         tabIndex={0}
-        className="border border-gray-700 rounded outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-grab"
+        className="border border-blue-500 rounded outline-none focus:ring-2 focus:ring-blue-500 cursor-grab overflow-hidden"
         style={{
           userSelect: 'none',
-          width: `${width}px`,
-          height: `${height}px`,
-          overflow: 'hidden', // Prevent canvas overflow
-          display: 'block' // Remove any inline spacing
+          width: `${renderWidth}px`,
+          height: `${renderHeight}px`,
         }}
         onClick={() => containerRef.current?.focus()}
       >
         <Application
-        ref={(app) => {
-          if (app && !pixiAppRef.current) {
-            pixiAppRef.current = app
-            setPixiAppReady(true)
-          }
-        }}
-        width={width}
-        height={height}
-        backgroundColor={defaultTheme.backgroundColor}
-        antialias={true}
-        resolution={window.devicePixelRatio || 1}
-      >
+          ref={(app) => {
+            if (app) {
+              pixiAppRef.current = app
+            }
+          }}
+          width={renderWidth}
+          height={renderHeight}
+          backgroundColor={defaultTheme.backgroundColor}
+          antialias={true}
+          resolution={window.devicePixelRatio || 1}
+        >
         {/* Container for viewport transform (zoom/pan) */}
         <pixiContainer
           ref={pixiContainerRef}
