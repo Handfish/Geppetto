@@ -270,6 +270,17 @@ export const NodePtyTerminalAdapter = Layer.effect(
           )
         )
 
+        // Check if process is alive before attempting resize
+        const currentState = yield* Ref.get(instance.state)
+        if (currentState.status === 'stopped' || currentState.status === 'error') {
+          return yield* Effect.fail(
+            new TerminalError({
+              reason: 'PermissionDenied',
+              message: `Cannot resize process ${processId}: process is ${currentState.status}`
+            })
+          )
+        }
+
         yield* Effect.try({
           try: () => instance.ptyProcess.resize(cols, rows),
           catch: (error) => new TerminalError({ reason: 'PermissionDenied', message: `Failed to resize process: ${error}` })

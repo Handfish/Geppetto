@@ -10,9 +10,11 @@ interface TerminalTypeSwitcherProps {
 /**
  * Terminal Type Switcher Component
  *
- * NOTE: Currently for testing/future use only.
- * AI watcher launcher still uses tmux - xterm integration is deferred.
- * This switcher allows testing the standalone xterm terminal panel.
+ * Controls which terminal backend is used when launching AI watchers:
+ * - Tmux: Traditional tmux sessions (stable, legacy)
+ * - XTerm: New xterm.js + node-pty terminal (testing)
+ *
+ * Preference is stored in localStorage and applies to all future launches.
  */
 export function TerminalTypeSwitcher({ className }: TerminalTypeSwitcherProps) {
   const { terminalType, setTerminalType } = useTerminalType()

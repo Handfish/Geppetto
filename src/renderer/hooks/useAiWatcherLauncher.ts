@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useAtom } from '@effect-atom/atom-react'
 import { createWatcherAtom } from '../atoms/ai-watcher-atoms'
+import { spawnWatcherAtom } from '../atoms/terminal-atoms'
 import type { GitHubIssue } from '../../shared/schemas/github/issue'
 import type { AiWatcherConfig } from '../../main/ai-watchers/schemas'
 import { SourceControlClient, WorkspaceClient } from '../lib/ipc-client'
 import { Effect } from 'effect'
 import { toast } from 'sonner'
+import { useTerminalType } from '../atoms/terminal-settings-atoms'
 
 /**
  * Hook for launching AI watchers for GitHub issues
@@ -18,7 +20,9 @@ import { toast } from 'sonner'
  */
 export function useAiWatcherLauncher() {
   const [createResult, createWatcher] = useAtom(createWatcherAtom)
+  const [spawnResult, spawnWatcher] = useAtom(spawnWatcherAtom)
   const [isCreatingWorktree, setIsCreatingWorktree] = useState(false)
+  const { terminalType } = useTerminalType()
 
   /**
    * Launch a watcher for a specific GitHub issue
@@ -96,12 +100,31 @@ export function useAiWatcherLauncher() {
         },
       }
 
-      // Step 4: Launch the watcher
-      console.log(`[useAiWatcherLauncher] Launching ${provider} watcher`)
-      createWatcher(config)
+      // Step 4: Launch the watcher (use terminal type preference)
+      console.log(`[useAiWatcherLauncher] Launching ${provider} watcher with ${terminalType}`)
+
+      if (terminalType === 'xterm') {
+        // Use new xterm.js + node-pty terminal
+        spawnWatcher({
+          accountId: `${provider}:user`, // TODO: Get actual account ID from context
+          agentType: provider === 'claude-code' ? 'claude' : provider === 'codex' ? 'codex' : 'cursor',
+          prompt: `Work on issue #${issue.number}: ${issue.title}`,
+          issueContext: {
+            owner,
+            repo,
+            issueNumber: issue.number,
+            issueTitle: issue.title,
+            worktreePath: worktreeResult.worktreePath,
+            branchName: worktreeResult.branchName,
+          },
+        })
+      } else {
+        // Use traditional tmux terminal
+        createWatcher(config)
+      }
 
       toast.success(
-        `Launched ${provider} for issue #${issue.number}`,
+        `Launched ${provider} for issue #${issue.number} (${terminalType})`,
         {
           duration: 4000,
         }
@@ -146,7 +169,9 @@ export function useAiWatcherLauncher() {
   return {
     launchWatcherForIssue,
     launchWatchersForIssues,
-    isLaunching: createResult.waiting || isCreatingWorktree,
+    isLaunching: createResult.waiting || spawnResult.waiting || isCreatingWorktree,
     createResult,
+    spawnResult,
+    terminalType,
   }
 }

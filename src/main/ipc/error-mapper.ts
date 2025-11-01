@@ -81,6 +81,12 @@ import {
   WatcherOperationError,
   TmuxError,
 } from '../../shared/schemas/ai-watchers/errors'
+import {
+  TerminalError as SharedTerminalError,
+} from '../../shared/schemas/terminal/errors'
+import {
+  TerminalError as DomainTerminalError,
+} from '../terminal/terminal-port'
 
 /**
  * Result type for IPC error responses
@@ -106,6 +112,7 @@ export type IpcErrorResult = {
     | IpcWatcherNotFoundError
     | WatcherOperationError
     | TmuxError
+    | SharedTerminalError
 }
 
 /**
@@ -262,6 +269,13 @@ const isSourceControlDomainError = (error: unknown): error is SourceControlDomai
 }
 
 /**
+ * Type guard to check if an error is a terminal domain error
+ */
+const isTerminalDomainError = (error: unknown): error is DomainTerminalError => {
+  return error instanceof DomainTerminalError
+}
+
+/**
  * Maps domain errors to shared IPC error types that can be sent across process boundaries
  */
 export const mapDomainErrorToIpcError = (
@@ -273,6 +287,18 @@ export const mapDomainErrorToIpcError = (
     console.error('[ERROR MAPPER] Error name:', error.name)
     console.error('[ERROR MAPPER] Error message:', error.message)
     console.error('[ERROR MAPPER] Error stack:', error.stack)
+  }
+
+  // Handle Terminal errors (node-pty, xterm)
+  if (isTerminalDomainError(error)) {
+    return Effect.succeed({
+      _tag: 'Error' as const,
+      error: new SharedTerminalError({
+        _tag: 'TerminalError' as const,
+        reason: error.reason,
+        message: error.message,
+      }),
+    })
   }
 
   // Handle AI Watcher errors
