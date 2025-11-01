@@ -4,6 +4,7 @@ import { Result } from '@effect-atom/atom-react'
 import { activeWatchersAtom, watcherStateAtom } from '../../atoms/terminal-atoms'
 import { XTerminal } from './XTerminal'
 import { TerminalLED } from './TerminalLED'
+import { TerminalTypeSwitcher } from './TerminalTypeSwitcher'
 import { cn } from '../../lib/utils'
 import { X, Maximize2, Minimize2, RotateCcw } from 'lucide-react'
 import { useTerminalOperations } from '../../hooks/useTerminalOperations'
@@ -177,6 +178,9 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
           </div>
         </div>
       )}
+
+      {/* Terminal Type Switcher */}
+      <TerminalTypeSwitcher />
     </div>
   )
 }
