@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, HashMap, Ref, PubSub, Duration, pipe } from 'effect'
+import { Effect, Layer, Stream, HashMap, Ref, PubSub, Queue, Duration, pipe } from 'effect'
 import type * as pty from 'node-pty'
 import { TerminalPort, ProcessConfig, ProcessState, OutputChunk, ProcessEvent, TerminalError, ProcessId } from '../terminal-port'
 
@@ -9,7 +9,7 @@ interface ProcessInstance {
   config: ProcessConfig
   ptyProcess: pty.IPty
   state: Ref.Ref<ProcessState>
-  outputStream: PubSub.PubSub<OutputChunk>
+  outputStream: PubSub.PubSub<OutputChunk>  // Changed back to PubSub for multi-consumer support
   eventStream: PubSub.PubSub<ProcessEvent>
   idleTimer: Ref.Ref<number | null>
 }
@@ -99,12 +99,18 @@ export const NodePtyTerminalAdapter = Layer.effect(
 
         const ptyProcess = yield* Effect.try({
           try: () => {
-            // Spawn an interactive shell in the PTY
-            const shell = config.shell || '/bin/bash'
+            // SIMPLIFIED: Just spawn the command directly in PTY for testing
+            // This should work for bash and simple commands
+            const spawnCommand = config.command
+            const spawnArgs = config.args
 
-            console.log('[NodePtyAdapter] Spawning interactive shell:', shell)
+            console.log('[NodePtyAdapter] Spawning directly in PTY:', {
+              command: spawnCommand,
+              args: spawnArgs,
+              cwd: config.cwd
+            })
 
-            const pty = ptyModule.spawn(shell, [], {
+            const pty = ptyModule.spawn(spawnCommand, spawnArgs, {
               name: 'xterm-256color',
               cols: config.cols || 80,
               rows: config.rows || 24,
@@ -112,23 +118,20 @@ export const NodePtyTerminalAdapter = Layer.effect(
               env: {
                 ...process.env,
                 ...config.env,
-                // Force interactive mode
-                PS1: '\\[\\033[1;32m\\]geppetto\\[\\033[0m\\]:\\[\\033[1;34m\\]\\w\\[\\033[0m\\]$ ',
+                // Force TTY mode
+                TERM: 'xterm-256color',
+                COLORTERM: 'truecolor',
+                FORCE_COLOR: '1',
               } as Record<string, string>,
             })
-            console.log('[NodePtyAdapter] Shell spawned successfully, PID:', pty.pid)
 
-            // Write the command to the shell's stdin after a short delay
-            if (config.command !== shell) {
-              setTimeout(() => {
-                const commandStr = config.args.length > 0
-                  ? `${config.command} ${config.args.map(arg => `"${arg.replace(/"/g, '\\"')}"`).join(' ')}`
-                  : config.command
+            console.log('[NodePtyAdapter] Process spawned successfully, PID:', pty.pid)
 
-                console.log('[NodePtyAdapter] Writing command to shell:', commandStr)
-                pty.write(`${commandStr}\r`)
-              }, 100)
-            }
+            // Write a test message to the PTY immediately to see if it appears
+            setTimeout(() => {
+              console.log('[NodePtyAdapter] Writing test message to PTY')
+              pty.write('echo "PTY Test: If you see this, the PTY is working!"\r')
+            }, 500)
 
             return pty
           },
@@ -146,7 +149,7 @@ export const NodePtyTerminalAdapter = Layer.effect(
           idleThreshold: config.issueContext ? 30000 : 60000,
         }))
 
-        const outputStream = yield* PubSub.unbounded<OutputChunk>()
+        const outputStream = yield* PubSub.unbounded<OutputChunk>()  // Using PubSub for multi-consumer support
         const eventStream = yield* PubSub.unbounded<ProcessEvent>()
         const idleTimer = yield* Ref.make<number | null>(null)
 
@@ -154,7 +157,7 @@ export const NodePtyTerminalAdapter = Layer.effect(
           config,
           ptyProcess,
           state,
-          outputStream,
+          outputStream,  // Back to outputStream with PubSub
           eventStream,
           idleTimer,
         }
@@ -163,15 +166,16 @@ export const NodePtyTerminalAdapter = Layer.effect(
         ptyProcess.onData((data: string) => {
           console.log('[NodePtyAdapter] Received PTY data:', data.substring(0, 100))
           Effect.runPromise(Effect.gen(function* () {
-            yield* PubSub.publish(
-              outputStream,
-              new OutputChunk({
-                processId: config.id,
-                data,
-                timestamp: new Date(),
-                type: 'stdout',
-              })
-            )
+            const chunk = new OutputChunk({
+              processId: config.id,
+              data,
+              timestamp: new Date(),
+              type: 'stdout',
+            })
+
+            console.log('[NodePtyAdapter] Publishing chunk to PubSub')
+            yield* PubSub.publish(outputStream, chunk)
+            console.log('[NodePtyAdapter] Successfully published to PubSub')
 
             yield* Ref.update(state, (s) => ({
               ...s,
@@ -179,7 +183,9 @@ export const NodePtyTerminalAdapter = Layer.effect(
             }))
 
             yield* resetIdleTimer(instance)
-          })).catch(console.error)
+          })).catch((error) => {
+            console.error('[NodePtyAdapter] Error in onData handler:', error)
+          })
         })
 
         ptyProcess.onExit(({ exitCode, signal }) => {
@@ -288,9 +294,17 @@ export const NodePtyTerminalAdapter = Layer.effect(
           )
         )
 
+        console.log('[NodePtyAdapter] Writing to PTY:', data, 'length:', data.length)
+
         yield* Effect.try({
-          try: () => instance.ptyProcess.write(data),
-          catch: (error) => new TerminalError({ reason: 'PermissionDenied', message: `Failed to write to process: ${error}` })
+          try: () => {
+            instance.ptyProcess.write(data)
+            console.log('[NodePtyAdapter] Successfully wrote to PTY')
+          },
+          catch: (error) => {
+            console.error('[NodePtyAdapter] Failed to write to PTY:', error)
+            return new TerminalError({ reason: 'PermissionDenied', message: `Failed to write to process: ${error}` })
+          }
         })
 
         // Reset idle timer on input
@@ -352,19 +366,40 @@ export const NodePtyTerminalAdapter = Layer.effect(
       })
 
       const subscribe = (processId: string): Stream.Stream<OutputChunk, TerminalError> => {
+        console.log('[NodePtyAdapter] Creating output stream subscription for:', processId)
         return pipe(
           Stream.fromEffect(
             pipe(
               Ref.get(processes),
               Effect.map(HashMap.get(processId as ProcessId)),
-              Effect.flatMap((option) =>
-                option._tag === 'Some'
-                  ? Effect.succeed(option.value)
-                  : Effect.fail(new TerminalError({ reason: 'ProcessNotFound', message: `Process ${processId} not found` }))
-              )
+              Effect.flatMap((option) => {
+                if (option._tag === 'Some') {
+                  console.log('[NodePtyAdapter] Found process instance for subscription')
+                  return Effect.succeed(option.value)
+                } else {
+                  console.error('[NodePtyAdapter] Process not found for subscription:', processId)
+                  return Effect.fail(new TerminalError({ reason: 'ProcessNotFound', message: `Process ${processId} not found` }))
+                }
+              })
             )
           ),
-          Stream.flatMap((instance) => Stream.fromPubSub(instance.outputStream))
+          Stream.flatMap((instance) => {
+            console.log('[NodePtyAdapter] Creating PubSub stream for process:', processId)
+            console.log('[NodePtyAdapter] PubSub instance:', instance.outputStream)
+            // PubSub.subscribe() returns a Dequeue (Queue), so use Stream.fromQueue!
+            return Stream.unwrapScoped(
+              Effect.map(
+                PubSub.subscribe(instance.outputStream),
+                (subscriptionQueue) => {
+                  console.log('[NodePtyAdapter] PubSub subscription queue created')
+                  return Stream.fromQueue(subscriptionQueue)  // subscriptionQueue is a Queue!
+                }
+              )
+            )
+          }),
+          Stream.tap((chunk) => Effect.sync(() => {
+            console.log('[NodePtyAdapter] Stream emitting chunk:', chunk.data.substring(0, 50))
+          }))
         )
       }
 

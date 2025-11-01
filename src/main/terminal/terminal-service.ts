@@ -71,10 +71,14 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         let command: string
         let args: string[]
 
+        // TEST: Let's first verify PTY works with a simple bash shell
+        // Then we can test with AI commands
         switch (config.agentType) {
           case 'claude':
-            command = 'claude'
-            args = [config.prompt]
+            // For testing: spawn bash first to see if PTY captures output
+            command = '/bin/bash'
+            args = []
+            console.log('[TerminalService] Testing with bash shell first for claude agent')
             break
           case 'codex':
             command = 'codex'
@@ -215,9 +219,18 @@ export class TerminalService extends Effect.Service<TerminalService>()(
       })
 
       const subscribeToWatcher: TerminalServiceMethods['subscribeToWatcher'] = (processId) => {
+        console.log('[TerminalService] subscribeToWatcher called for:', processId)
         return Stream.flatMap(
-          Stream.fromEffect(registry.getDefaultAdapter()),
-          (adapter) => adapter.subscribe(processId)
+          Stream.fromEffect(
+            Effect.tap(
+              registry.getDefaultAdapter(),
+              () => Effect.sync(() => console.log('[TerminalService] Got adapter, calling subscribe'))
+            )
+          ),
+          (adapter) => {
+            console.log('[TerminalService] Adapter retrieved, calling adapter.subscribe')
+            return adapter.subscribe(processId)
+          }
         )
       }
 

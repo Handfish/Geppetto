@@ -117,38 +117,53 @@ class TerminalSubscriptionManager {
   private listeners = new Map<string, (event: Electron.IpcRendererEvent, data: { type: 'output' | 'event', data: any }) => void>()
 
   subscribe(processId: string, onData: (data: OutputChunk | ProcessEvent) => void) {
+    console.log('[TerminalSubscriptionManager] Subscribe called for:', processId)
     return Effect.gen(function* (this: TerminalSubscriptionManager) {
       // If already subscribed, just add listener
       if (this.subscriptions.has(processId)) {
+        console.log('[TerminalSubscriptionManager] Already subscribed to:', processId)
         return { unsubscribe: () => this.unsubscribe(processId) }
       }
 
+      console.log('[TerminalSubscriptionManager] Invoking terminal:subscribe-to-watcher')
       const client = yield* ElectronIpcClient
       const result = yield* client.invoke('terminal:subscribe-to-watcher', { processId })
       const subscriptionId = result.subscriptionId
+      console.log('[TerminalSubscriptionManager] Got subscription ID:', subscriptionId)
 
       this.subscriptions.set(processId, subscriptionId)
 
       // Set up IPC listener
-      const listener = (...args: unknown[]) => {
-        const [_event, message] = args as [Electron.IpcRendererEvent, { type: 'output' | 'event', data: any }]
+      const listener = (_event: Electron.IpcRendererEvent, message: { type: 'output' | 'event', data: any }) => {
+        console.log('[TerminalSubscriptionManager] !!!!! IPC MESSAGE RECEIVED !!!!!')
+        console.log('[TerminalSubscriptionManager] Channel:', `terminal:stream:${processId}`)
+        console.log('[TerminalSubscriptionManager] Message type:', message.type)
+        console.log('[TerminalSubscriptionManager] Message data:', message.data)
+
         if (message.type === 'output') {
           const chunk = message.data as OutputChunk
+          console.log('[TerminalSubscriptionManager] >>> Output chunk data:', chunk.data.substring(0, 100))
+          console.log('[TerminalSubscriptionManager] >>> Output chunk length:', chunk.data.length)
 
           // Update output buffer
           appendToOutputBuffer(processId, chunk.data)
 
           // Notify subscriber
+          console.log('[TerminalSubscriptionManager] >>> Calling onData callback')
           onData(chunk)
+          console.log('[TerminalSubscriptionManager] >>> onData callback completed')
         } else if (message.type === 'event') {
           const event = message.data as ProcessEvent
+          console.log('[TerminalSubscriptionManager] >>> Event type:', event.type)
           onData(event)
         }
       }
 
       this.listeners.set(processId, listener)
+      console.log('[TerminalSubscriptionManager] Registering IPC listener for channel:', `terminal:stream:${processId}`)
       window.electron.ipcRenderer.on(`terminal:stream:${processId}`, listener)
 
+      console.log('[TerminalSubscriptionManager] Subscription complete')
       return {
         unsubscribe: () => this.unsubscribe(processId),
       }
@@ -173,7 +188,7 @@ class TerminalSubscriptionManager {
     }
 
     if (listener) {
-      window.electron.ipcRenderer.removeListener(`terminal:stream:${processId}`, listener as (...args: unknown[]) => void)
+      window.electron.ipcRenderer.removeListener(`terminal:stream:${processId}`, listener)
       this.listeners.delete(processId)
     }
   }

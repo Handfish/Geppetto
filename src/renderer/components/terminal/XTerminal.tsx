@@ -123,21 +123,27 @@ export function XTerminal({
 
     const terminal = xtermRef.current
 
-    console.log(`[XTerminal] Subscribing to output for process ${processId}`)
+    console.log(`[XTerminal] ==================== SUBSCRIBING ====================`)
+    console.log(`[XTerminal] Process ID: ${processId}`)
+    console.log(`[XTerminal] Terminal instance:`, xtermRef.current)
 
     // Subscribe to terminal output
     Effect.runPromise(
       terminalSubscriptionManager.subscribe(processId, (data) => {
-        console.log('[XTerminal] Received data:', data)
+        console.log('[XTerminal] !!!!! CALLBACK TRIGGERED !!!!!', data)
+        console.log('[XTerminal] Data type:', typeof data, 'keys:', Object.keys(data))
+
         if ('data' in data && 'type' in data) {
           // OutputChunk
           const chunk = data as OutputChunk
-          console.log('[XTerminal] Writing output chunk:', chunk.data)
+          console.log('[XTerminal] >>> Writing output chunk to terminal:', chunk.data.substring(0, 100))
+          console.log('[XTerminal] >>> Chunk length:', chunk.data.length)
           terminal.write(chunk.data)
+          console.log('[XTerminal] >>> Write completed')
         } else {
           // ProcessEvent
           const event = data as ProcessEvent
-          console.log('[XTerminal] Received event:', event.type)
+          console.log('[XTerminal] >>> Received event:', event.type)
           if (event.type === 'stopped' || event.type === 'error') {
             terminal.write(`\r\n\x1b[31m[Process ${event.type}]\x1b[0m\r\n`)
           } else if (event.type === 'idle') {
@@ -151,10 +157,10 @@ export function XTerminal({
         refreshOutput()
       }).pipe(Effect.provide(ElectronIpcClient.Default))
     ).then((subscription) => {
-      console.log('[XTerminal] Subscription successful')
+      console.log('[XTerminal] ==================== SUBSCRIPTION SUCCESSFUL ====================')
       subscriptionRef.current = subscription
     }).catch((error) => {
-      console.error('[XTerminal] Subscription failed:', error)
+      console.error('[XTerminal] ==================== SUBSCRIPTION FAILED ====================', error)
     })
 
     return () => {
