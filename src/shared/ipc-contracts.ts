@@ -47,6 +47,21 @@ import {
   WatcherOperationError,
   TmuxError,
 } from './schemas/ai-watchers/errors'
+import {
+  ProcessState,
+  OutputChunk,
+  ProcessEvent,
+  SpawnWatcherInput,
+  WatcherInfo,
+  SpawnWatcherResult,
+} from './schemas/terminal'
+import {
+  TerminalError as TerminalErrorSchema,
+  ProcessNotFoundError,
+  SpawnFailedError,
+  ProcessAlreadyRunningError,
+  PermissionDeniedError,
+} from './schemas/terminal/errors'
 
 /**
  * Account Management IPC Contracts
@@ -736,6 +751,105 @@ export const KeyboardLayerIpcContracts = {
 } as const
 
 /**
+ * Terminal IPC Contracts
+ */
+export const TerminalIpcContracts = {
+  'terminal:spawn-watcher': {
+    channel: 'terminal:spawn-watcher' as const,
+    input: SpawnWatcherInput,
+    output: SpawnWatcherResult,
+    errors: S.Union(
+      TerminalErrorSchema,
+      AuthenticationError,
+      TierLimitError
+    ),
+  },
+
+  'terminal:kill-watcher': {
+    channel: 'terminal:kill-watcher' as const,
+    input: S.Struct({
+      processId: S.String,
+    }),
+    output: S.Void,
+    errors: S.Union(TerminalErrorSchema),
+  },
+
+  'terminal:kill-all-watchers': {
+    channel: 'terminal:kill-all-watchers' as const,
+    input: S.Void,
+    output: S.Void,
+    errors: S.Never,
+  },
+
+  'terminal:restart-watcher': {
+    channel: 'terminal:restart-watcher' as const,
+    input: S.Struct({
+      processId: S.String,
+    }),
+    output: ProcessState,
+    errors: S.Union(TerminalErrorSchema),
+  },
+
+  'terminal:write-to-watcher': {
+    channel: 'terminal:write-to-watcher' as const,
+    input: S.Struct({
+      processId: S.String,
+      data: S.String,
+    }),
+    output: S.Void,
+    errors: S.Union(TerminalErrorSchema),
+  },
+
+  'terminal:resize-watcher': {
+    channel: 'terminal:resize-watcher' as const,
+    input: S.Struct({
+      processId: S.String,
+      rows: S.Number,
+      cols: S.Number,
+    }),
+    output: S.Void,
+    errors: S.Union(TerminalErrorSchema),
+  },
+
+  'terminal:get-watcher-state': {
+    channel: 'terminal:get-watcher-state' as const,
+    input: S.Struct({
+      processId: S.String,
+    }),
+    output: ProcessState,
+    errors: S.Union(TerminalErrorSchema),
+  },
+
+  'terminal:list-active-watchers': {
+    channel: 'terminal:list-active-watchers' as const,
+    input: S.Void,
+    output: S.Array(WatcherInfo),
+    errors: S.Never,
+  },
+
+  // Stream subscriptions (handled differently in IPC)
+  'terminal:subscribe-to-watcher': {
+    channel: 'terminal:subscribe-to-watcher' as const,
+    input: S.Struct({
+      processId: S.String,
+    }),
+    output: S.Struct({
+      subscriptionId: S.String,
+    }),
+    errors: S.Union(TerminalErrorSchema),
+  },
+
+  'terminal:unsubscribe-from-watcher': {
+    channel: 'terminal:unsubscribe-from-watcher' as const,
+    input: S.Struct({
+      subscriptionId: S.String,
+    }),
+    output: S.Void,
+    errors: S.Never,
+  },
+} as const
+
+/**
  * Combined IPC Contracts
  */
 export const IpcContracts = {
@@ -747,6 +861,7 @@ export const IpcContracts = {
   ...SourceControlIpcContracts,
   ...GitHubIssueIpcContracts,
   ...KeyboardLayerIpcContracts,
+  ...TerminalIpcContracts,
 } as const
 
 export type IpcContracts = typeof IpcContracts

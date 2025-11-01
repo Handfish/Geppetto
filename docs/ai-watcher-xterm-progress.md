@@ -1,9 +1,9 @@
 # AI Watcher XTerm.js Terminal - Migration Progress
 
-> **Status**: In Progress (Phase 1 Complete)
+> **Status**: In Progress (Phases 1-2 Complete)
 > **Start Date**: 2025-11-01
 > **Target Completion**: 2 days
-> **Actual Duration**: In Progress
+> **Actual Duration**: In Progress (~1.75 hours so far)
 
 ## Phase Completion Tracker
 
@@ -53,38 +53,44 @@
 ```
 
 ### Phase 2: IPC Contracts & Handlers (2 hours)
-**Status**: ⏳ Not Started
-**Duration**: -
+**Status**: ✅ Complete
+**Duration**: ~45 minutes
 
-- [ ] 2.1 Define IPC Contracts (`src/shared/ipc-contracts/terminal-contracts.ts`)
-  - [ ] spawnWatcher contract
-  - [ ] killWatcher contract
-  - [ ] killAllWatchers contract
-  - [ ] restartWatcher contract
-  - [ ] writeToWatcher contract
-  - [ ] resizeWatcher contract
-  - [ ] getWatcherState contract
-  - [ ] listActiveWatchers contract
-  - [ ] Stream subscription contracts
+- [x] 2.1 Define IPC Contracts (`src/shared/ipc-contracts.ts`)
+  - [x] spawnWatcher contract
+  - [x] killWatcher contract
+  - [x] killAllWatchers contract
+  - [x] restartWatcher contract
+  - [x] writeToWatcher contract
+  - [x] resizeWatcher contract
+  - [x] getWatcherState contract
+  - [x] listActiveWatchers contract
+  - [x] Stream subscription contracts
 
-- [ ] 2.2 Create Shared Schemas (`src/shared/schemas/terminal/index.ts`)
-  - [ ] ProcessState class
-  - [ ] OutputChunk class
-  - [ ] ProcessEvent class
-  - [ ] SpawnWatcherInput class
-  - [ ] WatcherInfo class
-  - [ ] TerminalError for IPC
+- [x] 2.2 Create Shared Schemas (`src/shared/schemas/terminal/index.ts` and `errors.ts`)
+  - [x] ProcessState class
+  - [x] OutputChunk class
+  - [x] ProcessEvent class
+  - [x] SpawnWatcherInput class
+  - [x] WatcherInfo class
+  - [x] TerminalError for IPC (with detailed error types)
 
-- [ ] 2.3 Create IPC Handlers (`src/main/ipc/terminal-handlers.ts`)
-  - [ ] Register basic operation handlers
-  - [ ] Implement stream subscription handler
-  - [ ] Set up IPC channel for stream data
-  - [ ] Manage subscription lifecycle
-  - [ ] Handle cleanup on unsubscribe
+- [x] 2.3 Create IPC Handlers (`src/main/ipc/terminal-handlers.ts`)
+  - [x] Register basic operation handlers
+  - [x] Implement stream subscription handler with Fiber management
+  - [x] Set up IPC channel for stream data (BrowserWindow.send)
+  - [x] Manage subscription lifecycle with Map tracking
+  - [x] Handle cleanup on unsubscribe with Fiber interruption
 
 **Notes**:
 ```
--
+- Added TerminalIpcContracts to main ipc-contracts.ts file
+- Created comprehensive error schemas for terminal operations
+- Implemented stream-based IPC using Effect Fibers
+- Used BrowserWindow.getAllWindows() for multi-window support
+- Proper cleanup function (cleanupTerminalSubscriptions) for app quit
+- Compilation successful with no TypeScript errors
+- All IPC contracts properly integrated into combined IpcContracts export
 ```
 
 ### Phase 3: Frontend Terminal Components (3-4 hours)
