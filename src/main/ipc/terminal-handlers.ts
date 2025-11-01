@@ -83,6 +83,7 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
   registerIpcHandler(
     TerminalIpcContracts['terminal:subscribe-to-watcher'],
     ({ processId }) => Effect.gen(function* () {
+      console.log('[TerminalHandlers] Subscribing to watcher:', processId)
       const subscriptionId = `sub-${processId}-${Date.now()}`
 
       // Get output and event streams
@@ -92,6 +93,7 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
       // Create fiber to run output stream and send via IPC
       const outputFiber = yield* outputStream.pipe(
         Stream.tap((chunk) => Effect.sync(() => {
+          console.log('[TerminalHandlers] Sending output chunk to renderer:', chunk.data.substring(0, 50))
           // Send to all renderer windows
           const windows = BrowserWindow.getAllWindows()
           windows.forEach((window) => {
@@ -108,6 +110,7 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
       // Create fiber to run event stream and send via IPC
       const eventFiber = yield* eventStream.pipe(
         Stream.tap((event) => Effect.sync(() => {
+          console.log('[TerminalHandlers] Sending event to renderer:', event.type)
           // Send to all renderer windows
           const windows = BrowserWindow.getAllWindows()
           windows.forEach((window) => {
@@ -129,6 +132,7 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
         eventFiber,
       })
 
+      console.log('[TerminalHandlers] Subscription created:', subscriptionId)
       return { subscriptionId }
     })
   )

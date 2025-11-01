@@ -90,15 +90,52 @@ export const NodePtyTerminalAdapter = Layer.effect(
 
         // Lazy load node-pty and create PTY process
         const ptyModule = yield* getPty()
+
+        console.log('[NodePtyAdapter] Spawning process:', {
+          command: config.command,
+          args: config.args,
+          cwd: config.cwd,
+        })
+
         const ptyProcess = yield* Effect.try({
-          try: () => ptyModule.spawn(config.command, [...config.args], {
-            name: 'xterm-256color',
-            cols: config.cols || 80,
-            rows: config.rows || 24,
-            cwd: config.cwd,
-            env: { ...process.env, ...config.env } as Record<string, string>,
-          }),
-          catch: (error) => new TerminalError({ reason: 'SpawnFailed', message: `Failed to spawn process: ${error}` })
+          try: () => {
+            // Spawn an interactive shell in the PTY
+            const shell = config.shell || '/bin/bash'
+
+            console.log('[NodePtyAdapter] Spawning interactive shell:', shell)
+
+            const pty = ptyModule.spawn(shell, [], {
+              name: 'xterm-256color',
+              cols: config.cols || 80,
+              rows: config.rows || 24,
+              cwd: config.cwd,
+              env: {
+                ...process.env,
+                ...config.env,
+                // Force interactive mode
+                PS1: '\\[\\033[1;32m\\]geppetto\\[\\033[0m\\]:\\[\\033[1;34m\\]\\w\\[\\033[0m\\]$ ',
+              } as Record<string, string>,
+            })
+            console.log('[NodePtyAdapter] Shell spawned successfully, PID:', pty.pid)
+
+            // Write the command to the shell's stdin after a short delay
+            if (config.command !== shell) {
+              setTimeout(() => {
+                const commandStr = config.args.length > 0
+                  ? `${config.command} ${config.args.map(arg => `"${arg.replace(/"/g, '\\"')}"`).join(' ')}`
+                  : config.command
+
+                console.log('[NodePtyAdapter] Writing command to shell:', commandStr)
+                pty.write(`${commandStr}\r`)
+              }, 100)
+            }
+
+            return pty
+          },
+          catch: (error) => {
+            console.error('[NodePtyAdapter] Failed to spawn process:', error)
+            return new TerminalError({ reason: 'SpawnFailed', message: `Failed to spawn process: ${error}` })
+          }
         })
 
         // Create state and streams
@@ -124,6 +161,7 @@ export const NodePtyTerminalAdapter = Layer.effect(
 
         // Set up event handlers
         ptyProcess.onData((data: string) => {
+          console.log('[NodePtyAdapter] Received PTY data:', data.substring(0, 100))
           Effect.runPromise(Effect.gen(function* () {
             yield* PubSub.publish(
               outputStream,

@@ -94,8 +94,15 @@ export function XTerminal({
     // Initial fit
     setTimeout(() => fitAddon.fit(), 0)
 
+    // Write initial message to verify terminal is working (bright yellow on black, bold)
+    terminal.write('\x1b[1;33m===== XTerminal Ready =====\x1b[0m\r\n')
+    terminal.write('\x1b[32mConnecting to process...\x1b[0m\r\n')
+    terminal.write('\x1b[36mType something to test input\x1b[0m\r\n')
+    console.log('[XTerminal] Terminal initialized and opened')
+
     // Handle input
     terminal.onData((data) => {
+      console.log('[XTerminal] User input:', data, 'charCode:', data.charCodeAt(0))
       onData?.(data)
     })
 
@@ -116,16 +123,21 @@ export function XTerminal({
 
     const terminal = xtermRef.current
 
+    console.log(`[XTerminal] Subscribing to output for process ${processId}`)
+
     // Subscribe to terminal output
     Effect.runPromise(
       terminalSubscriptionManager.subscribe(processId, (data) => {
+        console.log('[XTerminal] Received data:', data)
         if ('data' in data && 'type' in data) {
           // OutputChunk
           const chunk = data as OutputChunk
+          console.log('[XTerminal] Writing output chunk:', chunk.data)
           terminal.write(chunk.data)
         } else {
           // ProcessEvent
           const event = data as ProcessEvent
+          console.log('[XTerminal] Received event:', event.type)
           if (event.type === 'stopped' || event.type === 'error') {
             terminal.write(`\r\n\x1b[31m[Process ${event.type}]\x1b[0m\r\n`)
           } else if (event.type === 'idle') {
@@ -139,10 +151,14 @@ export function XTerminal({
         refreshOutput()
       }).pipe(Effect.provide(ElectronIpcClient.Default))
     ).then((subscription) => {
+      console.log('[XTerminal] Subscription successful')
       subscriptionRef.current = subscription
-    }).catch(console.error)
+    }).catch((error) => {
+      console.error('[XTerminal] Subscription failed:', error)
+    })
 
     return () => {
+      console.log(`[XTerminal] Unsubscribing from process ${processId}`)
       subscriptionRef.current?.unsubscribe()
     }
   }, [processId, refreshOutput])
