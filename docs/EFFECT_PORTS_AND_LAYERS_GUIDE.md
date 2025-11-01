@@ -693,9 +693,175 @@ const TerminalLayer = Layer.provide(
 )
 ```
 
+## Multi-Provider Pattern: Registry vs Direct Access
+
+When you have **multiple adapters implementing the same port**, you face a choice: use a registry service or access adapters directly via tags.
+
+### Pattern 1: Registry Service (For Multi-Provider Orchestration)
+
+**When to use:**
+- ✅ Need dynamic runtime selection of providers
+- ✅ Need to iterate over all available providers
+- ✅ Complex orchestration (fallback, A/B testing, cost optimization)
+- ✅ IPC handlers need adapter access with minimal context
+- ✅ Frequent lookups in loops/iterations
+
+**Architecture:**
+
+```typescript
+// 1. Port Interface (same as always)
+export interface AiProviderPort {
+  readonly provider: AiProviderType
+  signIn(): Effect.Effect<AiProviderSignInResult, AiProviderAuthenticationError>
+  getUsage(accountId: AiAccountId): Effect.Effect<AiUsageSnapshot, AiProviderUsageError>
+}
+
+// 2. Tag Registry (GenericTag management)
+export class AiProviderTags {
+  private static tags = new Map<AiProviderType, Context.Tag<AiProviderPort, AiProviderPort>>()
+
+  static register(provider: AiProviderType) {
+    const tag = Context.GenericTag<AiProviderPort>(`AiProvider:${provider}`)
+    this.tags.set(provider, tag)
+    return tag
+  }
+
+  static all() {
+    return Array.from(this.tags.values())
+  }
+}
+
+// 3. Adapters (Layer implementations)
+const OpenAiProviderTag = AiProviderTags.register('openai')
+export const OpenAiBrowserProviderAdapter = Layer.effect(
+  OpenAiProviderTag,
+  Effect.gen(function* () {
+    const adapter: AiProviderPort = {
+      provider: 'openai',
+      signIn: () => { /* ... */ },
+      getUsage: (accountId) => { /* ... */ }
+    }
+    return adapter
+  })
+)
+
+// 4. Registry Service (Adapter capture & lookup)
+export class AiProviderRegistryService extends Effect.Service<...>() {
+  effect: Effect.gen(function* () {
+    // ✅ Capture adapters at construction time
+    const tags = AiProviderTags.all()
+    const adaptersMap = new Map<AiProviderType, AiProviderPort>()
+
+    for (const tag of tags) {
+      const adapter = yield* tag  // Context available NOW
+      adaptersMap.set(adapter.provider, adapter)
+    }
+
+    // ✅ Methods access Map - no context needed at call time
+    return {
+      getAdapter: (provider) =>
+        Effect.gen(function* () {
+          const adapter = adaptersMap.get(provider)
+          if (!adapter) return yield* Effect.fail(new Error(`Provider ${provider} not found`))
+          return adapter
+        }),
+      listAdapters: () => Effect.succeed(Array.from(adaptersMap.values()))
+    }
+  })
+}
+
+// 5. Usage - Clean and context-free
+const agent = Effect.gen(function* () {
+  const registry = yield* AiProviderRegistryService
+
+  // Dynamic selection
+  const provider = selectBestProvider(criteria)
+  const adapter = yield* registry.getAdapter(provider)
+
+  // Iteration
+  const all = yield* registry.listAdapters()
+  const results = yield* Effect.forEach(all, a => a.getUsage(accountId))
+})
+```
+
+**Benefits:**
+- Adapters captured once at construction
+- No context propagation at call sites
+- Clean iteration and dynamic selection
+- IPC handlers only need registry
+
+**See detailed multi-provider patterns:** [AI Layers Hexagonal Agents Benefit](./AI_LAYERS_HEXAGONAL_AGENTS_BENEFIT.md)
+
+---
+
+### Pattern 2: Direct Port Access (For Single/Static Providers)
+
+**When to use:**
+- ✅ Single adapter per port
+- ✅ Static, compile-time adapter selection
+- ✅ No iteration or multi-provider logic needed
+
+**Architecture:**
+
+```typescript
+// 1. Port Interface
+export interface TerminalPort {
+  spawn: (config: ProcessConfig) => Effect.Effect<ProcessState, TerminalError>
+  kill: (processId: string) => Effect.Effect<void, TerminalError>
+}
+
+// 2. Tag (GenericTag)
+export const TerminalPort = Context.GenericTag<TerminalPort>('TerminalPort')
+
+// 3. Adapter (Layer implementation)
+export const NodePtyTerminalAdapter = Layer.effect(
+  TerminalPort,
+  Effect.gen(function* () {
+    const adapter: TerminalPort = {
+      spawn: (config) => { /* ... */ },
+      kill: (processId) => { /* ... */ }
+    }
+    return adapter
+  })
+)
+
+// 4. Usage - Direct access
+const service = Effect.gen(function* () {
+  // ✅ Direct access - no registry needed
+  const terminal = yield* TerminalPort
+  yield* terminal.spawn(config)
+})
+```
+
+**Benefits:**
+- Simpler - no registry abstraction
+- Direct access to adapter
+- Clear single implementation
+
+---
+
+### Comparison: Registry vs Direct Access
+
+| Aspect | Registry Pattern | Direct Access |
+|--------|-----------------|---------------|
+| **Use Case** | Multiple providers, dynamic selection | Single provider, static selection |
+| **Context Requirements** | Registry only (adapters captured) | Adapter layer needed |
+| **Dynamic Selection** | ✅ Easy | ❌ Not possible |
+| **Iteration** | ✅ `registry.listAdapters()` | ❌ Not applicable |
+| **IPC Handlers** | ✅ Minimal context | ⚠️ Need adapter layer |
+| **Complexity** | Higher (2 abstractions) | Lower (direct) |
+| **Performance** | Better (cached lookups) | Slightly worse (yields each time) |
+| **When to Use** | Multi-provider orchestration | Single adapter simplicity |
+
+**Decision Rule:**
+- **2+ adapters + (dynamic selection OR iteration OR orchestration)** → Use Registry
+- **Single adapter OR static selection** → Use Direct Access
+
+---
+
 ## Real-World Examples
 
-### Example 1: Multi-Provider AI Domain
+### Example 1: Multi-Provider AI Domain (Registry Pattern)
 
 ```typescript
 // ai/provider-port.ts
@@ -742,7 +908,7 @@ export const OpenAiAdapter = Layer.effect(
 )
 ```
 
-### Example 2: Terminal Domain with Single Adapter
+### Example 2: Terminal Domain with Single Adapter (Direct Access Pattern)
 
 ```typescript
 // terminal/terminal-port.ts
@@ -783,15 +949,46 @@ export const NodePtyTerminalAdapter = Layer.effect(
   })
 )
 
-// main/index.ts - Layer composition
+// terminal/terminal-service.ts - Direct port access (NO REGISTRY)
+export class TerminalService extends Effect.Service<TerminalService>()(
+  'TerminalService',
+  {
+    effect: Effect.gen(function* () {
+      // ✅ Direct access to port - no registry needed
+      const terminal = yield* TerminalPort
+      const activeWatchers = yield* Ref.make(HashMap.empty<string, WatcherConfig>())
+
+      return {
+        spawnAiWatcher: (config) => Effect.gen(function* () {
+          // Use terminal directly
+          const state = yield* terminal.spawn(processConfig)
+          yield* Ref.update(activeWatchers, HashMap.set(processId, config))
+          return { processId, state }
+        }),
+
+        killWatcher: (processId) => Effect.gen(function* () {
+          // Use terminal directly
+          yield* terminal.kill(processId)
+          yield* Ref.update(activeWatchers, HashMap.remove(processId))
+        })
+      }
+    }),
+    dependencies: []  // Terminal provided via Layer.provide
+  }
+) {}
+
+// main/index.ts - Layer composition (no registry needed)
 const TerminalLayer = Layer.provide(
-  Layer.mergeAll(
-    TerminalRegistry.Default,
-    TerminalService.Default
-  ),
-  NodePtyTerminalAdapter  // Provides TerminalPort
+  TerminalService.Default,
+  NodePtyTerminalAdapter  // Provides TerminalPort directly
 )
 ```
+
+**Why no registry?**
+- Single adapter (NodePty)
+- No dynamic selection needed
+- No iteration over multiple adapters
+- Direct access is simpler and sufficient
 
 ## Migration Guide
 
@@ -907,6 +1104,14 @@ const TestLayer = Layer.provide(
 - Separate interface definition from tag
 - Avoids name collision issues
 
+**Multiple Adapters for Same Port?**
+- YES → Consider registry pattern
+  - Need dynamic selection? → Use registry
+  - Need iteration? → Use registry
+  - Need orchestration (fallback, A/B testing)? → Use registry
+  - Simple static use? → Direct tag access is fine
+- NO (single adapter) → Use direct port access, skip registry
+
 **Creating a Service?**
 - Use `class Service extends Context.Tag` with inline interface
 - Or use `Effect.Service` pattern with interface constraint
@@ -927,8 +1132,9 @@ const TestLayer = Layer.provide(
 
 ## Related Documentation
 
-- [AI Adapters Hexagonal Architecture](./AI_ADAPTERS_HEXAGONAL_ARCHITECTURE.md)
-- [Effect Atom IPC Guide](./EFFECT_ATOM_IPC_GUIDE.md)
+- [AI Adapters Hexagonal Architecture](./AI_ADAPTERS_HEXAGONAL_ARCHITECTURE.md) - Deep dive into hexagonal architecture
+- [AI Layers Hexagonal Agents Benefit](./AI_LAYERS_HEXAGONAL_AGENTS_BENEFIT.md) - **Multi-provider registry pattern with real-world AI agent examples**
+- [Effect Atom IPC Guide](./EFFECT_ATOM_IPC_GUIDE.md) - IPC communication patterns
 - [AI Watcher XTerm Progress](./ai-watcher-xterm-progress.md) - Real implementation timeline with issues encountered
 
 ## Debugging History

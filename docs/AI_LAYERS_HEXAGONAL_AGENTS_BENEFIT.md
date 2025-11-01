@@ -3,6 +3,8 @@
 **Date:** 2025-10-26
 **Purpose:** Explain why the new Layer-based hexagonal architecture is superior to the old Effect.Service registry pattern for building AI agents (Claude, Codex, etc.)
 
+**See Also:** [Effect Ports and Layers Guide](./EFFECT_PORTS_AND_LAYERS_GUIDE.md) - General patterns for all domains
+
 ---
 
 ## TL;DR
@@ -842,6 +844,263 @@ const newAgent = Effect.gen(function* () {
 2. Remove concrete service dependencies from Effect.provide
 3. Iterate over `registry.listAdapters()` instead of hardcoded services
 4. Enjoy cleaner, more testable agent code!
+
+---
+
+## When Do You Need the Registry Pattern?
+
+The registry pattern adds a layer of indirection between your code and the adapters. **It's not always necessary** - understand when to use it.
+
+### ✅ Use Registry Pattern When:
+
+#### 1. Multiple Adapters for Same Port Interface
+
+```typescript
+// Multiple implementations of AiProviderPort
+OpenAiBrowserProviderAdapter  → AiProviderPort
+ClaudeBrowserProviderAdapter  → AiProviderPort
+CursorBrowserProviderAdapter  → AiProviderPort
+
+// Registry provides unified access
+const registry = yield* AiProviderRegistryService
+const adapter = yield* registry.getAdapter('openai')  // Dynamic selection
+```
+
+**Why:** GenericTags alone require adapters in context at call time. Registry captures them once at construction.
+
+#### 2. Dynamic Provider Selection
+
+```typescript
+// Select provider at runtime based on criteria
+const selectProvider = (criteria: Criteria): AiProviderType => {
+  if (criteria.cost === 'low') return 'cursor'
+  if (criteria.quality === 'high') return 'claude'
+  return 'openai'
+}
+
+const registry = yield* AiProviderRegistryService
+const adapter = yield* registry.getAdapter(selectProvider(userCriteria))
+```
+
+**Why:** Can't dynamically yield different tags without registry.
+
+#### 3. Iteration Over All Providers
+
+```typescript
+// Compare all providers
+const registry = yield* AiProviderRegistryService
+const adapters = yield* registry.listAdapters()
+
+const results = yield* Effect.forEach(
+  adapters,
+  adapter => adapter.getUsage(accountId),
+  { concurrency: 'unbounded' }
+)
+```
+
+**Why:** GenericTags can provide list of tags, but you'd yield each one repeatedly. Registry captures them once.
+
+#### 4. Complex Orchestration (Fallback, A/B Testing, Cost Optimization)
+
+```typescript
+// Fallback chain
+const registry = yield* AiProviderRegistryService
+for (const provider of ['openai', 'claude', 'cursor']) {
+  const adapter = yield* registry.getAdapter(provider)  // Map lookup, not context yield
+  const result = yield* adapter.getUsage(id).pipe(
+    Effect.catchAll(() => Effect.succeed(null))
+  )
+  if (result) return result
+}
+```
+
+**Why:** Loops with repeated lookups benefit from Map-based access vs repeated tag yielding.
+
+#### 5. IPC Handlers Need Adapter Access
+
+```typescript
+// IPC handler - minimal context needed
+registerIpcHandler(AiIpcContracts.getUsage, (input) =>
+  Effect.gen(function* () {
+    const registry = yield* AiProviderRegistryService  // Only need registry
+    const adapter = yield* registry.getAdapter(input.provider)
+    return yield* adapter.getUsage(input.accountId)
+  })
+)
+```
+
+**Why:** Without registry, IPC handler needs all adapter layers in context. With registry, only needs registry.
+
+### ❌ Skip Registry Pattern When:
+
+#### 1. Single Adapter Per Port
+
+```typescript
+// Terminal domain - only one adapter
+interface TerminalPort { ... }
+NodePtyTerminalAdapter → TerminalPort
+
+// ❌ NO REGISTRY NEEDED - just use port directly
+const terminal = yield* TerminalPort
+yield* terminal.spawn(config)
+```
+
+**Why:** Registry adds unnecessary abstraction when there's only one implementation.
+
+#### 2. Static, Compile-Time Adapter Selection
+
+```typescript
+// Always use OpenAI - no dynamic selection
+const openai = yield* OpenAiProviderTag
+yield* openai.getUsage(accountId)
+```
+
+**Why:** If you always know which adapter you need, just yield the tag directly.
+
+#### 3. No Iteration or Multi-Provider Logic
+
+```typescript
+// Just use one provider
+const claude = yield* ClaudeProviderTag
+const result = yield* claude.getUsage(accountId)
+```
+
+**Why:** If you never need to iterate or compare providers, registry is overkill.
+
+### Comparison: With vs Without Registry
+
+#### Without Registry (GenericTags Only)
+
+```typescript
+// Agent that uses multiple providers
+const agent = Effect.gen(function* () {
+  // Must yield each tag separately
+  const openai = yield* AiProviderTags.getOrCreate('openai')  // Requires context
+  const claude = yield* AiProviderTags.getOrCreate('claude')  // Requires context
+
+  // Can't iterate dynamically
+  const adapters = []
+  for (const tag of AiProviderTags.all()) {
+    adapters.push(yield* tag)  // Yields in loop - performance cost
+  }
+
+  // Use adapters...
+}).pipe(
+  // ⚠️ ALL adapters must be in context
+  Effect.provide(Layer.mergeAll(
+    OpenAiBrowserProviderAdapter,
+    ClaudeBrowserProviderAdapter,
+    CursorBrowserProviderAdapter
+  ))
+)
+```
+
+**Issues:**
+- ❌ Adapters required in context at every call site
+- ❌ Tags yielded repeatedly (performance cost in loops)
+- ❌ Can't use in IPC handlers without full adapter context
+- ❌ Verbose layer composition
+
+#### With Registry
+
+```typescript
+// Same agent with registry
+const agent = Effect.gen(function* () {
+  const registry = yield* AiProviderRegistryService  // Adapters captured once
+
+  // Get adapters by name (Map lookup, no context needed)
+  const openai = yield* registry.getAdapter('openai')
+  const claude = yield* registry.getAdapter('claude')
+
+  // Iterate cleanly
+  const adapters = yield* registry.listAdapters()  // Already captured
+
+  // Use adapters...
+}).pipe(
+  // ✅ Only need registry - adapters already captured at construction
+  Effect.provide(MainLayer)
+)
+```
+
+**Benefits:**
+- ✅ Adapters captured once at construction
+- ✅ No repeated tag yielding
+- ✅ IPC handlers only need registry in context
+- ✅ Clean layer composition
+
+### Registry Pattern Architecture
+
+The registry pattern uses **two abstractions** working together:
+
+```typescript
+// 1. AiProviderTags - Tag Management (GenericTags)
+export class AiProviderTags {
+  private static tags = new Map<AiProviderType, Context.Tag<AiProviderPort, AiProviderPort>>()
+
+  static register(provider: AiProviderType) {
+    const tag = Context.GenericTag<AiProviderPort>(`AiProvider:${provider}`)
+    this.tags.set(provider, tag)
+    return tag
+  }
+
+  static all() {
+    return Array.from(this.tags.values())
+  }
+}
+
+// 2. AiProviderRegistryService - Adapter Capture & Lookup
+export class AiProviderRegistryService extends Effect.Service<...>() {
+  effect: Effect.gen(function* () {
+    // Capture adapters at construction time
+    const tags = AiProviderTags.all()
+    const adaptersMap = new Map<AiProviderType, AiProviderPort>()
+
+    for (const tag of tags) {
+      const adapter = yield* tag  // Context available NOW
+      adaptersMap.set(adapter.provider, adapter)
+    }
+
+    // Methods access Map (no context needed at call time)
+    return {
+      getAdapter: (provider) => Effect.succeed(adaptersMap.get(provider)),
+      listAdapters: () => Effect.succeed(Array.from(adaptersMap.values()))
+    }
+  })
+}
+```
+
+**Why Two Abstractions?**
+- **AiProviderTags**: Manages tag identity and creation
+- **AiProviderRegistryService**: Manages adapter lifecycle and access
+- **Separation of Concerns**: Tag management vs adapter capture
+- **Flexibility**: Can use tags directly in simple scenarios
+
+### Decision Tree: Do You Need Registry?
+
+```
+┌─ Single adapter per port?
+│  └─ NO → Use port directly (e.g., TerminalPort)
+│
+├─ Multiple adapters for same port?
+│  ├─ NO → Use port directly
+│  └─ YES → Continue...
+│
+├─ Need dynamic runtime selection?
+│  ├─ NO → Yield specific tag directly
+│  └─ YES → Use registry
+│
+├─ Need to iterate over all adapters?
+│  ├─ NO → Yield specific tags
+│  └─ YES → Use registry
+│
+├─ Complex orchestration (fallback, comparison, A/B testing)?
+│  ├─ NO → Yield specific tags
+│  └─ YES → Use registry
+│
+└─ IPC handlers need adapter access?
+   ├─ NO → Yield specific tags
+   └─ YES → Use registry
+```
 
 ---
 
