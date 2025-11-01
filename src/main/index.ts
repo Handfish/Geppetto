@@ -39,6 +39,10 @@ import {
 import { BroadcastService } from './broadcast/broadcast-service'
 import { KeyboardLayerManager } from './keyboard/keyboard-layer-manager'
 import { setupKeyboardLayerIpcHandlers } from './ipc/keyboard-layer-handlers'
+import { NodePtyTerminalAdapterLayer } from './terminal/node-pty/adapter'
+import { TerminalRegistry } from './terminal/terminal-registry'
+import { TerminalService } from './terminal/terminal-service'
+import { setupTerminalIpcHandlers } from './ipc/terminal-handlers'
 
 // Protocol scheme for OAuth callbacks
 const PROTOCOL_SCHEME = 'geppetto'
@@ -132,6 +136,19 @@ const MainLayer = Layer.mergeAll(
 
   // AI Watchers (independent domain with own adapters)
   AiWatchersLayer,                        // Process monitoring + Tmux session management
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // TERMINAL DOMAIN (Hexagonal Architecture with Registry)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // Terminal Provider Registry + Services (depends on NodePtyTerminalAdapterLayer)
+  Layer.provide(
+    Layer.mergeAll(
+      TerminalRegistry.Default,           // Registry: Manages terminal adapters
+      TerminalService.Default,            // Service: Terminal orchestration
+    ),
+    NodePtyTerminalAdapterLayer          // Adapter: node-pty implementation
+  ),
 
   // ═══════════════════════════════════════════════════════════════════════
   // SOURCE CONTROL DOMAIN (Infrastructure Adapters Only)
@@ -389,6 +406,7 @@ app.whenReady().then(async () => {
         setupAiWatcherIpcHandlers,
         setupSourceControlIpcHandlers,
         setupWorkspaceIpcHandlers,
+        setupTerminalIpcHandlers,
       ],
       { concurrency: 'unbounded' }
     ).pipe(Effect.provide(MainLayerWithKeyboard))

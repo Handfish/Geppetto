@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { AuthCard } from './components/AuthCard'
 import { RepositoryList } from './components/RepositoryList'
 import SleepLight from './components/ui/SleepLight'
@@ -9,9 +9,12 @@ import { ErrorTester } from './components/dev/ErrorTester'
 import { AiWatcherDevPanel } from './components/dev/AiWatcherDevPanel'
 import { WorkspaceSelector } from './components/WorkspaceSelector'
 import { SourceControlDevPanel } from './components/dev/SourceControlDevPanel'
+import { TerminalPanel } from './components/terminal/TerminalPanel'
+import { Terminal as TerminalIcon } from 'lucide-react'
 
 export function App() {
   const { isAuthenticated } = useProviderAuth('github')
+  const [showTerminal, setShowTerminal] = useState(false)
 
   const content = (
     <div className="min-h-screen bg-gray-900 p-6 relative">
@@ -46,6 +49,22 @@ export function App() {
           </>
         )}
       </div>
+
+      {/* Terminal Toggle Button */}
+      <button
+        onClick={() => setShowTerminal(!showTerminal)}
+        className="fixed bottom-4 right-4 p-3 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg transition-colors z-50"
+        title="Toggle Terminal"
+      >
+        <TerminalIcon className="h-5 w-5 text-white" />
+      </button>
+
+      {/* Terminal Panel */}
+      {showTerminal && (
+        <div className="fixed bottom-0 left-0 right-0 h-1/2 z-40">
+          <TerminalPanel onClose={() => setShowTerminal(false)} />
+        </div>
+      )}
     </div>
   )
 

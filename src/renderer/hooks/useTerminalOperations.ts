@@ -1,5 +1,4 @@
-import { useCallback } from 'react'
-import { Effect } from 'effect'
+import { useAtom } from '@effect-atom/atom-react'
 import {
   spawnWatcherAtom,
   killWatcherAtom,
@@ -8,38 +7,18 @@ import {
   writeToWatcherAtom,
   resizeWatcherAtom,
 } from '../atoms/terminal-atoms'
-import type { SpawnWatcherInput } from '../../shared/schemas/terminal'
-import { useAtomCallback } from '@effect-atom/atom-react'
 
 /**
  * Hook providing terminal operation methods
- * Uses atom callbacks for reactive updates
+ * Uses useAtom pattern for reactive updates
  */
 export function useTerminalOperations() {
-  const spawnWatcher = useAtomCallback(
-    useCallback((input: SpawnWatcherInput) => spawnWatcherAtom(input), [])
-  )
-
-  const killWatcher = useAtomCallback(
-    useCallback((processId: string) => killWatcherAtom(processId), [])
-  )
-
-  const killAllWatchers = useAtomCallback(
-    useCallback(() => killAllWatchersAtom(), [])
-  )
-
-  const restartWatcher = useAtomCallback(
-    useCallback((processId: string) => restartWatcherAtom(processId), [])
-  )
-
-  const writeToWatcher = useAtomCallback(
-    useCallback((processId: string, data: string) => writeToWatcherAtom(processId, data), [])
-  )
-
-  const resizeWatcher = useAtomCallback(
-    useCallback((processId: string, rows: number, cols: number) =>
-      resizeWatcherAtom(processId, rows, cols), [])
-  )
+  const [spawnResult, spawnWatcher] = useAtom(spawnWatcherAtom)
+  const [killResult, killWatcher] = useAtom(killWatcherAtom)
+  const [killAllResult, killAllWatchers] = useAtom(killAllWatchersAtom)
+  const [restartResult, restartWatcher] = useAtom(restartWatcherAtom)
+  const [writeResult, writeToWatcher] = useAtom(writeToWatcherAtom)
+  const [resizeResult, resizeWatcher] = useAtom(resizeWatcherAtom)
 
   return {
     spawnWatcher,
@@ -48,5 +27,12 @@ export function useTerminalOperations() {
     restartWatcher,
     writeToWatcher,
     resizeWatcher,
+    // Also expose results for loading states
+    spawnResult,
+    killResult,
+    killAllResult,
+    restartResult,
+    writeResult,
+    resizeResult,
   }
 }
