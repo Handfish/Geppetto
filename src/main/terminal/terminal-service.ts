@@ -65,15 +65,43 @@ export class TerminalService extends Effect.Service<TerminalService>()(
           : `watcher-${config.accountId}-${Date.now()}`
 
         // Build command based on agent type
-        const command = config.agentType === 'claude' ? 'claude' : 'cursor'
         const cwd = config.issueContext?.worktreePath || process.cwd()
+
+        // Map agent types to actual commands
+        let command: string
+        let args: string[]
+
+        switch (config.agentType) {
+          case 'claude':
+            command = 'claude'
+            args = [config.prompt]
+            break
+          case 'codex':
+            command = 'codex'
+            args = [config.prompt]
+            break
+          case 'cursor':
+            command = 'cursor'
+            args = ['agent', config.prompt]
+            break
+          default:
+            // Fallback to interactive shell for unknown agent types
+            command = process.platform === 'win32' ? 'powershell.exe' : '/bin/bash'
+            args = []
+        }
 
         // Cast to branded ProcessId type
         const processConfig = new ProcessConfig({
           id: processId as ProcessId,
           command,
-          args: ['--task', config.prompt],
-          env: {},
+          args,
+          env: {
+            // Inherit parent environment and add AI watcher context
+            TERM: 'xterm-256color',
+            AI_WATCHER_AGENT: config.agentType,
+            AI_WATCHER_PROMPT: config.prompt,
+            AI_WATCHER_ISSUE: config.issueContext ? String(config.issueContext.issueNumber) : '',
+          },
           cwd,
           shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/bash',
           rows: 30,

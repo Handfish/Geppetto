@@ -44,13 +44,13 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
   }, [activeProcessId, writeToWatcher])
 
   const handleTerminalResize = useCallback(async (rows: number, cols: number) => {
-    if (activeProcessId) {
-      try {
-        await resizeWatcher({ processId: activeProcessId, rows, cols })
-      } catch (error) {
-        // Silently ignore resize errors (process may have died)
-        console.warn(`[TerminalPanel] Resize failed for process ${activeProcessId}:`, error)
-      }
+    if (!activeProcessId) return
+
+    try {
+      await resizeWatcher({ processId: activeProcessId, rows, cols })
+    } catch (error) {
+      // Silently ignore resize errors (process may have died)
+      console.warn(`[TerminalPanel] Resize failed for process ${activeProcessId}:`, error)
     }
   }, [activeProcessId, resizeWatcher])
 

@@ -91,7 +91,7 @@ export const NodePtyTerminalAdapter = Layer.effect(
         // Lazy load node-pty and create PTY process
         const ptyModule = yield* getPty()
         const ptyProcess = yield* Effect.try({
-          try: () => ptyModule.spawn(config.shell || '/bin/bash', [...config.args], {
+          try: () => ptyModule.spawn(config.command, [...config.args], {
             name: 'xterm-256color',
             cols: config.cols || 80,
             rows: config.rows || 24,
