@@ -150,13 +150,14 @@ export function XTerminal({
   useEffect(() => {
     if (!xtermRef.current) return
 
-    Result.match(outputResult, {
-      onSuccess: (lines) => {
-        if (lines.length > 0 && xtermRef.current) {
-          xtermRef.current.write(lines.join('\n'))
+    Result.matchWithError(outputResult, {
+      onSuccess: (data) => {
+        if (data && data.length > 0 && xtermRef.current) {
+          xtermRef.current.write(data.join('\n'))
         }
       },
       onError: () => {},
+      onDefect: () => {},
       onInitial: () => {},
     })
   }, [outputResult])

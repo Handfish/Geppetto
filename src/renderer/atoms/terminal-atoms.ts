@@ -114,7 +114,7 @@ export function clearOutputBuffer(processId: string) {
  */
 class TerminalSubscriptionManager {
   private subscriptions = new Map<string, string>() // processId -> subscriptionId
-  private listeners = new Map<string, (event: any, data: any) => void>()
+  private listeners = new Map<string, (event: Electron.IpcRendererEvent, data: { type: 'output' | 'event', data: any }) => void>()
 
   subscribe(processId: string, onData: (data: OutputChunk | ProcessEvent) => void) {
     return Effect.gen(function* (this: TerminalSubscriptionManager) {
@@ -130,7 +130,7 @@ class TerminalSubscriptionManager {
       this.subscriptions.set(processId, subscriptionId)
 
       // Set up IPC listener
-      const listener = (_event: any, message: { type: 'output' | 'event', data: any }) => {
+      const listener = (_event: Electron.IpcRendererEvent, message: { type: 'output' | 'event', data: any }) => {
         if (message.type === 'output') {
           const chunk = message.data as OutputChunk
 
@@ -160,8 +160,11 @@ class TerminalSubscriptionManager {
 
     if (subscriptionId) {
       // Call IPC to unsubscribe
-      ElectronIpcClient.pipe(
-        Effect.flatMap((client) => client.invoke('terminal:unsubscribe-from-watcher', { subscriptionId })),
+      Effect.gen(function* () {
+        const client = yield* ElectronIpcClient
+        yield* client.invoke('terminal:unsubscribe-from-watcher', { subscriptionId })
+      }).pipe(
+        Effect.provide(ElectronIpcClient.Default),
         Effect.runPromise
       ).catch(console.error)
 
@@ -169,7 +172,7 @@ class TerminalSubscriptionManager {
     }
 
     if (listener) {
-      window.electron.ipcRenderer.removeListener(`terminal:stream:${processId}`, listener)
+      window.electron.ipcRenderer.removeListener(`terminal:stream:${processId}`, listener as (...args: unknown[]) => void)
       this.listeners.delete(processId)
     }
   }
@@ -272,10 +275,10 @@ export const restartWatcherAtom = terminalRuntime.fn(
  * No reactivity keys - this is a terminal input action
  */
 export const writeToWatcherAtom = terminalRuntime.fn(
-  (processId: string, data: string) =>
+  (params: { processId: string; data: string }) =>
     Effect.gen(function* () {
       const client = yield* ElectronIpcClient
-      yield* client.invoke('terminal:write-to-watcher', { processId, data })
+      yield* client.invoke('terminal:write-to-watcher', params)
     }),
   {
     reactivityKeys: [], // No data changes, just sends input
@@ -287,10 +290,10 @@ export const writeToWatcherAtom = terminalRuntime.fn(
  * No reactivity keys - this is a terminal resize action
  */
 export const resizeWatcherAtom = terminalRuntime.fn(
-  (processId: string, rows: number, cols: number) =>
+  (params: { processId: string; rows: number; cols: number }) =>
     Effect.gen(function* () {
       const client = yield* ElectronIpcClient
-      yield* client.invoke('terminal:resize-watcher', { processId, rows, cols })
+      yield* client.invoke('terminal:resize-watcher', params)
     }),
   {
     reactivityKeys: [], // No data changes, just resizes terminal

@@ -1,6 +1,6 @@
-import { Effect, Stream, Ref, HashMap } from 'effect'
+import { Effect, Stream, Ref, HashMap, Schema as S } from 'effect'
 import { TerminalRegistry } from './terminal-registry'
-import { ProcessConfig, ProcessState, OutputChunk, ProcessEvent, TerminalError } from './terminal-port'
+import { ProcessConfig, ProcessState, OutputChunk, ProcessEvent, TerminalError, ProcessId } from './terminal-port'
 import { AccountContextService } from '../account/account-context-service'
 import { TierService } from '../tier/tier-service'
 
@@ -10,10 +10,35 @@ interface WatcherProcessConfig extends ProcessConfig {
   prompt: string
 }
 
+interface TerminalServiceMethods {
+  spawnAiWatcher(config: {
+    accountId: string
+    agentType: string
+    prompt: string
+    issueContext?: {
+      owner: string
+      repo: string
+      issueNumber: number
+      issueTitle: string
+      worktreePath: string
+      branchName: string
+    }
+  }): Effect.Effect<{ processId: string; state: ProcessState }, TerminalError, never>
+  killWatcher(processId: string): Effect.Effect<void, TerminalError, never>
+  killAllWatchers(): Effect.Effect<void, never, never>
+  restartWatcher(processId: string): Effect.Effect<ProcessState, TerminalError, never>
+  writeToWatcher(processId: string, data: string): Effect.Effect<void, TerminalError, never>
+  resizeWatcher(processId: string, rows: number, cols: number): Effect.Effect<void, TerminalError, never>
+  getWatcherState(processId: string): Effect.Effect<ProcessState, TerminalError, never>
+  listActiveWatchers(): Effect.Effect<ReadonlyArray<{ processId: string; accountId: string; agentType: string; prompt: string; state: ProcessState; issueContext?: any }>, never, never>
+  subscribeToWatcher(processId: string): Stream.Stream<OutputChunk, TerminalError, never>
+  subscribeToWatcherEvents(processId: string): Stream.Stream<ProcessEvent, TerminalError, never>
+}
+
 export class TerminalService extends Effect.Service<TerminalService>()(
   'TerminalService',
   {
-    effect: Effect.gen(function* () {
+    effect: Effect.gen(function* (): Generator<any, TerminalServiceMethods, any> {
       const registry = yield* TerminalRegistry
       const accountService = yield* AccountContextService
       const tierService = yield* TierService
@@ -21,23 +46,12 @@ export class TerminalService extends Effect.Service<TerminalService>()(
       // Track active watchers
       const activeWatchers = yield* Ref.make(HashMap.empty<string, WatcherProcessConfig>())
 
-      const spawnAiWatcher = (config: {
-        accountId: string
-        agentType: string
-        prompt: string
-        issueContext?: {
-          owner: string
-          repo: string
-          issueNumber: number
-          issueTitle: string
-          worktreePath: string
-          branchName: string
-        }
-      }) => Effect.gen(function* () {
+      const spawnAiWatcher: TerminalServiceMethods['spawnAiWatcher'] = (config) => Effect.gen(function* () {
         // Check tier limits
         yield* tierService.checkFeatureAvailable('ai-watchers')
 
-        const account = yield* accountService.getAccountContext(config.accountId)
+        // Get account context (not strictly needed for terminal, but validates account exists)
+        const context = yield* accountService.getContext()
         const adapter = yield* registry.getDefaultAdapter()
 
         // Generate process ID
@@ -49,18 +63,21 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         const command = config.agentType === 'claude' ? 'claude' : 'cursor'
         const cwd = config.issueContext?.worktreePath || process.cwd()
 
-        const processConfig: WatcherProcessConfig = {
-          id: processId as ProcessConfig['id'],
+        // Cast to branded ProcessId type
+        const processConfig = new ProcessConfig({
+          id: processId as ProcessId,
           command,
           args: ['--task', config.prompt],
-          env: {
-            ANTHROPIC_API_KEY: account.credentials?.apiKey || '',
-          },
+          env: {},
           cwd,
           shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/bash',
           rows: 30,
           cols: 120,
           issueContext: config.issueContext,
+        })
+
+        const watcherConfig: WatcherProcessConfig = {
+          ...processConfig,
           accountId: config.accountId,
           agentType: config.agentType,
           prompt: config.prompt,
@@ -70,7 +87,7 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         const state = yield* adapter.spawn(processConfig)
 
         // Track the watcher
-        yield* Ref.update(activeWatchers, HashMap.set(processId, processConfig))
+        yield* Ref.update(activeWatchers, HashMap.set(processId, watcherConfig))
 
         return {
           processId,
@@ -78,13 +95,13 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         }
       })
 
-      const killWatcher = (processId: string) => Effect.gen(function* () {
+      const killWatcher: TerminalServiceMethods['killWatcher'] = (processId) => Effect.gen(function* () {
         const adapter = yield* registry.getDefaultAdapter()
         yield* adapter.kill(processId)
         yield* Ref.update(activeWatchers, HashMap.remove(processId))
       })
 
-      const killAllWatchers = () => Effect.gen(function* () {
+      const killAllWatchers: TerminalServiceMethods['killAllWatchers'] = () => Effect.gen(function* () {
         const watchers = yield* Ref.get(activeWatchers)
         const adapter = yield* registry.getDefaultAdapter()
 
@@ -100,7 +117,7 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         yield* Ref.set(activeWatchers, HashMap.empty())
       })
 
-      const restartWatcher = (processId: string) => Effect.gen(function* () {
+      const restartWatcher: TerminalServiceMethods['restartWatcher'] = (processId) => Effect.gen(function* () {
         const watchers = yield* Ref.get(activeWatchers)
         const configOption = HashMap.get(watchers, processId)
 
@@ -112,22 +129,22 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         return yield* adapter.restart(processId)
       })
 
-      const writeToWatcher = (processId: string, data: string) => Effect.gen(function* () {
+      const writeToWatcher: TerminalServiceMethods['writeToWatcher'] = (processId, data) => Effect.gen(function* () {
         const adapter = yield* registry.getDefaultAdapter()
         yield* adapter.write(processId, data)
       })
 
-      const resizeWatcher = (processId: string, rows: number, cols: number) => Effect.gen(function* () {
+      const resizeWatcher: TerminalServiceMethods['resizeWatcher'] = (processId, rows, cols) => Effect.gen(function* () {
         const adapter = yield* registry.getDefaultAdapter()
         yield* adapter.resize(processId, rows, cols)
       })
 
-      const getWatcherState = (processId: string) => Effect.gen(function* () {
+      const getWatcherState: TerminalServiceMethods['getWatcherState'] = (processId) => Effect.gen(function* () {
         const adapter = yield* registry.getDefaultAdapter()
         return yield* adapter.getState(processId)
       })
 
-      const listActiveWatchers = () => Effect.gen(function* () {
+      const listActiveWatchers: TerminalServiceMethods['listActiveWatchers'] = () => Effect.gen(function* () {
         const watchers = yield* Ref.get(activeWatchers)
         const adapter = yield* registry.getDefaultAdapter()
 
@@ -136,18 +153,24 @@ export class TerminalService extends Effect.Service<TerminalService>()(
             adapter.getState(processId).pipe(
               Effect.map((state) => ({
                 processId,
-                config,
+                accountId: config.accountId,
+                agentType: config.agentType,
+                prompt: config.prompt,
                 state,
+                issueContext: config.issueContext,
               })),
               Effect.catchAll(() =>
                 Effect.succeed({
                   processId,
-                  config,
+                  accountId: config.accountId,
+                  agentType: config.agentType,
+                  prompt: config.prompt,
                   state: new ProcessState({
                     status: 'stopped' as const,
                     lastActivity: new Date(),
                     idleThreshold: 60000,
                   }),
+                  issueContext: config.issueContext,
                 })
               )
             )
@@ -158,15 +181,17 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         return states
       })
 
-      const subscribeToWatcher = (processId: string): Stream.Stream<OutputChunk, TerminalError> => {
-        return Stream.fromEffect(registry.getDefaultAdapter()).pipe(
-          Stream.flatMap((adapter) => adapter.subscribe(processId))
+      const subscribeToWatcher: TerminalServiceMethods['subscribeToWatcher'] = (processId) => {
+        return Stream.flatMap(
+          Stream.fromEffect(registry.getDefaultAdapter()),
+          (adapter) => adapter.subscribe(processId)
         )
       }
 
-      const subscribeToWatcherEvents = (processId: string): Stream.Stream<ProcessEvent, TerminalError> => {
-        return Stream.fromEffect(registry.getDefaultAdapter()).pipe(
-          Stream.flatMap((adapter) => adapter.subscribeToEvents(processId))
+      const subscribeToWatcherEvents: TerminalServiceMethods['subscribeToWatcherEvents'] = (processId) => {
+        return Stream.flatMap(
+          Stream.fromEffect(registry.getDefaultAdapter()),
+          (adapter) => adapter.subscribeToEvents(processId)
         )
       }
 
@@ -181,8 +206,8 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         listActiveWatchers,
         subscribeToWatcher,
         subscribeToWatcherEvents,
-      }
+      } satisfies TerminalServiceMethods
     }),
-    dependencies: [TerminalRegistry, AccountContextService, TierService],
+    dependencies: [TerminalRegistry.Default, AccountContextService.Default, TierService.Default],
   }
 ) {}

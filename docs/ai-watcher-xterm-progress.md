@@ -243,17 +243,58 @@
 
 ## Issues Encountered
 
-### Issue 1: [Title]
-**Phase**: -
-**Problem**: -
-**Solution**: -
-**Impact**: -
+### Issue 1: node-pty Native Module Not Found
+**Phase**: Phase 4 (Integration & Testing)
+**Problem**: Runtime error when starting dev server: `Error: Cannot find module '../build/Release/pty.node'`. node-pty is a native C++ module that needs to be compiled for Electron's specific Node.js version, but was only compiled for regular Node.js.
+**Solution**:
+- Ran `npx electron-rebuild -f -w node-pty` to rebuild for development
+- Ran `pnpm install:deps` to rebuild for production (node_modules/.dev)
+- Both commands successfully built the native binary
+**Impact**: Minor - Quick fix (2 minutes). Documented rebuild requirement for future reference. Development server now starts without errors.
 
-### Issue 2: [Title]
-**Phase**: -
-**Problem**: -
-**Solution**: -
-**Impact**: -
+### Issue 2: useAtomCallback API Does Not Exist
+**Phase**: Phase 4 (Integration & Testing)
+**Problem**: Compilation error in `useTerminalOperations.ts` - `useAtomCallback` is not exported by @effect-atom/atom-react
+**Solution**: Changed to `useAtom` pattern by referencing existing hooks (useAiWatcherLauncher.ts). This is the correct pattern used throughout the codebase.
+**Impact**: Minor - Quick fix (<5 minutes). Lesson learned to check existing code patterns before using new APIs.
+
+### Issue 3: TierLimitError Not Imported in IPC Contracts
+**Phase**: Phase 4 (Integration & Testing)
+**Problem**: Runtime error when starting app: `ReferenceError: TierLimitError is not defined`. Terminal IPC contracts referenced `TierLimitError` in error union but it wasn't imported in `src/shared/ipc-contracts.ts`.
+**Solution**: Added `TierLimitError` to the imports from `./schemas/errors` in ipc-contracts.ts, then recompiled.
+**Impact**: Minor - Quick fix (2 minutes). Lesson learned to verify all schema imports when adding new IPC contracts.
+
+### Issue 4: IPC Handlers Not Ready - Race Condition
+**Phase**: Phase 4 (Integration & Testing)
+**Problem**: Network error in renderer: `Error: No handler registered for 'ai-watcher:list'`. IPC handlers were being registered asynchronously in background (`Effect.runPromise` without await) while window was already created and showing. React components mounted and tried to fetch data before handlers were ready.
+**Solution**: Changed handler registration to blocking by adding `await` before `Effect.runPromise` in src/main/index.ts (line 400). Now all IPC handlers are guaranteed to be registered before window renders and React components mount.
+**Impact**: Moderate - Fix took 5 minutes. Critical for ensuring reliable app startup. Changed console log from "registering in background..." to "✓ All IPC handlers registered successfully".
+
+### Issue 5: Native Module Loaded at Import Time
+**Phase**: Phase 4 (Integration & Testing)
+**Problem**: Runtime error: `RuntimeException: Not a valid effect: undefined`. The node-pty adapter had `import * as pty from 'node-pty'` at the top level (line 2), which loaded the native module immediately when the file was imported during service construction. This caused the module load to fail with "MODULE_NOT_FOUND" error, propagating as undefined to Effect.all().
+**Solution**: Changed to lazy import pattern in src/main/terminal/node-pty/adapter.ts:
+- Line 2: Changed `import * as pty from 'node-pty'` to `import type * as pty from 'node-pty'` (type-only)
+- Line 6: Added `const getPty = () => Effect.sync(() => require('node-pty') as typeof pty)`
+- Line 92: Updated spawn to lazy load: `const ptyModule = yield* getPty()` before using
+
+**Additional TypeScript Fixes** (src/main/terminal/terminal-service.ts):
+- Line 41: Added Generator type annotation to Effect.gen for proper type inference
+- Lines 13-36: Added TerminalServiceMethods interface to explicitly declare service method signatures
+- Line 58: Removed reference to undefined `account` variable (changed to empty env object)
+- Lines 161-171: Fixed Stream.flatMap type inference by reordering parameters
+- Line 210: Added `satisfies TerminalServiceMethods` to ensure return type matches interface
+
+**Additional TypeScript Fixes** (cont'd):
+- Lines 49-191: Changed all service methods to use interface constraint pattern (e.g., `const spawnAiWatcher: TerminalServiceMethods['spawnAiWatcher'] = ...`) instead of explicit type annotations. This ensures proper type inference without using `any` types.
+- Lines 161-181: Fixed listActiveWatchers mapping to extract config fields (accountId, agentType, prompt, issueContext) instead of returning full config object
+
+**TypeScript Fixes** (src/main/ipc/terminal-handlers.ts):
+- Lines 20-21: Changed Fiber error types from `never` to `TerminalError` in Subscription interface
+- Line 12: Added TerminalError import
+- Lines 77-80: Simplified listActiveWatchers handler to directly call service method (removed redundant mapping)
+
+**Impact**: Critical - Fix took 120 minutes to fully diagnose and resolve all related type errors without using `any`. This was blocking app startup entirely. Lesson learned: Native modules must be lazy-loaded in Effect services to avoid loading during service construction. Use dynamic imports for native dependencies. Use interface constraint pattern (`const method: Interface['method'] = ...`) for Effect.Service methods to get proper type inference without explicit type annotations.
 
 ## Migration Metrics
 
@@ -334,6 +375,19 @@ If migration fails or causes issues:
 }
 ```
 
+**Important - Native Module Rebuild**:
+`node-pty` is a native module that requires rebuilding for Electron:
+
+```bash
+# For development (regular node_modules)
+npx electron-rebuild -f -w node-pty
+
+# For production (node_modules/.dev)
+pnpm install:deps
+```
+
+**Note**: This is automatically handled by the `postinstall` script for production builds, but must be run manually after installing node-pty in development.
+
 ## Post-Migration Tasks
 
 - [ ] Remove tmux dependencies
@@ -346,8 +400,8 @@ If migration fails or causes issues:
 ## Completion Summary
 
 **Date Completed**: 2025-11-01
-**Total Time**: ~4.25 hours (2.8x faster than estimated 10-12 hours)
-**Developer Notes**: All 4 phases completed successfully with zero TypeScript errors. Bundle size increased by 464kB (reasonable for xterm.js + addons). Runtime testing deferred - compilation and type safety verified.
+**Total Time**: ~6.5 hours (1.8x faster than estimated 10-12 hours)
+**Developer Notes**: All 4 phases completed successfully with extensive TypeScript fixes. Fixed complex Effect type inference issues, Result API usage, and terminal port/adapter patterns. Compilation now successful with zero errors.
 
 ### What Went Well
 - **Hexagonal architecture pattern**: Clean separation with ports/adapters made implementation straightforward
@@ -362,15 +416,57 @@ If migration fails or causes issues:
 ### What Could Be Improved
 - **Bundle size**: 464kB increase exceeds target (<25kB), but unavoidable with xterm.js. Consider lazy loading terminal panel
 - **Initial API mistake**: Used non-existent `useAtomCallback` before checking existing code patterns (fixed quickly by referencing useAiWatcherLauncher.ts)
+- **Missing import**: TierLimitError used in terminal contracts but not imported in ipc-contracts.ts (fixed by adding to imports)
+- **Native module rebuild**: node-pty required manual rebuild for Electron after installation (documented for future reference)
+- **Race condition**: IPC handlers registered asynchronously allowed window to render before handlers ready (fixed by making registration blocking)
+- **Native module import**: node-pty imported at top level caused service construction failure (fixed with lazy import pattern)
+- **Dependencies pattern**: Initially used wrong pattern for service dependencies (fixed by adding .Default to layer references)
 - **Runtime testing**: Compilation verified but no manual testing of actual terminal functionality yet
 - **Performance profiling**: No metrics collected yet for startup time, memory usage, CPU usage
 - **Documentation**: Could add inline comments for complex stream subscription logic
 
+### Additional Issues Fixed (Post-Implementation TypeScript Fixes)
+
+**Issue 6: Complex TypeScript Type Inference Failures (~2.25 hours)**
+- **Problem**: Effect.gen functions lost type inference when explicit return types were added
+- **Initial attempt**: Added explicit type annotations and Generator types with `any` - user rejected "No anys"
+- **Solution**: Used interface constraint pattern (`const method: Interface['method'] = ...`) instead of explicit type annotations
+- **Impact**: All 10 service methods updated with constraint pattern for proper type inference
+
+**Issue 7: Terminal Port/Adapter Pattern Misalignment**
+- **Problem**: TerminalPort used as both interface and Context tag, causing Layer.effect issues
+- **Solution**: Changed adapter from Effect.Service pattern to Layer.effect with TerminalPort tag
+- **Impact**: Simplified registry, removed unnecessary adapter abstraction
+
+**Issue 8: Branded Type Handling**
+- **Problem**: ProcessId brand type conflicts between Schema and runtime usage
+- **Solution**: Cast strings to ProcessId at HashMap operations, keep interface signatures with plain strings
+- **Impact**: All adapter methods updated to cast processId parameters
+
+**Issue 9: Result API Misuse**
+- **Problem**: Result.match with onError/onSuccess/onInitial doesn't exist
+- **Solution**: Use Result.matchWithError with onError/onDefect/onSuccess/onInitial or Result.builder with onFailure
+- **Impact**: Fixed all terminal components' Result handling
+
+**Issue 10: Atom Function Signatures**
+- **Problem**: terminalRuntime.fn doesn't support multiple parameters directly
+- **Solution**: Wrap multiple parameters in single object parameter
+- **Impact**: writeToWatcherAtom and resizeWatcherAtom updated to accept parameter objects
+
 ### Lessons Learned
 - **Check existing hooks first**: Before implementing new patterns, always reference similar existing code (e.g., useAiWatcherLauncher.ts for atom hooks)
+- **Verify all imports**: When adding new IPC contracts with error unions, verify all error types are imported in ipc-contracts.ts
+- **Native modules in Electron**: Native Node.js modules (like node-pty) must be rebuilt for Electron using electron-rebuild
+- **Lazy-load native modules**: In Effect services, use dynamic imports (`require()` wrapped in `Effect.sync()`) for native modules to prevent loading during service construction. Top-level imports of native modules cause immediate loading and failures
+- **IPC handler timing**: Always await IPC handler registration before window creation to prevent race conditions where React components try to call handlers that aren't ready yet
+- **Effect Service dependencies**: Use `.Default` for service/layer dependencies, use raw tags for context tags (like TerminalPort)
 - **Bundle size trade-offs**: Rich UI libraries (xterm.js) come with size costs - document and justify increases
 - **Stream cleanup**: Fiber-based cleanup pattern with Map tracking is robust for IPC subscriptions
 - **Layer composition**: Following established Layer.provide patterns (AI/VCS domains) ensures consistency
 - **Client-side buffering**: Storing last 1000 lines client-side prevents backend round-trips for terminal output
 - **Idle detection**: Timer-based idle detection with activity reset is simple and effective
 - **Multi-window support**: BrowserWindow.getAllWindows() handles edge cases for multi-window apps
+- **TypeScript Interface Constraints**: For Effect.Service methods, use interface constraint pattern (`const method: Interface['method'] = ...`) instead of explicit type annotations to preserve Effect type inference
+- **Result API patterns**: Use Result.matchWithError for side effects in useEffect, Result.builder for rendering UI
+- **Atom function parameters**: terminalRuntime.fn requires single parameter - wrap multiple args in object
+- **Branded types in Effect Schema**: Cast at boundaries, keep interfaces clean with plain types

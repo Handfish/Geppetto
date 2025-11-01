@@ -39,7 +39,7 @@ import {
 import { BroadcastService } from './broadcast/broadcast-service'
 import { KeyboardLayerManager } from './keyboard/keyboard-layer-manager'
 import { setupKeyboardLayerIpcHandlers } from './ipc/keyboard-layer-handlers'
-import { NodePtyTerminalAdapterLayer } from './terminal/node-pty/adapter'
+import { NodePtyTerminalAdapter } from './terminal/node-pty/adapter'
 import { TerminalRegistry } from './terminal/terminal-registry'
 import { TerminalService } from './terminal/terminal-service'
 import { setupTerminalIpcHandlers } from './ipc/terminal-handlers'
@@ -141,13 +141,13 @@ const MainLayer = Layer.mergeAll(
   // TERMINAL DOMAIN (Hexagonal Architecture with Registry)
   // ═══════════════════════════════════════════════════════════════════════
 
-  // Terminal Provider Registry + Services (depends on NodePtyTerminalAdapterLayer)
+  // Terminal Provider Registry + Services (depends on NodePtyTerminalAdapter)
   Layer.provide(
     Layer.mergeAll(
       TerminalRegistry.Default,           // Registry: Manages terminal adapters
       TerminalService.Default,            // Service: Terminal orchestration
     ),
-    NodePtyTerminalAdapterLayer          // Adapter: node-pty implementation
+    NodePtyTerminalAdapter               // Adapter: node-pty implementation
   ),
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -395,25 +395,28 @@ app.whenReady().then(async () => {
   // Construct full MainLayer with keyboard in background (lazy)
   const MainLayerWithKeyboard = Layer.mergeAll(MainLayer, KeyboardLayerManagerLayer)
 
-  // Register remaining IPC handlers in parallel (non-blocking for keyboard)
-  Effect.runPromise(
-    Effect.all(
-      [
-        setupAccountIpcHandlers,
-        setupProviderIpcHandlers,
-        setupGitHubIssueIpcHandlers,
-        setupAiProviderIpcHandlers,
-        setupAiWatcherIpcHandlers,
-        setupSourceControlIpcHandlers,
-        setupWorkspaceIpcHandlers,
-        setupTerminalIpcHandlers,
-      ],
-      { concurrency: 'unbounded' }
-    ).pipe(Effect.provide(MainLayerWithKeyboard))
-  ).catch((error) => {
+  // Register remaining IPC handlers in parallel (BLOCKING to ensure they're ready before window shows)
+  try {
+    await Effect.runPromise(
+      Effect.all(
+        [
+          setupAccountIpcHandlers,
+          setupProviderIpcHandlers,
+          setupGitHubIssueIpcHandlers,
+          setupAiProviderIpcHandlers,
+          setupAiWatcherIpcHandlers,
+          setupSourceControlIpcHandlers,
+          setupWorkspaceIpcHandlers,
+          setupTerminalIpcHandlers,
+        ],
+        { concurrency: 'unbounded' }
+      ).pipe(Effect.provide(MainLayerWithKeyboard))
+    )
+    console.log('[Main] ✓ All IPC handlers registered successfully')
+  } catch (error) {
     console.error('[Main] Failed to setup IPC handlers:', error)
-  })
-  console.log('[Main] ⏳ Other IPC handlers registering in background...')
+    throw error
+  }
 
   // Create console window in development mode
   if (process.env.NODE_ENV === 'development') {

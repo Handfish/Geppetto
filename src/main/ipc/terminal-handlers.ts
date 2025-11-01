@@ -9,6 +9,7 @@ import { Effect, Stream, Fiber } from 'effect'
 import { BrowserWindow } from 'electron'
 import { TerminalIpcContracts } from '../../shared/ipc-contracts'
 import { TerminalService } from '../terminal/terminal-service'
+import { TerminalError } from '../terminal/terminal-port'
 import { registerIpcHandler } from './ipc-handler-setup'
 
 /**
@@ -17,8 +18,8 @@ import { registerIpcHandler } from './ipc-handler-setup'
 interface Subscription {
   id: string
   processId: string
-  outputFiber: Fiber.RuntimeFiber<void, never>
-  eventFiber: Fiber.RuntimeFiber<void, never>
+  outputFiber: Fiber.RuntimeFiber<void, TerminalError>
+  eventFiber: Fiber.RuntimeFiber<void, TerminalError>
 }
 
 // Track active subscriptions
@@ -75,18 +76,7 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
   // List active watchers
   registerIpcHandler(
     TerminalIpcContracts['terminal:list-active-watchers'],
-    () => terminalService.listActiveWatchers().pipe(
-      Effect.map((watchers) =>
-        watchers.map((w) => ({
-          processId: w.processId,
-          accountId: w.config.accountId,
-          agentType: w.config.agentType,
-          prompt: w.config.prompt,
-          state: w.state,
-          issueContext: w.config.issueContext,
-        }))
-      )
-    )
+    () => terminalService.listActiveWatchers()
   )
 
   // Subscribe to watcher output/events

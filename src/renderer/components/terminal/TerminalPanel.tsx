@@ -23,26 +23,27 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
 
   // Auto-select first watcher
   useEffect(() => {
-    Result.match(watchersResult, {
-      onSuccess: (watchers) => {
-        if (watchers.length > 0 && !activeProcessId) {
-          setActiveProcessId(watchers[0].processId)
+    Result.matchWithError(watchersResult, {
+      onSuccess: (data) => {
+        if (data && data.length > 0 && !activeProcessId) {
+          setActiveProcessId(data[0].processId)
         }
       },
       onError: () => {},
+      onDefect: () => {},
       onInitial: () => {},
     })
   }, [watchersResult, activeProcessId])
 
   const handleTerminalData = useCallback(async (data: string) => {
     if (activeProcessId) {
-      await writeToWatcher(activeProcessId, data)
+      await writeToWatcher({ processId: activeProcessId, data })
     }
   }, [activeProcessId, writeToWatcher])
 
   const handleTerminalResize = useCallback(async (rows: number, cols: number) => {
     if (activeProcessId) {
-      await resizeWatcher(activeProcessId, rows, cols)
+      await resizeWatcher({ processId: activeProcessId, rows, cols })
     }
   }, [activeProcessId, resizeWatcher])
 
@@ -72,9 +73,10 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-gray-200">AI Watchers Terminal</h3>
           <span className="text-xs text-gray-500">
-            {Result.match(watchersResult, {
-              onSuccess: (watchers) => `${watchers.length} active`,
+            {Result.matchWithError(watchersResult, {
+              onSuccess: (data) => `${data.length} active`,
               onError: () => 'Error',
+              onDefect: () => 'Error',
               onInitial: () => 'Loading...',
             })}
           </span>
@@ -126,7 +128,7 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
           .onInitial(() => (
             <div className="text-xs text-gray-500">Loading watchers...</div>
           ))
-          .onError((error) => (
+          .onFailure((error) => (
             <div className="text-xs text-red-500">Error loading watchers</div>
           ))
           .render()}
@@ -209,6 +211,6 @@ function WatcherLEDWithState({
         onClick={onClick}
       />
     ))
-    .onError(() => null)
+    .onFailure(() => null)
     .render()
 }

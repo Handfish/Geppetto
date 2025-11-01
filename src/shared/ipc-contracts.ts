@@ -21,6 +21,7 @@ import {
   ProviderUnavailableError,
   ProviderOperationError,
   GitOperationError,
+  TierLimitError,
 } from './schemas/errors'
 import {
   AiAuthenticationError,

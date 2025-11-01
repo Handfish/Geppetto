@@ -1,6 +1,9 @@
 import { Effect, Layer, Stream, HashMap, Ref, PubSub, Duration, pipe } from 'effect'
-import * as pty from 'node-pty'
-import { TerminalPort, ProcessConfig, ProcessState, OutputChunk, ProcessEvent, TerminalError } from '../terminal-port'
+import type * as pty from 'node-pty'
+import { TerminalPort, ProcessConfig, ProcessState, OutputChunk, ProcessEvent, TerminalError, ProcessId } from '../terminal-port'
+
+// Lazy import of node-pty to avoid loading native module at startup
+const getPty = () => Effect.sync(() => require('node-pty') as typeof pty)
 
 interface ProcessInstance {
   config: ProcessConfig
@@ -11,15 +14,15 @@ interface ProcessInstance {
   idleTimer: Ref.Ref<number | null>
 }
 
-export class NodePtyTerminalAdapter extends Effect.Service<NodePtyTerminalAdapter>()(
-  'NodePtyTerminalAdapter',
-  {
-    effect: Effect.gen(function* () {
-      // Process registry
-      const processes = yield* Ref.make(HashMap.empty<string, ProcessInstance>())
+// Export as Layer
+export const NodePtyTerminalAdapter = Layer.effect(
+  TerminalPort,
+  Effect.gen(function* () {
+    // Process registry
+    const processes = yield* Ref.make(HashMap.empty<ProcessId, ProcessInstance>())
 
-      // Helper to update idle status
-      const updateIdleStatus = (instance: ProcessInstance) => Effect.gen(function* () {
+    // Helper to update idle status
+    const updateIdleStatus = (instance: ProcessInstance) => Effect.gen(function* () {
         const currentState = yield* Ref.get(instance.state)
         const now = Date.now()
         const timeSinceActivity = now - currentState.lastActivity.getTime()
@@ -85,9 +88,10 @@ export class NodePtyTerminalAdapter extends Effect.Service<NodePtyTerminalAdapte
           }
         }
 
-        // Create PTY process
+        // Lazy load node-pty and create PTY process
+        const ptyModule = yield* getPty()
         const ptyProcess = yield* Effect.try({
-          try: () => pty.spawn(config.shell || '/bin/bash', config.args, {
+          try: () => ptyModule.spawn(config.shell || '/bin/bash', [...config.args], {
             name: 'xterm-256color',
             cols: config.cols || 80,
             rows: config.rows || 24,
@@ -191,7 +195,7 @@ export class NodePtyTerminalAdapter extends Effect.Service<NodePtyTerminalAdapte
       const kill = (processId: string) => Effect.gen(function* () {
         const instance = yield* pipe(
           Ref.get(processes),
-          Effect.map(HashMap.get(processId)),
+          Effect.map(HashMap.get(processId as ProcessId)),
           Effect.flatMap((option) =>
             option._tag === 'Some'
               ? Effect.succeed(option.value)
@@ -216,13 +220,13 @@ export class NodePtyTerminalAdapter extends Effect.Service<NodePtyTerminalAdapte
         }))
 
         // Remove from registry
-        yield* Ref.update(processes, HashMap.remove(processId))
+        yield* Ref.update(processes, HashMap.remove(processId as ProcessId))
       })
 
       const restart = (processId: string) => Effect.gen(function* () {
         const instance = yield* pipe(
           Ref.get(processes),
-          Effect.map(HashMap.get(processId)),
+          Effect.map(HashMap.get(processId as ProcessId)),
           Effect.flatMap((option) =>
             option._tag === 'Some'
               ? Effect.succeed(option.value)
@@ -238,7 +242,7 @@ export class NodePtyTerminalAdapter extends Effect.Service<NodePtyTerminalAdapte
       const write = (processId: string, data: string) => Effect.gen(function* () {
         const instance = yield* pipe(
           Ref.get(processes),
-          Effect.map(HashMap.get(processId)),
+          Effect.map(HashMap.get(processId as ProcessId)),
           Effect.flatMap((option) =>
             option._tag === 'Some'
               ? Effect.succeed(option.value)
@@ -258,7 +262,7 @@ export class NodePtyTerminalAdapter extends Effect.Service<NodePtyTerminalAdapte
       const resize = (processId: string, rows: number, cols: number) => Effect.gen(function* () {
         const instance = yield* pipe(
           Ref.get(processes),
-          Effect.map(HashMap.get(processId)),
+          Effect.map(HashMap.get(processId as ProcessId)),
           Effect.flatMap((option) =>
             option._tag === 'Some'
               ? Effect.succeed(option.value)
@@ -275,7 +279,7 @@ export class NodePtyTerminalAdapter extends Effect.Service<NodePtyTerminalAdapte
       const getState = (processId: string) => Effect.gen(function* () {
         const instance = yield* pipe(
           Ref.get(processes),
-          Effect.map(HashMap.get(processId)),
+          Effect.map(HashMap.get(processId as ProcessId)),
           Effect.flatMap((option) =>
             option._tag === 'Some'
               ? Effect.succeed(option.value)
@@ -303,7 +307,7 @@ export class NodePtyTerminalAdapter extends Effect.Service<NodePtyTerminalAdapte
           Stream.fromEffect(
             pipe(
               Ref.get(processes),
-              Effect.map(HashMap.get(processId)),
+              Effect.map(HashMap.get(processId as ProcessId)),
               Effect.flatMap((option) =>
                 option._tag === 'Some'
                   ? Effect.succeed(option.value)
@@ -320,7 +324,7 @@ export class NodePtyTerminalAdapter extends Effect.Service<NodePtyTerminalAdapte
           Stream.fromEffect(
             pipe(
               Ref.get(processes),
-              Effect.map(HashMap.get(processId)),
+              Effect.map(HashMap.get(processId as ProcessId)),
               Effect.flatMap((option) =>
                 option._tag === 'Some'
                   ? Effect.succeed(option.value)
@@ -332,24 +336,18 @@ export class NodePtyTerminalAdapter extends Effect.Service<NodePtyTerminalAdapte
         )
       }
 
-      return {
-        spawn,
-        kill,
-        restart,
-        write,
-        resize,
-        getState,
-        listProcesses,
-        subscribe,
-        subscribeToEvents,
-      } satisfies TerminalPort
-    }),
-    dependencies: [],
-  }
-) {}
+    const adapter: TerminalPort = {
+      spawn,
+      kill,
+      restart,
+      write,
+      resize,
+      getState,
+      listProcesses,
+      subscribe,
+      subscribeToEvents,
+    }
 
-// Export as Layer
-export const NodePtyTerminalAdapterLayer = Layer.succeed(
-  TerminalPort,
-  NodePtyTerminalAdapter
+    return adapter
+  })
 )
