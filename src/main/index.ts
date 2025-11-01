@@ -277,6 +277,29 @@ app.whenReady().then(async () => {
   )
   console.log('[Main] ✓ Keyboard layer handlers registered (fast path)')
 
+  // Helper: Register arrow key shortcuts for carousel navigation
+  const registerArrowKeys = () => {
+    // Unregister first to avoid conflicts
+    globalShortcut.unregister('Left')
+    globalShortcut.unregister('Right')
+
+    globalShortcut.register('Left', () => {
+      console.log('[Main] Left arrow → carousel:prev')
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('carousel:prev')
+      }
+    })
+
+    globalShortcut.register('Right', () => {
+      console.log('[Main] Right arrow → carousel:next')
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('carousel:next')
+      }
+    })
+
+    console.log('[Main] ✓ Arrow keys registered for carousel navigation')
+  }
+
   // Track focus state
   let isMainWindowFocused = true
 
@@ -293,6 +316,7 @@ app.whenReady().then(async () => {
         // Unregister arrow keys when window unfocuses (but keep Ctrl+Shift+G active!)
         globalShortcut.unregister('Left')
         globalShortcut.unregister('Right')
+        console.log('[Main] ✗ Arrow keys unregistered (window hidden)')
 
         // Wait for CSS fade animation (500ms) before hiding
         setTimeout(() => {
@@ -324,8 +348,8 @@ app.whenReady().then(async () => {
         mainWindow.focus()
         mainWindow.webContents.send('window:focus')
 
-        // Send IPC to renderer to reset keyboard layer (will re-register arrow keys)
-        mainWindow.webContents.send('window:focus')
+        // Re-register arrow keys when window is shown
+        registerArrowKeys()
 
         console.log(
           '[Window] Focused - window shown, click-through disabled'
@@ -333,6 +357,9 @@ app.whenReady().then(async () => {
       }
     }
   }
+
+  // Register arrow keys for carousel navigation on startup
+  registerArrowKeys()
 
   // Register global shortcut to toggle focus
   const toggleShortcut = 'CommandOrControl+Shift+G'
@@ -346,7 +373,7 @@ app.whenReady().then(async () => {
     console.error(`[Hotkeys] Failed to register: ${toggleShortcut}`)
   }
 
-  console.log('[Main] KeyboardLayerManager initialized - arrow keys managed by layer stack')
+  console.log('[Main] Keyboard shortcuts initialized - Ctrl+Shift+G and arrow keys active')
 
   // Construct full MainLayer with keyboard in background (lazy)
   const MainLayerWithKeyboard = Layer.mergeAll(MainLayer, KeyboardLayerManagerLayer)
