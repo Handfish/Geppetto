@@ -89,7 +89,7 @@ export interface TerminalPort {
 }
 
 // Port tag for dependency injection
-export class TerminalPort extends Context.Tag('TerminalPort')<TerminalPort, TerminalPort>() {}
+export const TerminalPort = Context.GenericTag<TerminalPort>('TerminalPort')
 
 // Tag registry for adapters
 export const TerminalAdapterTag = {

@@ -6,12 +6,20 @@ A comprehensive guide to implementing hexagonal architecture with Effect-TS, bas
 
 1. [Core Concepts](#core-concepts)
 2. [Port Definition Patterns](#port-definition-patterns)
+   - [Understanding Context.Tag Patterns](#understanding-contexttag-patterns)
+   - [Pattern 1: GenericTag (RECOMMENDED)](#pattern-1-generictag-recommended-for-ports)
+   - [Pattern 2: Class extends Context.Tag (DEPRECATED for Ports)](#pattern-2-class-extends-contexttag-deprecated-for-ports)
+   - [Pattern 3: Inline Interface](#pattern-3-inline-interface-for-services)
+   - [Name Collision Anti-Pattern](#-anti-pattern-name-collision-with-class-extends-contexttag)
 3. [Adapter Implementation Patterns](#adapter-implementation-patterns)
 4. [Service Implementation Patterns](#service-implementation-patterns)
 5. [Type Inference Patterns](#type-inference-patterns)
-6. [Common Anti-Patterns](#common-anti-patterns)
-7. [Real-World Examples](#real-world-examples)
-8. [Migration Guide](#migration-guide)
+6. [Result API Patterns](#result-api-patterns)
+   - [Result.matchWithError vs Result.builder](#understanding-resultmatchwitherror-vs-resultbuilder)
+7. [Common Anti-Patterns](#common-anti-patterns)
+8. [Real-World Examples](#real-world-examples)
+9. [Migration Guide](#migration-guide)
+10. [Testing Patterns](#testing-patterns)
 
 ## Core Concepts
 
@@ -53,7 +61,93 @@ A **Layer** in Effect is a composable unit of dependency injection. It provides 
 
 ## Port Definition Patterns
 
-### ✅ CORRECT: Port as Interface + Context Tag
+### Understanding Context.Tag Patterns
+
+Effect provides three patterns for creating service tags. Understanding when to use each is **critical** for avoiding type errors.
+
+#### Pattern 1: GenericTag (RECOMMENDED for Ports)
+
+```typescript
+// source-control/ports/secondary/provider-port.ts
+import { Context } from 'effect'
+
+// Step 1: Define the interface
+export interface ProviderPortFactory {
+  getProvider: (type: ProviderType) => ProviderPort
+}
+
+// Step 2: Create tag using GenericTag
+export const ProviderPortFactory = Context.GenericTag<ProviderPortFactory>(
+  'SourceControl/ProviderPortFactory'
+)
+```
+
+**When to use:**
+- ✅ For ports that use the same name for interface and tag
+- ✅ When you want to avoid name collision issues
+- ✅ Multi-provider systems (via tag registry pattern)
+
+**Advantages:**
+- No name collision between interface and tag
+- Type annotation `const adapter: PortInterface = { ... }` works correctly
+- Simpler mental model - separate interface + tag
+
+#### Pattern 2: Class extends Context.Tag (DEPRECATED for Ports)
+
+```typescript
+// AVOID THIS PATTERN FOR PORTS - Can cause name collisions
+export interface TerminalPort {
+  spawn: (config: ProcessConfig) => Effect.Effect<ProcessState, TerminalError>
+  kill: (processId: string) => Effect.Effect<void, TerminalError>
+}
+
+// ⚠️ NAME COLLISION RISK: Class has same name as interface
+export class TerminalPort extends Context.Tag('TerminalPort')<
+  TerminalPort,
+  TerminalPort
+>() {}
+
+// This causes TypeScript to resolve to the CLASS instead of the INTERFACE!
+const adapter: TerminalPort = { spawn, kill }  // ❌ Type error!
+// Error: Type '{ spawn: ..., kill: ... }' is missing the following properties
+// from type 'TerminalPort': Id, Type, [TagTypeId]
+```
+
+**Why this fails:**
+- TypeScript resolves `TerminalPort` in type position to the **class**, not the interface
+- The class has Context.Tag properties (Id, Type, [TagTypeId])
+- Your adapter object doesn't have those properties → type error
+- Using `satisfies` doesn't help - it also resolves to the class
+
+**When to use:**
+- ✅ For services where interface is defined inline in generics (KeyboardLayerManager pattern)
+- ❌ **NEVER** for ports where interface and tag share the same name
+
+#### Pattern 3: Inline Interface (for Services)
+
+```typescript
+// keyboard/keyboard-layer-manager.ts
+export class KeyboardLayerManager extends Context.Tag('KeyboardLayerManager')<
+  KeyboardLayerManager,
+  {
+    // Interface defined inline - no name collision possible
+    readonly pushLayer: (layer: KeyboardLayer) => Effect.Effect<void>
+    readonly popLayer: (layer: KeyboardLayer) => Effect.Effect<void>
+    readonly getState: () => Effect.Effect<KeyboardLayerState>
+  }
+>() {
+  static Live = (config: Config) => Layer.effect(/* ... */)
+}
+```
+
+**When to use:**
+- ✅ For Effect.Service implementations
+- ✅ When service interface is simple and doesn't need separate definition
+- ✅ When you want service and tag in single declaration
+
+### ✅ CORRECT: Port with GenericTag (Recommended)
+
+**Example from TerminalPort (after fix):**
 
 ```typescript
 // terminal-port.ts
@@ -67,17 +161,103 @@ export interface TerminalPort {
   subscribe: (processId: string) => Stream.Stream<OutputChunk, TerminalError>
 }
 
-// Step 2: Create Context tag for dependency injection
+// Step 2: Create Context tag using GenericTag (NO name collision)
+export const TerminalPort = Context.GenericTag<TerminalPort>('TerminalPort')
+```
+
+**Why this works:**
+- Clean separation between interface (type) and tag (value)
+- No name collision - tag is a const, interface is a type
+- Type annotations work correctly: `const adapter: TerminalPort = { ... }`
+- TypeScript resolves correctly in both type and value positions
+
+**Adapter implementation:**
+
+```typescript
+export const NodePtyTerminalAdapter = Layer.effect(
+  TerminalPort,  // The tag
+  Effect.gen(function* () {
+    // Implementation
+    const adapter: TerminalPort = {  // ✅ Resolves to interface, not tag
+      spawn,
+      kill,
+      getState,
+      subscribe
+    }
+    return adapter
+  })
+)
+```
+
+### ❌ ANTI-PATTERN: Name Collision with Class extends Context.Tag
+
+**What we had before (caused type errors):**
+
+```typescript
+// terminal-port.ts
+export interface TerminalPort {
+  spawn: (config: ProcessConfig) => Effect.Effect<ProcessState, TerminalError>
+  // ... other methods
+}
+
+// ❌ WRONG: Class has same name as interface
 export class TerminalPort extends Context.Tag('TerminalPort')<
   TerminalPort,
   TerminalPort
 >() {}
+
+// In adapter file:
+const adapter: TerminalPort = {  // ❌ TypeScript resolves to CLASS!
+  spawn,
+  kill,
+  // ... other methods
+}
+// ERROR: Type '{ spawn: ..., kill: ... }' is missing the following properties
+// from type 'TerminalPort': Id, Type, [TagTypeId]
+
+return adapter  // Still errors even without type annotation!
+
+// Even 'satisfies' doesn't work:
+return {
+  spawn,
+  kill
+} satisfies TerminalPort  // ❌ Still resolves to class!
 ```
 
-**Why this works:**
-- Clean separation between interface (contract) and tag (DI mechanism)
-- The class extension pattern allows both type and value usage
-- Context.Tag creates proper Effect service identification
+**Error Pattern Recognition:**
+
+If you see this error:
+```
+Type '{ ... }' is missing the following properties from type 'YourPort':
+Id, Type, [TagTypeId]
+```
+
+**Root Cause**: You have a name collision between an interface and a class that extends Context.Tag.
+
+**Solution**: Change to GenericTag pattern.
+
+### Migration: Class extends Context.Tag → GenericTag
+
+```typescript
+// BEFORE (with name collision)
+export interface MyPort {
+  method1: () => Effect.Effect<Result, Error>
+}
+
+export class MyPort extends Context.Tag('MyPort')<MyPort, MyPort>() {}
+
+// AFTER (no collision)
+export interface MyPort {
+  method1: () => Effect.Effect<Result, Error>
+}
+
+export const MyPort = Context.GenericTag<MyPort>('MyPort')
+```
+
+**Changes needed:**
+1. Change `export class` to `export const`
+2. Change `extends Context.Tag('MyPort')<MyPort, MyPort>()` to `Context.GenericTag<MyPort>('MyPort')`
+3. All usage sites remain the same - no changes needed!
 
 ### ❌ ANTI-PATTERN: Mixing Service Definition with Port
 
@@ -308,6 +488,113 @@ export class ProcessConfig extends S.Class<ProcessConfig>('ProcessConfig')({
 
 These are incompatible types and will cause compilation errors throughout your codebase.
 
+## Result API Patterns
+
+### Understanding Result.matchWithError vs Result.builder
+
+The `@effect-atom/atom-react` library provides two APIs for handling Result types. Understanding the difference is critical for proper type handling.
+
+#### ✅ CORRECT: Result.matchWithError with Success Wrapper
+
+When using `Result.matchWithError`, the `onSuccess` callback receives a **Success wrapper object**, not the unwrapped data.
+
+```typescript
+// terminal/TerminalPanel.tsx
+import type { WatcherInfo } from '../../../shared/schemas/terminal'
+
+useEffect(() => {
+  Result.matchWithError(watchersResult, {
+    onSuccess: (data) => {
+      // ✅ data is Success<readonly WatcherInfo[], NetworkError>
+      // Access actual data via data.value
+      if (data && data.value.length > 0 && !activeProcessId) {
+        setActiveProcessId(data.value[0].processId)  // Use .value
+      }
+    },
+    onError: (error) => {
+      // error is the actual error type (NetworkError)
+    },
+    onDefect: (defect) => {
+      // defect is unknown
+    },
+    onInitial: () => {
+      // Initial state
+    }
+  })
+}, [watchersResult, activeProcessId])
+```
+
+**Key Points:**
+- `onSuccess` receives: `Success<T, E>` (wrapper object with `.value` property)
+- `onError` receives: `E` (the actual error type)
+- `onDefect` receives: `unknown` (unexpected errors)
+- Access actual data via `data.value`, not just `data`
+
+#### ✅ CORRECT: Result.builder with Unwrapped Data
+
+When using `Result.builder`, the `.onSuccess()` callback receives the **unwrapped data** directly.
+
+```typescript
+// From repository carousel
+{Result.builder(repos)
+  .onSuccess(repositories => {  // repositories is T, not Success<T, E>
+    const total = repositories.length  // Direct access, no .value needed
+    if (total === 0) {
+      return <div>No repositories yet</div>
+    }
+    return <RepositoryGrid repositories={repositories} />
+  })
+  .onErrorTag('AuthenticationError', error => (
+    <ErrorAlert error={error} />
+  ))
+  .onInitial(() => <LoadingSpinner />)
+  .render()}
+```
+
+**Key Points:**
+- `.onSuccess()` receives: `T` (unwrapped data, no `.value` needed)
+- `.onErrorTag()` receives: specific error type
+- `.onError()` receives: all error types
+- `.onInitial()` receives: nothing
+
+### ❌ ANTI-PATTERN: Adding Type Annotations to Result Callbacks
+
+```typescript
+// ❌ WRONG - Type annotation breaks inference
+Result.matchWithError(watchersResult, {
+  onSuccess: (data: readonly WatcherInfo[]) => {  // Type mismatch!
+    // TypeScript error: Type '(data: readonly WatcherInfo[]) => void' is not
+    // assignable to type '(_: Success<readonly WatcherInfo[], NetworkError>) => void'
+  }
+})
+
+// ✅ CORRECT - Let TypeScript infer the type
+Result.matchWithError(watchersResult, {
+  onSuccess: (data) => {  // TypeScript infers Success<readonly WatcherInfo[], NetworkError>
+    if (data && data.value.length > 0) {  // Use .value
+      // ...
+    }
+  }
+})
+```
+
+**Why this matters:**
+- `Result.matchWithError` expects `Success<T, E>` wrapper in `onSuccess`
+- Adding explicit type annotation `T` creates a type mismatch
+- TypeScript can't reconcile `T` with `Success<T, E>`
+- Let TypeScript infer the type - it knows the correct wrapper type
+
+### Quick Reference: Result API Differences
+
+| API | `onSuccess` receives | Data access pattern | Use case |
+|-----|---------------------|---------------------|----------|
+| `Result.matchWithError` | `Success<T, E>` wrapper | `data.value.property` | useEffect, side effects |
+| `Result.builder` | `T` (unwrapped) | `data.property` | JSX rendering |
+
+**Rule of thumb:**
+- In `useEffect` or callbacks → use `Result.matchWithError` → access via `.value`
+- In JSX rendering → use `Result.builder` → direct access
+
 ## Common Anti-Patterns
 
 ### Anti-Pattern 1: Not Memoizing Shared Infrastructure
@@ -465,10 +752,8 @@ export interface TerminalPort {
   subscribe: (processId: string) => Stream.Stream<OutputChunk, TerminalError>
 }
 
-export class TerminalPort extends Context.Tag('TerminalPort')<
-  TerminalPort,
-  TerminalPort
->() {}
+// Use GenericTag to avoid name collision
+export const TerminalPort = Context.GenericTag<TerminalPort>('TerminalPort')
 
 // terminal/node-pty/adapter.ts
 export const NodePtyTerminalAdapter = Layer.effect(
@@ -605,15 +890,68 @@ const TestLayer = Layer.provide(
 ## Best Practices Summary
 
 1. **Ports define contracts** - Keep them abstract, no implementation
-2. **Adapters implement ports** - Use Layer.effect, not Effect.Service
-3. **Services orchestrate** - Use interface constraint pattern for type inference
-4. **Share infrastructure** - Memoize via module-level constants
-5. **Lazy-load native modules** - Use Effect.sync(() => require(...))
-6. **Extract branded types from schemas** - Always use `S.Schema.Type<typeof Schema>` pattern, never manually define branded types
-7. **Test with mock adapters** - Easy to swap via Layer.provide
+2. **Use GenericTag for ports** - Avoid name collisions with `Context.GenericTag<Interface>('name')` pattern
+3. **Adapters implement ports** - Use Layer.effect, not Effect.Service
+4. **Services orchestrate** - Use interface constraint pattern for type inference
+5. **Share infrastructure** - Memoize via module-level constants
+6. **Lazy-load native modules** - Use Effect.sync(() => require(...))
+7. **Extract branded types from schemas** - Always use `S.Schema.Type<typeof Schema>` pattern, never manually define branded types
+8. **Result.matchWithError uses wrappers** - Access data via `data.value`, not `data`
+9. **Don't add type annotations to Result callbacks** - Let TypeScript infer wrapper types
+10. **Test with mock adapters** - Easy to swap via Layer.provide
+
+### Quick Decision Tree
+
+**Creating a Port?**
+- Use `Context.GenericTag<PortInterface>('PortName')` pattern
+- Separate interface definition from tag
+- Avoids name collision issues
+
+**Creating a Service?**
+- Use `class Service extends Context.Tag` with inline interface
+- Or use `Effect.Service` pattern with interface constraint
+
+**Implementing an Adapter?**
+- Use `Layer.effect(PortTag, Effect.gen(...))`
+- Return object with explicit type: `const adapter: PortInterface = { ... }`
+
+**Working with Result types?**
+- `Result.matchWithError` → access via `.value` in `onSuccess`
+- `Result.builder` → direct access in `.onSuccess()`
+- Never add explicit type annotations to callbacks
+
+**Dealing with TypeScript errors?**
+- See error "missing Id, Type, [TagTypeId]"? → Name collision, use GenericTag
+- See error "Type 'unknown' not assignable"? → Use interface constraint pattern
+- See error with branded types? → Extract type from schema with `S.Schema.Type<typeof Schema>`
 
 ## Related Documentation
 
 - [AI Adapters Hexagonal Architecture](./AI_ADAPTERS_HEXAGONAL_ARCHITECTURE.md)
 - [Effect Atom IPC Guide](./EFFECT_ATOM_IPC_GUIDE.md)
 - [AI Watcher XTerm Progress](./ai-watcher-xterm-progress.md) - Real implementation timeline with issues encountered
+
+## Debugging History
+
+This guide was refined through real-world debugging sessions:
+
+**TerminalPort GenericTag Migration** (2025-01-XX):
+- **Problem**: 11 TypeScript errors with "missing Id, Type, [TagTypeId]" when using `class TerminalPort extends Context.Tag`
+- **Root Cause**: Name collision between `interface TerminalPort` and `class TerminalPort` - TypeScript resolved type annotations to the class instead of interface
+- **Solution**: Migrated to `Context.GenericTag<TerminalPort>('TerminalPort')` pattern (following `ProviderPortFactory` example)
+- **Key Insight**: Using `satisfies` or removing type annotations didn't help - the issue was the class/interface name collision itself
+- **References**: See src/main/terminal/terminal-port.ts:92, src/main/source-control/ports/secondary/provider-port.ts
+- **All 11 terminal-related TypeScript errors fixed** ✅
+
+**Result.matchWithError Wrapper Types** (2025-01-XX):
+- **Problem**: Type errors when adding explicit type annotations to `onSuccess` callbacks
+- **Root Cause**: `Result.matchWithError.onSuccess` receives `Success<T, E>` wrapper, not unwrapped `T`
+- **Solution**: Let TypeScript infer types, access data via `data.value`
+- **Key Learning**: Different from `Result.builder.onSuccess` which receives unwrapped `T`
+- **References**: src/renderer/components/terminal/TerminalPanel.tsx, src/renderer/components/terminal/XTerminal.tsx
+
+These debugging sessions demonstrated the importance of:
+1. Following established codebase patterns (grep for similar code when stuck)
+2. Understanding TypeScript's type resolution in the presence of name collisions
+3. Letting TypeScript infer complex wrapper types instead of fighting it with annotations
+4. Reading Effect library source code when documentation is unclear

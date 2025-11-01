@@ -10,6 +10,7 @@ import { watcherOutputAtom, terminalSubscriptionManager } from '../../atoms/term
 import type { OutputChunk, ProcessEvent } from '../../../shared/schemas/terminal'
 import { cn } from '../../lib/utils'
 import { Effect } from 'effect'
+import { ElectronIpcClient } from '../../lib/ipc-client'
 
 interface XTerminalProps {
   processId: string
@@ -136,7 +137,7 @@ export function XTerminal({
 
         // Refresh output atom to update buffer
         refreshOutput()
-      })
+      }).pipe(Effect.provide(ElectronIpcClient.Default))
     ).then((subscription) => {
       subscriptionRef.current = subscription
     }).catch(console.error)
@@ -152,8 +153,8 @@ export function XTerminal({
 
     Result.matchWithError(outputResult, {
       onSuccess: (data) => {
-        if (data && data.length > 0 && xtermRef.current) {
-          xtermRef.current.write(data.join('\n'))
+        if (data && data.value.length > 0 && xtermRef.current) {
+          xtermRef.current.write(data.value.join('\n'))
         }
       },
       onError: () => {},

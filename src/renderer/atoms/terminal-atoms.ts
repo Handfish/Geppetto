@@ -130,7 +130,8 @@ class TerminalSubscriptionManager {
       this.subscriptions.set(processId, subscriptionId)
 
       // Set up IPC listener
-      const listener = (_event: Electron.IpcRendererEvent, message: { type: 'output' | 'event', data: any }) => {
+      const listener = (...args: unknown[]) => {
+        const [_event, message] = args as [Electron.IpcRendererEvent, { type: 'output' | 'event', data: any }]
         if (message.type === 'output') {
           const chunk = message.data as OutputChunk
 

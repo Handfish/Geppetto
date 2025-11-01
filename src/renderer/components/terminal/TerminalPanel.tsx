@@ -7,6 +7,7 @@ import { TerminalLED } from './TerminalLED'
 import { cn } from '../../lib/utils'
 import { X, Maximize2, Minimize2, RotateCcw } from 'lucide-react'
 import { useTerminalOperations } from '../../hooks/useTerminalOperations'
+import type { WatcherInfo } from '../../../shared/schemas/terminal'
 
 interface TerminalPanelProps {
   className?: string
@@ -25,8 +26,8 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
   useEffect(() => {
     Result.matchWithError(watchersResult, {
       onSuccess: (data) => {
-        if (data && data.length > 0 && !activeProcessId) {
-          setActiveProcessId(data[0].processId)
+        if (data && data.value.length > 0 && !activeProcessId) {
+          setActiveProcessId(data.value[0].processId)
         }
       },
       onError: () => {},
@@ -74,7 +75,7 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
           <h3 className="text-sm font-semibold text-gray-200">AI Watchers Terminal</h3>
           <span className="text-xs text-gray-500">
             {Result.matchWithError(watchersResult, {
-              onSuccess: (data) => `${data.length} active`,
+              onSuccess: (data) => `${data.value.length} active`,
               onError: () => 'Error',
               onDefect: () => 'Error',
               onInitial: () => 'Loading...',
