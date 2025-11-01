@@ -9,12 +9,13 @@ export class ProcessState extends S.Class<ProcessState>('ProcessState')({
   idleThreshold: S.Number.pipe(S.annotations({ description: 'Milliseconds before idle' })),
 }) {}
 
-// Branded ProcessId type
-export type ProcessId = string & { readonly ProcessId: unique symbol }
+// Branded ProcessId type - extract type from schema for proper Effect Schema compatibility
+export const ProcessIdSchema = S.String.pipe(S.brand('ProcessId'))
+export type ProcessId = S.Schema.Type<typeof ProcessIdSchema>
 
 // Terminal process configuration
 export class ProcessConfig extends S.Class<ProcessConfig>('ProcessConfig')({
-  id: S.String.pipe(S.brand('ProcessId')),
+  id: ProcessIdSchema,
   command: S.String,
   args: S.Array(S.String),
   env: S.Record({ key: S.String, value: S.String }),
@@ -34,7 +35,7 @@ export class ProcessConfig extends S.Class<ProcessConfig>('ProcessConfig')({
 
 // Terminal output chunk
 export class OutputChunk extends S.Class<OutputChunk>('OutputChunk')({
-  processId: S.String.pipe(S.brand('ProcessId')),
+  processId: ProcessIdSchema,
   data: S.String,
   timestamp: S.Date,
   type: S.Literal('stdout', 'stderr'),
@@ -42,20 +43,20 @@ export class OutputChunk extends S.Class<OutputChunk>('OutputChunk')({
 
 // Terminal resize event
 export class ResizeEvent extends S.Class<ResizeEvent>('ResizeEvent')({
-  processId: S.String.pipe(S.brand('ProcessId')),
+  processId: ProcessIdSchema,
   rows: S.Number,
   cols: S.Number,
 }) {}
 
 // Terminal input event
 export class InputEvent extends S.Class<InputEvent>('InputEvent')({
-  processId: S.String.pipe(S.brand('ProcessId')),
+  processId: ProcessIdSchema,
   data: S.String,
 }) {}
 
 // Process lifecycle events
 export class ProcessEvent extends S.Class<ProcessEvent>('ProcessEvent')({
-  processId: S.String.pipe(S.brand('ProcessId')),
+  processId: ProcessIdSchema,
   type: S.Literal('started', 'stopped', 'error', 'idle', 'active'),
   timestamp: S.Date,
   metadata: S.optional(S.Unknown),

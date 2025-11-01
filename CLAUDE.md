@@ -90,6 +90,7 @@ export const CoreInfrastructureLayer = Layer.mergeAll(/* shared services */)
 Effect memoizes by **object reference**, not service tag. Always share infrastructure layers via module-level constants.
 
 **See detailed documentation**:
+- `docs/EFFECT_PORTS_AND_LAYERS_GUIDE.md`: Complete ports/adapters patterns with real examples and anti-patterns
 - `docs/AI_ADAPTERS_HEXAGONAL_ARCHITECTURE.md`: Hexagonal architecture deep dive
 - `docs/AI_PROVIDER_LIFECYCLE.md`: Provider lifecycle and memoization
 - `docs/AI_LAYERS_HEXAGONAL_AGENTS_BENEFIT.md`: Multi-provider patterns for AI agents
@@ -282,7 +283,9 @@ All data models use Effect Schema:
 
 ### 1. Hexagonal Architecture (Ports & Adapters)
 
-**See "Layer-Based Hexagonal Architecture" section above** for complete pattern. Reference implementation: `src/main/ai/`
+**See "Layer-Based Hexagonal Architecture" section above** for complete pattern. Reference implementation: `src/main/ai/` and `src/main/terminal/`
+
+**⚠️ IMPORTANT**: If you encounter TypeScript type inference issues with Effect services, consult `docs/EFFECT_PORTS_AND_LAYERS_GUIDE.md` for proper patterns and common anti-patterns.
 
 **Key steps**: Define port → Tag registry → Adapters as Layers → Compose AdaptersLayer → Registry captures adapters → Inject via MainLayer
 
@@ -295,8 +298,28 @@ Effect.gen(function* () {
 })
 ```
 
-### 3. Effect.Service Pattern
-**⚠️ CRITICAL**: Dependencies array must match all `yield*` service uses. TypeScript won't catch mismatches!
+### 3. Effect.Service Pattern with Interface Constraint
+**⚠️ CRITICAL**: Use interface constraint pattern to preserve TypeScript type inference in Effect.gen functions:
+
+```typescript
+// Define interface with method signatures
+interface MyServiceMethods {
+  doSomething(param: string): Effect.Effect<Result, MyError, never>
+  doAnotherThing(): Effect.Effect<void, MyError, never>
+}
+
+// Use interface constraint - preserves type inference!
+const doSomething: MyServiceMethods['doSomething'] = (param) =>
+  Effect.gen(function* () {
+    // Types properly inferred, no 'unknown' errors
+  })
+
+// NEVER use explicit type annotations - breaks inference!
+// const doSomething = (param: string): Effect.Effect<Result, MyError, never> =>
+//   Effect.gen(function* () { /* Type inference breaks here! */ })
+```
+
+**Note**: Dependencies array must match all `yield*` service uses. TypeScript won't catch mismatches!
 
 ### 4. Layer Memoization
 Effect memoizes by **object reference**. Share infrastructure via module-level constants:
@@ -406,12 +429,14 @@ Example: Email domain with Gmail/Outlook
 
 ### Key Principles
 
-1. **Hexagonal Architecture**: Ports & Adapters for multi-provider domains
-2. **Layer Memoization**: Share infrastructure via module-level constants
-3. **Type Safety**: Extract types from schemas, NO `any` types
-4. **Domain Isolation**: Independent providers with own errors/services/schemas
-5. **Contract-Based IPC**: Schema validation at process boundaries
-6. **Effect Generators**: `Effect.gen` for all async operations
+1. **Hexagonal Architecture**: Ports & Adapters for multi-provider domains (see `docs/EFFECT_PORTS_AND_LAYERS_GUIDE.md`)
+2. **Interface Constraint Pattern**: Use `const method: Interface['method']` for Effect.Service methods to preserve type inference
+3. **Layer Memoization**: Share infrastructure via module-level constants
+4. **Type Safety**: Extract types from schemas, **NEVER use `any` types** - find proper TypeScript patterns instead
+5. **Domain Isolation**: Independent providers with own errors/services/schemas
+6. **Contract-Based IPC**: Schema validation at process boundaries
+7. **Effect Generators**: `Effect.gen` for all async operations without explicit type annotations
+8. **Layer.effect for Adapters**: Use `Layer.effect(PortTag, implementation)` not `Effect.Service` for adapter implementations
 
 ### File Structure Summary
 
@@ -663,6 +688,7 @@ useGraphKeyboardShortcuts({
 - `docs/RESULT_API_AND_ERROR_HANDLING.md`: Result.builder API reference and advanced error handling
 
 ### Hexagonal Architecture & Multi-Provider Patterns
+- `docs/EFFECT_PORTS_AND_LAYERS_GUIDE.md`: Complete ports/adapters patterns with real examples and anti-patterns
 - `docs/AI_ADAPTERS_HEXAGONAL_ARCHITECTURE.md`: Hexagonal architecture deep dive
 - `docs/AI_PROVIDER_LIFECYCLE.md`: Provider lifecycle and memoization
 - `docs/AI_LAYERS_HEXAGONAL_AGENTS_BENEFIT.md`: Multi-provider patterns for AI agents

@@ -439,9 +439,16 @@ pnpm install:deps
 - **Impact**: Simplified registry, removed unnecessary adapter abstraction
 
 **Issue 8: Branded Type Handling**
-- **Problem**: ProcessId brand type conflicts between Schema and runtime usage
-- **Solution**: Cast strings to ProcessId at HashMap operations, keep interface signatures with plain strings
-- **Impact**: All adapter methods updated to cast processId parameters
+- **Problem**: ProcessId defined as manual TypeScript brand `string & { readonly ProcessId: unique symbol }` conflicted with Effect Schema brand `string & Brand<"ProcessId">`
+- **Root Cause**: Mixing manual type definition with Effect Schema branding creates incompatible types
+- **Solution**: Extract type from schema like other domains (repository.ts pattern):
+  ```typescript
+  // Create schema first
+  export const ProcessIdSchema = S.String.pipe(S.brand('ProcessId'))
+  // Extract type from schema
+  export type ProcessId = S.Schema.Type<typeof ProcessIdSchema>
+  ```
+- **Impact**: All ProcessId usages updated to use ProcessIdSchema, eliminated 3 type errors
 
 **Issue 9: Result API Misuse**
 - **Problem**: Result.match with onError/onSuccess/onInitial doesn't exist
@@ -469,4 +476,4 @@ pnpm install:deps
 - **TypeScript Interface Constraints**: For Effect.Service methods, use interface constraint pattern (`const method: Interface['method'] = ...`) instead of explicit type annotations to preserve Effect type inference
 - **Result API patterns**: Use Result.matchWithError for side effects in useEffect, Result.builder for rendering UI
 - **Atom function parameters**: terminalRuntime.fn requires single parameter - wrap multiple args in object
-- **Branded types in Effect Schema**: Cast at boundaries, keep interfaces clean with plain types
+- **Branded types in Effect Schema**: ALWAYS extract types from schemas using `S.Schema.Type<typeof Schema>` pattern, never manually define branded types. See `src/shared/schemas/source-control/repository.ts` for correct pattern

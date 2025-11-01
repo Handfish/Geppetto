@@ -336,7 +336,8 @@ export const NodePtyTerminalAdapter = Layer.effect(
         )
       }
 
-    const adapter: TerminalPort = {
+    // Return adapter implementation (type inferred correctly)
+    return {
       spawn,
       kill,
       restart,
@@ -347,7 +348,5 @@ export const NodePtyTerminalAdapter = Layer.effect(
       subscribe,
       subscribeToEvents,
     }
-
-    return adapter
   })
 )

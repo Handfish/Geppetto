@@ -256,46 +256,57 @@ const killWatcher = (processId: string) =>
 
 ### ✅ CORRECT: Handling Branded Types
 
-Effect Schema uses branded types for additional type safety. Handle them at boundaries:
+**CRITICAL**: Always extract branded types from Effect Schema. Never manually define them.
 
 ```typescript
-// In your Schema definition
-export type ProcessId = string & { readonly ProcessId: unique symbol }
+// ✅ CORRECT - Extract type from schema (like repository.ts)
+// Step 1: Create the schema
+export const ProcessIdSchema = S.String.pipe(S.brand('ProcessId'))
 
+// Step 2: Extract the type from the schema
+export type ProcessId = S.Schema.Type<typeof ProcessIdSchema>
+
+// Step 3: Use the schema in classes
 export class ProcessConfig extends S.Class<ProcessConfig>('ProcessConfig')({
-  id: S.String.pipe(S.brand('ProcessId')),
+  id: ProcessIdSchema,  // Use the schema, not S.String.pipe(S.brand(...))
   command: S.String,
   // ...
 }) {}
 
-// In your adapter - cast at boundaries
+// Step 4: Use the extracted type in your code
 const processes = yield* Ref.make(HashMap.empty<ProcessId, ProcessInstance>())
 
 const kill = (processId: string) => Effect.gen(function* () {
   // Cast plain string to branded type at HashMap operations
   const instance = yield* pipe(
     Ref.get(processes),
-    Effect.map(HashMap.get(processId as ProcessId)),  // Cast here
+    Effect.map(HashMap.get(processId as ProcessId)),  // Now types match!
     Effect.flatMap(/* ... */)
   )
 })
-
-// In your service - keep interfaces clean
-interface TerminalPort {
-  kill: (processId: string) => Effect.Effect<void, TerminalError>  // Plain string
-}
 ```
 
-### ❌ ANTI-PATTERN: Branded Types in Public APIs
+**Why this works**: `S.Schema.Type<typeof Schema>` extracts the exact TypeScript type that Effect Schema uses internally, including the proper `Brand<"ProcessId">` structure.
+
+### ❌ ANTI-PATTERN: Manual Branded Type Definition
 
 ```typescript
-// DON'T expose branded types in public interfaces
-interface TerminalPort {
-  kill: (processId: ProcessId) => Effect.Effect<void, TerminalError>  // BAD!
-}
+// ❌ WRONG - Manual type definition conflicts with Effect Schema
+export type ProcessId = string & { readonly ProcessId: unique symbol }
 
-// This forces all callers to deal with type casting
+export class ProcessConfig extends S.Class<ProcessConfig>('ProcessConfig')({
+  id: S.String.pipe(S.brand('ProcessId')),  // Different brand type!
+  // This creates: string & Brand<"ProcessId">
+  // But ProcessId is: string & { readonly ProcessId: unique symbol }
+  // These are INCOMPATIBLE!
+})
 ```
+
+**Why this fails**: You've created TWO different branded type systems:
+- Manual TypeScript brand: `string & { readonly ProcessId: unique symbol }`
+- Effect Schema brand: `string & Brand<"ProcessId">`
+
+These are incompatible types and will cause compilation errors throughout your codebase.
 
 ## Common Anti-Patterns
 
@@ -598,7 +609,7 @@ const TestLayer = Layer.provide(
 3. **Services orchestrate** - Use interface constraint pattern for type inference
 4. **Share infrastructure** - Memoize via module-level constants
 5. **Lazy-load native modules** - Use Effect.sync(() => require(...))
-6. **Handle branded types at boundaries** - Cast in adapters, not in interfaces
+6. **Extract branded types from schemas** - Always use `S.Schema.Type<typeof Schema>` pattern, never manually define branded types
 7. **Test with mock adapters** - Easy to swap via Layer.provide
 
 ## Related Documentation

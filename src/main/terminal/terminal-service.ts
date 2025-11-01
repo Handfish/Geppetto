@@ -1,4 +1,4 @@
-import { Effect, Stream, Ref, HashMap, Schema as S } from 'effect'
+import { Effect, Stream, Ref, HashMap } from 'effect'
 import { TerminalRegistry } from './terminal-registry'
 import { ProcessConfig, ProcessState, OutputChunk, ProcessEvent, TerminalError, ProcessId } from './terminal-port'
 import { AccountContextService } from '../account/account-context-service'
@@ -38,7 +38,7 @@ interface TerminalServiceMethods {
 export class TerminalService extends Effect.Service<TerminalService>()(
   'TerminalService',
   {
-    effect: Effect.gen(function* (): Generator<any, TerminalServiceMethods, any> {
+    effect: Effect.gen(function* () {
       const registry = yield* TerminalRegistry
       const accountService = yield* AccountContextService
       const tierService = yield* TierService
@@ -47,8 +47,13 @@ export class TerminalService extends Effect.Service<TerminalService>()(
       const activeWatchers = yield* Ref.make(HashMap.empty<string, WatcherProcessConfig>())
 
       const spawnAiWatcher: TerminalServiceMethods['spawnAiWatcher'] = (config) => Effect.gen(function* () {
-        // Check tier limits
-        yield* tierService.checkFeatureAvailable('ai-watchers')
+        // Check tier limits - map feature error to terminal error
+        yield* tierService.checkFeatureAvailable('ai-watchers').pipe(
+          Effect.mapError(() => new TerminalError({
+            reason: 'PermissionDenied',
+            message: 'AI watchers feature not available in current tier'
+          }))
+        )
 
         // Get account context (not strictly needed for terminal, but validates account exists)
         const context = yield* accountService.getContext()
