@@ -169,21 +169,41 @@ export function XTerminal({
     }
   }, [processId, refreshOutput])
 
-  // Load existing output
+  // Load existing output when switching to this terminal
+  // StrictMode protection: track if we've already loaded to prevent duplicates
+  const hasLoadedRef = useRef(false)
+  const isLoadingRef = useRef(false)
+
   useEffect(() => {
     if (!xtermRef.current) return
+    if (isLoadingRef.current) return  // StrictMode protection: prevent concurrent loads
+    if (hasLoadedRef.current) return  // Already loaded
+
+    isLoadingRef.current = true
 
     Result.matchWithError(outputResult, {
-      onSuccess: (data) => {
-        if (data && data.value.length > 0 && xtermRef.current) {
-          xtermRef.current.write(data.value.join('\n'))
+      onSuccess: (chunks) => {
+        if (chunks && chunks.value.length > 0 && xtermRef.current && !hasLoadedRef.current) {
+          console.log('[XTerminal] Loading', chunks.value.length, 'chunks of history')
+          // Write all raw chunks - concatenate without adding newlines!
+          const fullOutput = chunks.value.join('')
+          xtermRef.current.write(fullOutput)
+          hasLoadedRef.current = true
         }
       },
       onError: () => {},
       onDefect: () => {},
       onInitial: () => {},
     })
+
+    isLoadingRef.current = false
   }, [outputResult])
+
+  // Reset loaded flags when processId changes
+  useEffect(() => {
+    hasLoadedRef.current = false
+    isLoadingRef.current = false
+  }, [processId])
 
   // Handle active state changes
   useEffect(() => {

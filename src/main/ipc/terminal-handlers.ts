@@ -5,8 +5,8 @@
  * registerIpcHandler pattern for type-safe, boilerplate-free handler registration.
  */
 
-import { Effect } from 'effect'
-import { BrowserWindow } from 'electron'
+import { Effect, Schema as S } from 'effect'
+import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { TerminalIpcContracts } from '../../shared/ipc-contracts'
 import { TerminalService } from '../terminal/terminal-service'
 import { registerIpcHandler } from './ipc-handler-setup'
@@ -18,6 +18,7 @@ import type { OutputChunk, ProcessEvent } from '../../shared/schemas/terminal'
 interface Subscription {
   id: string
   processId: string
+  webContentsId: number  // Track which window owns this subscription
   cleanupOutput: () => void
   cleanupEvents: () => void
 }
@@ -86,69 +87,96 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
   )
 
   // Subscribe to watcher output/events
+  // Custom handler (not using registerIpcHandler) to access event.sender
   console.log('[TerminalHandlers] Registering subscribe-to-watcher handler')
-  registerIpcHandler(
-    TerminalIpcContracts['terminal:subscribe-to-watcher'],
-    ({ processId }) => {
-      console.log('[TerminalHandlers] ========== SUBSCRIPTION HANDLER CALLED ==========')
+  ipcMain.handle('terminal:subscribe-to-watcher', async (event: IpcMainInvokeEvent, input: unknown) => {
+    console.log('[TerminalHandlers] ========== SUBSCRIPTION HANDLER CALLED ==========')
+    console.log('[TerminalHandlers] Sender webContentsId:', event.sender.id)
+
+    const program = Effect.gen(function* () {
+      // Decode input
+      const { processId } = yield* S.decodeUnknown(TerminalIpcContracts['terminal:subscribe-to-watcher'].input)(input)
       console.log('[TerminalHandlers] ProcessId:', processId)
-      return Effect.gen(function* () {
-        console.log('[TerminalHandlers] ========== INSIDE EFFECT.GEN ==========')
-        console.log('[TerminalHandlers] Subscribing to watcher:', processId)
-        const subscriptionId = `sub-${processId}-${Date.now()}`
 
-        // Define callback that sends output via IPC (push-based)
-        const sendOutputViaIpc = (chunk: OutputChunk) => {
-          console.log('[TerminalHandlers] !!!!! Sending output chunk to renderer:', chunk.data.substring(0, 50))
+      const subscriptionId = `sub-${processId}-${Date.now()}`
+      const senderWebContentsId = event.sender.id
 
-          // Send to all renderer windows (check if not destroyed)
-          const windows = BrowserWindow.getAllWindows()
-          console.log('[TerminalHandlers] Sending to', windows.length, 'windows')
+      // Define callback that sends output via IPC (push-based) - ONLY to the sender window
+      const sendOutputViaIpc = (chunk: OutputChunk) => {
+        console.log('[TerminalHandlers] !!!!! Sending output chunk to renderer:', chunk.data.substring(0, 50))
 
-          windows.forEach((window) => {
-            if (!window.isDestroyed() && window.webContents && !window.webContents.isDestroyed()) {
-              window.webContents.send(`terminal:stream:${processId}`, {
-                type: 'output' as const,
-                data: chunk,
-              })
-            }
-          })
+        // Send ONLY to the window that owns this subscription
+        const window = BrowserWindow.getAllWindows().find(w => w.webContents.id === senderWebContentsId)
+
+        if (!window || window.isDestroyed() || !window.webContents || window.webContents.isDestroyed()) {
+          console.log('[TerminalHandlers] Target window no longer exists:', senderWebContentsId)
+          return
         }
 
-        // Define callback that sends events via IPC (push-based)
-        const sendEventViaIpc = (event: ProcessEvent) => {
-          console.log('[TerminalHandlers] Sending event to renderer:', event.type)
-
-          const windows = BrowserWindow.getAllWindows()
-          windows.forEach((window) => {
-            if (!window.isDestroyed() && window.webContents && !window.webContents.isDestroyed()) {
-              window.webContents.send(`terminal:stream:${processId}`, {
-                type: 'event' as const,
-                data: event,
-              })
-            }
-          })
+        // Convert Schema class to plain object for IPC serialization
+        const plainChunk = {
+          processId: chunk.processId,
+          data: chunk.data,
+          timestamp: chunk.timestamp,
+          type: chunk.type,
         }
 
-        // Register callbacks with terminal service
-        console.log('[TerminalHandlers] Registering callbacks with terminal service')
-        const cleanupOutput = yield* terminalService.subscribeToWatcher(processId, sendOutputViaIpc)
-        const cleanupEvents = yield* terminalService.subscribeToWatcherEvents(processId, sendEventViaIpc)
-        console.log('[TerminalHandlers] Callbacks registered')
-
-        // Store subscription
-        subscriptions.set(subscriptionId, {
-          id: subscriptionId,
-          processId,
-          cleanupOutput,
-          cleanupEvents,
+        window.webContents.send(`terminal:stream:${processId}`, {
+          type: 'output' as const,
+          data: plainChunk,
         })
+        console.log('[TerminalHandlers] Sent to window:', window.id)
+      }
 
-        console.log('[TerminalHandlers] ========== SUBSCRIPTION CREATED:', subscriptionId, '==========')
-        return { subscriptionId }
+      // Define callback that sends events via IPC (push-based) - ONLY to the sender window
+      const sendEventViaIpc = (event: ProcessEvent) => {
+        console.log('[TerminalHandlers] Sending event to renderer:', event.type)
+
+        // Send ONLY to the window that owns this subscription
+        const window = BrowserWindow.getAllWindows().find(w => w.webContents.id === senderWebContentsId)
+
+        if (!window || window.isDestroyed() || !window.webContents || window.webContents.isDestroyed()) {
+          console.log('[TerminalHandlers] Target window no longer exists:', senderWebContentsId)
+          return
+        }
+
+        // Convert Schema class to plain object for IPC serialization
+        const plainEvent = {
+          processId: event.processId,
+          type: event.type,
+          timestamp: event.timestamp,
+          metadata: event.metadata,
+        }
+
+        window.webContents.send(`terminal:stream:${processId}`, {
+          type: 'event' as const,
+          data: plainEvent,
+        })
+      }
+
+      // Register callbacks with terminal service
+      console.log('[TerminalHandlers] Registering callbacks with terminal service')
+      const cleanupOutput = yield* terminalService.subscribeToWatcher(processId, sendOutputViaIpc)
+      const cleanupEvents = yield* terminalService.subscribeToWatcherEvents(processId, sendEventViaIpc)
+      console.log('[TerminalHandlers] Callbacks registered')
+
+      // Store subscription
+      subscriptions.set(subscriptionId, {
+        id: subscriptionId,
+        processId,
+        webContentsId: senderWebContentsId,
+        cleanupOutput,
+        cleanupEvents,
       })
-    }
-  )
+
+      console.log('[TerminalHandlers] ========== SUBSCRIPTION CREATED:', subscriptionId, '==========')
+
+      // Encode output
+      return yield* S.encode(TerminalIpcContracts['terminal:subscribe-to-watcher'].output)({ subscriptionId })
+    })
+
+    return await Effect.runPromise(program)
+  })
   console.log('[TerminalHandlers] subscribe-to-watcher handler registered')
 
   // Unsubscribe from watcher

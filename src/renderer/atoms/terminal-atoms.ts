@@ -53,12 +53,15 @@ export const watcherStateAtom = Atom.family((processId: string) =>
 
 /**
  * Terminal output buffer atom (client-side storage)
- * Stores last N lines of output per process
+ * Stores raw output chunks (not split by newlines!)
  * Updated via terminal subscription manager
+ *
+ * NOTE: XTerm.js has its own internal buffer, so this is primarily for debugging
+ * or potential future features like saving terminal history.
  */
 interface OutputBuffer {
-  lines: string[]
-  maxLines: number
+  chunks: string[]  // Raw chunks, not lines!
+  maxChunks: number
 }
 
 const outputBuffers = new Map<string, OutputBuffer>()
@@ -69,12 +72,12 @@ export const watcherOutputAtom = Atom.family((processId: string) =>
       // Initialize buffer if needed
       if (!outputBuffers.has(processId)) {
         outputBuffers.set(processId, {
-          lines: [],
-          maxLines: 1000,
+          chunks: [],
+          maxChunks: 1000,
         })
       }
 
-      return outputBuffers.get(processId)!.lines
+      return outputBuffers.get(processId)!.chunks
     })
   ).pipe(
     Atom.withReactivity(['terminal:output', processId])
@@ -84,16 +87,17 @@ export const watcherOutputAtom = Atom.family((processId: string) =>
 /**
  * Helper function to append output to buffer
  * Called by terminal subscription manager
+ * Stores RAW chunks without splitting - XTerm handles display
  */
 export function appendToOutputBuffer(processId: string, data: string) {
   const buffer = outputBuffers.get(processId)
   if (buffer) {
-    const newLines = data.split('\n')
-    buffer.lines.push(...newLines)
+    // Store raw chunk - do NOT split by newlines!
+    buffer.chunks.push(data)
 
-    // Trim to max lines
-    if (buffer.lines.length > buffer.maxLines) {
-      buffer.lines = buffer.lines.slice(-buffer.maxLines)
+    // Trim to max chunks
+    if (buffer.chunks.length > buffer.maxChunks) {
+      buffer.chunks = buffer.chunks.slice(-buffer.maxChunks)
     }
   }
 }
@@ -104,7 +108,7 @@ export function appendToOutputBuffer(processId: string, data: string) {
 export function clearOutputBuffer(processId: string) {
   const buffer = outputBuffers.get(processId)
   if (buffer) {
-    buffer.lines = []
+    buffer.chunks = []
   }
 }
 
@@ -114,14 +118,15 @@ export function clearOutputBuffer(processId: string) {
  */
 class TerminalSubscriptionManager {
   private subscriptions = new Map<string, string>() // processId -> subscriptionId
-  private listeners = new Map<string, (event: Electron.IpcRendererEvent, data: { type: 'output' | 'event', data: any }) => void>()
+  private listeners = new Map<string, (message: { type: 'output' | 'event', data: any }) => void>() // Note: preload removes event param
+  private listenerAttached = new Set<string>() // Track which processIds have listeners attached (prevents duplicates in StrictMode)
 
   subscribe(processId: string, onData: (data: OutputChunk | ProcessEvent) => void) {
     console.log('[TerminalSubscriptionManager] Subscribe called for:', processId)
     return Effect.gen(function* (this: TerminalSubscriptionManager) {
-      // If already subscribed, just add listener
-      if (this.subscriptions.has(processId)) {
-        console.log('[TerminalSubscriptionManager] Already subscribed to:', processId)
+      // If IPC listener already attached for this processId, don't attach another
+      if (this.listenerAttached.has(processId)) {
+        console.log('[TerminalSubscriptionManager] IPC listener already attached for:', processId)
         return { unsubscribe: () => this.unsubscribe(processId) }
       }
 
@@ -134,11 +139,13 @@ class TerminalSubscriptionManager {
       this.subscriptions.set(processId, subscriptionId)
 
       // Set up IPC listener
-      const listener = (_event: Electron.IpcRendererEvent, message: { type: 'output' | 'event', data: any }) => {
+      // Note: preload script removes the event parameter, so listener only receives message
+      const listener = (message: { type: 'output' | 'event', data: any }) => {
         console.log('[TerminalSubscriptionManager] !!!!! IPC MESSAGE RECEIVED !!!!!')
         console.log('[TerminalSubscriptionManager] Channel:', `terminal:stream:${processId}`)
-        console.log('[TerminalSubscriptionManager] Message type:', message.type)
-        console.log('[TerminalSubscriptionManager] Message data:', message.data)
+        console.log('[TerminalSubscriptionManager] Message:', message)
+        console.log('[TerminalSubscriptionManager] Message type:', message?.type)
+        console.log('[TerminalSubscriptionManager] Message data:', message?.data)
 
         if (message.type === 'output') {
           const chunk = message.data as OutputChunk
@@ -162,6 +169,9 @@ class TerminalSubscriptionManager {
       this.listeners.set(processId, listener)
       console.log('[TerminalSubscriptionManager] Registering IPC listener for channel:', `terminal:stream:${processId}`)
       window.electron.ipcRenderer.on(`terminal:stream:${processId}`, listener)
+
+      // Mark listener as attached to prevent duplicates
+      this.listenerAttached.add(processId)
 
       console.log('[TerminalSubscriptionManager] Subscription complete')
       return {
@@ -188,8 +198,10 @@ class TerminalSubscriptionManager {
     }
 
     if (listener) {
+      console.log('[TerminalSubscriptionManager] Removing IPC listener for:', processId)
       window.electron.ipcRenderer.removeListener(`terminal:stream:${processId}`, listener)
       this.listeners.delete(processId)
+      this.listenerAttached.delete(processId) // Remove from tracking set
     }
   }
 
