@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, HashMap, Ref, PubSub, Queue, Duration, pipe } from 'effect'
+import { Effect, Layer, HashMap, Ref, Duration, pipe } from 'effect'
 import type * as pty from 'node-pty'
 import { TerminalPort, ProcessConfig, ProcessState, OutputChunk, ProcessEvent, TerminalError, ProcessId } from '../terminal-port'
 
@@ -9,8 +9,8 @@ interface ProcessInstance {
   config: ProcessConfig
   ptyProcess: pty.IPty
   state: Ref.Ref<ProcessState>
-  outputQueues: Set<Queue.Queue<OutputChunk>>  // Track all subscriber queues
-  eventQueues: Set<Queue.Queue<ProcessEvent>>  // Track all event subscriber queues
+  outputCallbacks: Set<(chunk: OutputChunk) => void>  // Simple callbacks for push-based streaming
+  eventCallbacks: Set<(event: ProcessEvent) => void>  // Simple callbacks for events
   idleTimer: Ref.Ref<number | null>
 }
 
@@ -40,9 +40,9 @@ export const NodePtyTerminalAdapter = Layer.effect(
             timestamp: new Date(),
           })
 
-          // Offer to all event subscriber queues
-          for (const queue of instance.eventQueues) {
-            yield* Queue.offer(queue, event)
+          // Invoke all event callbacks directly (push-based)
+          for (const callback of instance.eventCallbacks) {
+            callback(event)
           }
         }
       })
@@ -72,9 +72,9 @@ export const NodePtyTerminalAdapter = Layer.effect(
             timestamp: new Date(),
           })
 
-          // Offer to all event subscriber queues
-          for (const queue of instance.eventQueues) {
-            yield* Queue.offer(queue, event)
+          // Invoke all event callbacks directly (push-based)
+          for (const callback of instance.eventCallbacks) {
+            callback(event)
           }
         }
       })
@@ -159,8 +159,8 @@ export const NodePtyTerminalAdapter = Layer.effect(
           config,
           ptyProcess,
           state,
-          outputQueues: new Set(),  // Track all output subscribers
-          eventQueues: new Set(),   // Track all event subscribers
+          outputCallbacks: new Set(),  // Track all output callbacks
+          eventCallbacks: new Set(),   // Track all event callbacks
           idleTimer,
         }
 
@@ -175,14 +175,14 @@ export const NodePtyTerminalAdapter = Layer.effect(
               type: 'stdout',
             })
 
-            console.log('[NodePtyAdapter] Offering chunk to', instance.outputQueues.size, 'subscriber queues')
+            console.log('[NodePtyAdapter] Invoking', instance.outputCallbacks.size, 'output callbacks')
 
-            // Offer to all subscriber queues
-            for (const queue of instance.outputQueues) {
-              yield* Queue.offer(queue, chunk)
+            // Invoke all callbacks directly (push-based)
+            for (const callback of instance.outputCallbacks) {
+              callback(chunk)
             }
 
-            console.log('[NodePtyAdapter] Successfully offered to all queues')
+            console.log('[NodePtyAdapter] All callbacks invoked')
 
             yield* Ref.update(state, (s) => ({
               ...s,
@@ -210,9 +210,9 @@ export const NodePtyTerminalAdapter = Layer.effect(
               metadata: { exitCode, signal },
             })
 
-            // Offer to all event subscriber queues
-            for (const queue of instance.eventQueues) {
-              yield* Queue.offer(queue, event)
+            // Invoke all event callbacks directly (push-based)
+            for (const callback of instance.eventCallbacks) {
+              callback(event)
             }
 
             // Clear idle timer
@@ -236,9 +236,9 @@ export const NodePtyTerminalAdapter = Layer.effect(
           timestamp: new Date(),
         })
 
-        // Offer to all event subscriber queues
-        for (const queue of instance.eventQueues) {
-          yield* Queue.offer(queue, event)
+        // Invoke all event callbacks directly (push-based)
+        for (const callback of instance.eventCallbacks) {
+          callback(event)
         }
 
         // Start idle timer
@@ -376,80 +376,66 @@ export const NodePtyTerminalAdapter = Layer.effect(
         return states
       })
 
-      const subscribe = (processId: string): Stream.Stream<OutputChunk, TerminalError> => {
-        console.log('[NodePtyAdapter] Creating output stream subscription for:', processId)
+      const subscribe = (processId: string, onOutput: (chunk: OutputChunk) => void): Effect.Effect<() => void, TerminalError> => {
+        console.log('[NodePtyAdapter] Creating callback subscription for:', processId)
 
-        // Use asyncScoped for proper resource management
-        return Stream.asyncScoped<OutputChunk, TerminalError>((emit) =>
-          Effect.gen(function* () {
-            console.log('[NodePtyAdapter] Stream asyncScoped callback called')
+        return Effect.gen(function* () {
+          const option = yield* pipe(
+            Ref.get(processes),
+            Effect.map(HashMap.get(processId as ProcessId))
+          )
 
-            const option = yield* pipe(
-              Ref.get(processes),
-              Effect.map(HashMap.get(processId as ProcessId))
+          if (option._tag === 'None') {
+            console.error('[NodePtyAdapter] Process not found for subscription:', processId)
+            return yield* Effect.fail(
+              new TerminalError({ reason: 'ProcessNotFound', message: `Process ${processId} not found` })
             )
+          }
 
-            if (option._tag === 'None') {
-              console.error('[NodePtyAdapter] Process not found for subscription:', processId)
-              emit.fail(new TerminalError({ reason: 'ProcessNotFound', message: `Process ${processId} not found` }))
-              return
-            }
+          const instance = option.value
+          console.log('[NodePtyAdapter] Found process instance, registering callback')
 
-            const instance = option.value
-            console.log('[NodePtyAdapter] Found process instance, creating queue')
+          // Add callback to set (push-based)
+          instance.outputCallbacks.add(onOutput)
+          console.log('[NodePtyAdapter] Callback registered, total subscribers:', instance.outputCallbacks.size)
 
-            // Create queue within the scoped effect
-            const queue = yield* Queue.unbounded<OutputChunk>()
-            instance.outputQueues.add(queue)
-            console.log('[NodePtyAdapter] Queue added, total subscribers:', instance.outputQueues.size)
-
-            // Fork a fiber to pull from queue and emit
-            console.log('[NodePtyAdapter] Forking fiber to pull from queue')
-            yield* Effect.forkScoped(
-              Effect.gen(function* () {
-                console.log('[NodePtyAdapter] Pull fiber started')
-                while (true) {
-                  const chunk = yield* Queue.take(queue)
-                  console.log('[NodePtyAdapter] Emitting chunk:', chunk.data.substring(0, 50))
-                  emit.single(chunk)
-                }
-              })
-            )
-
-            console.log('[NodePtyAdapter] AsyncScoped setup complete')
-          })
-        )
+          // Return cleanup function
+          return () => {
+            console.log('[NodePtyAdapter] Cleanup: removing callback for process:', processId)
+            instance.outputCallbacks.delete(onOutput)
+          }
+        })
       }
 
-      const subscribeToEvents = (processId: string): Stream.Stream<ProcessEvent, TerminalError> => {
-        return pipe(
-          Stream.fromEffect(
-            Effect.gen(function* () {
-              const option = yield* pipe(
-                Ref.get(processes),
-                Effect.map(HashMap.get(processId as ProcessId))
-              )
+      const subscribeToEvents = (processId: string, onEvent: (event: ProcessEvent) => void): Effect.Effect<() => void, TerminalError> => {
+        console.log('[NodePtyAdapter] Creating event callback subscription for:', processId)
 
-              if (option._tag === 'None') {
-                return yield* Effect.fail(new TerminalError({ reason: 'ProcessNotFound', message: `Process ${processId} not found` }))
-              }
+        return Effect.gen(function* () {
+          const option = yield* pipe(
+            Ref.get(processes),
+            Effect.map(HashMap.get(processId as ProcessId))
+          )
 
-              const instance = option.value
+          if (option._tag === 'None') {
+            console.error('[NodePtyAdapter] Process not found for event subscription:', processId)
+            return yield* Effect.fail(
+              new TerminalError({ reason: 'ProcessNotFound', message: `Process ${processId} not found` })
+            )
+          }
 
-              // Create a new queue for this event subscription
-              const queue = yield* Queue.unbounded<ProcessEvent>()
+          const instance = option.value
+          console.log('[NodePtyAdapter] Found process instance, registering event callback')
 
-              // Add queue to the set of event subscribers
-              instance.eventQueues.add(queue)
+          // Add callback to set (push-based)
+          instance.eventCallbacks.add(onEvent)
+          console.log('[NodePtyAdapter] Event callback registered, total subscribers:', instance.eventCallbacks.size)
 
-              return { instance, queue }
-            })
-          ),
-          Stream.flatMap(({ instance, queue }) => {
-            // Return stream from the subscriber's queue
-            return Stream.fromQueue(queue)
-          })
-        )
+          // Return cleanup function
+          return () => {
+            console.log('[NodePtyAdapter] Cleanup: removing event callback for process:', processId)
+            instance.eventCallbacks.delete(onEvent)
+          }
+        })
       }
 
     // Return adapter implementation with explicit type

@@ -5,21 +5,21 @@
  * registerIpcHandler pattern for type-safe, boilerplate-free handler registration.
  */
 
-import { Effect, Stream, Fiber } from 'effect'
+import { Effect } from 'effect'
 import { BrowserWindow } from 'electron'
 import { TerminalIpcContracts } from '../../shared/ipc-contracts'
 import { TerminalService } from '../terminal/terminal-service'
-import { TerminalError } from '../terminal/terminal-port'
 import { registerIpcHandler } from './ipc-handler-setup'
+import type { OutputChunk, ProcessEvent } from '../../shared/schemas/terminal'
 
 /**
- * Subscription tracking for stream-based IPC
+ * Subscription tracking for callback-based IPC
  */
 interface Subscription {
   id: string
   processId: string
-  outputFiber: Fiber.RuntimeFiber<void, TerminalError>
-  eventFiber: Fiber.RuntimeFiber<void, TerminalError>
+  cleanupOutput: () => void
+  cleanupEvents: () => void
 }
 
 // Track active subscriptions
@@ -95,24 +95,16 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
       return Effect.gen(function* () {
         console.log('[TerminalHandlers] ========== INSIDE EFFECT.GEN ==========')
         console.log('[TerminalHandlers] Subscribing to watcher:', processId)
-      const subscriptionId = `sub-${processId}-${Date.now()}`
+        const subscriptionId = `sub-${processId}-${Date.now()}`
 
-      // Get output and event streams
-      console.log('[TerminalHandlers] Getting streams from terminal service')
-      const outputStream = terminalService.subscribeToWatcher(processId)
-      const eventStream = terminalService.subscribeToWatcherEvents(processId)
-      console.log('[TerminalHandlers] Got streams')
-
-      // Create fiber to run output stream and send via IPC
-      console.log('[TerminalHandlers] Creating output fiber')
-      console.log('[TerminalHandlers] Output stream object:', typeof outputStream)
-      console.log('[TerminalHandlers] Output stream:', outputStream)
-      const outputFiber = yield* outputStream.pipe(
-        Stream.tap((chunk) => Effect.sync(() => {
+        // Define callback that sends output via IPC (push-based)
+        const sendOutputViaIpc = (chunk: OutputChunk) => {
           console.log('[TerminalHandlers] !!!!! Sending output chunk to renderer:', chunk.data.substring(0, 50))
+
           // Send to all renderer windows (check if not destroyed)
           const windows = BrowserWindow.getAllWindows()
           console.log('[TerminalHandlers] Sending to', windows.length, 'windows')
+
           windows.forEach((window) => {
             if (!window.isDestroyed() && window.webContents && !window.webContents.isDestroyed()) {
               window.webContents.send(`terminal:stream:${processId}`, {
@@ -121,35 +113,12 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
               })
             }
           })
-        })),
-        Stream.tap(() => Effect.sync(() => {
-          console.log('[TerminalHandlers] Stream.runDrain is consuming')
-        })),
-        Stream.runDrain,
-        Effect.tap(() => Effect.sync(() => {
-          console.log('[TerminalHandlers] Stream.runDrain completed!')
-        })),
-        Effect.catchAllCause((cause) => Effect.sync(() => {
-          console.error('[TerminalHandlers] !!! Stream fiber error:', cause)
-        })),
-        Effect.fork
-      )
+        }
 
-      // Monitor fiber status
-      Effect.runSync(Effect.sync(() => {
-        console.log('[TerminalHandlers] Output fiber forked, monitoring...')
-        setTimeout(() => {
-          console.log('[TerminalHandlers] Checking fiber status after 1s')
-        }, 1000)
-      }))
-      console.log('[TerminalHandlers] Output fiber created')
-
-      // Create fiber to run event stream and send via IPC
-      console.log('[TerminalHandlers] Creating event fiber')
-      const eventFiber = yield* eventStream.pipe(
-        Stream.tap((event) => Effect.sync(() => {
+        // Define callback that sends events via IPC (push-based)
+        const sendEventViaIpc = (event: ProcessEvent) => {
           console.log('[TerminalHandlers] Sending event to renderer:', event.type)
-          // Send to all renderer windows (check if not destroyed)
+
           const windows = BrowserWindow.getAllWindows()
           windows.forEach((window) => {
             if (!window.isDestroyed() && window.webContents && !window.webContents.isDestroyed()) {
@@ -159,22 +128,24 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
               })
             }
           })
-        })),
-        Stream.runDrain,
-        Effect.fork
-      )
-      console.log('[TerminalHandlers] Event fiber created')
+        }
 
-      // Store subscription
-      subscriptions.set(subscriptionId, {
-        id: subscriptionId,
-        processId,
-        outputFiber,
-        eventFiber,
-      })
+        // Register callbacks with terminal service
+        console.log('[TerminalHandlers] Registering callbacks with terminal service')
+        const cleanupOutput = yield* terminalService.subscribeToWatcher(processId, sendOutputViaIpc)
+        const cleanupEvents = yield* terminalService.subscribeToWatcherEvents(processId, sendEventViaIpc)
+        console.log('[TerminalHandlers] Callbacks registered')
 
-      console.log('[TerminalHandlers] ========== SUBSCRIPTION CREATED:', subscriptionId, '==========')
-      return { subscriptionId }
+        // Store subscription
+        subscriptions.set(subscriptionId, {
+          id: subscriptionId,
+          processId,
+          cleanupOutput,
+          cleanupEvents,
+        })
+
+        console.log('[TerminalHandlers] ========== SUBSCRIPTION CREATED:', subscriptionId, '==========')
+        return { subscriptionId }
       })
     }
   )
@@ -187,10 +158,11 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
     ({ subscriptionId }) => Effect.gen(function* () {
       const subscription = subscriptions.get(subscriptionId)
       if (subscription) {
-        // Interrupt both fibers
-        yield* Fiber.interrupt(subscription.outputFiber)
-        yield* Fiber.interrupt(subscription.eventFiber)
+        // Call cleanup functions (removes callbacks from adapter)
+        subscription.cleanupOutput()
+        subscription.cleanupEvents()
         subscriptions.delete(subscriptionId)
+        console.log('[TerminalHandlers] Subscription cleaned up:', subscriptionId)
       }
     })
   )
@@ -204,10 +176,11 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
 /**
  * Cleanup all terminal subscriptions (call on app quit)
  */
-export const cleanupTerminalSubscriptions = Effect.gen(function* () {
+export const cleanupTerminalSubscriptions = Effect.sync(() => {
   for (const subscription of subscriptions.values()) {
-    yield* Fiber.interrupt(subscription.outputFiber)
-    yield* Fiber.interrupt(subscription.eventFiber)
+    subscription.cleanupOutput()
+    subscription.cleanupEvents()
   }
   subscriptions.clear()
+  console.log('[TerminalHandlers] All subscriptions cleaned up')
 })

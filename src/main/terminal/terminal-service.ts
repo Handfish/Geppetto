@@ -1,4 +1,4 @@
-import { Effect, Stream, Ref, HashMap } from 'effect'
+import { Effect, Ref, HashMap } from 'effect'
 import { TerminalRegistry } from './terminal-registry'
 import { ProcessConfig, ProcessState, OutputChunk, ProcessEvent, TerminalError, ProcessId } from './terminal-port'
 import { AccountContextService } from '../account/account-context-service'
@@ -31,8 +31,8 @@ interface TerminalServiceMethods {
   resizeWatcher(processId: string, rows: number, cols: number): Effect.Effect<void, TerminalError, never>
   getWatcherState(processId: string): Effect.Effect<ProcessState, TerminalError, never>
   listActiveWatchers(): Effect.Effect<ReadonlyArray<{ processId: string; accountId: string; agentType: string; prompt: string; state: ProcessState; issueContext?: any }>, never, never>
-  subscribeToWatcher(processId: string): Stream.Stream<OutputChunk, TerminalError, never>
-  subscribeToWatcherEvents(processId: string): Stream.Stream<ProcessEvent, TerminalError, never>
+  subscribeToWatcher(processId: string, onOutput: (chunk: OutputChunk) => void): Effect.Effect<() => void, TerminalError, never>
+  subscribeToWatcherEvents(processId: string, onEvent: (event: ProcessEvent) => void): Effect.Effect<() => void, TerminalError, never>
 }
 
 export class TerminalService extends Effect.Service<TerminalService>()(
@@ -218,27 +218,20 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         return states
       })
 
-      const subscribeToWatcher: TerminalServiceMethods['subscribeToWatcher'] = (processId) => {
+      const subscribeToWatcher: TerminalServiceMethods['subscribeToWatcher'] = (processId, onOutput) => {
         console.log('[TerminalService] subscribeToWatcher called for:', processId)
-        return Stream.flatMap(
-          Stream.fromEffect(
-            Effect.tap(
-              registry.getDefaultAdapter(),
-              () => Effect.sync(() => console.log('[TerminalService] Got adapter, calling subscribe'))
-            )
-          ),
-          (adapter) => {
-            console.log('[TerminalService] Adapter retrieved, calling adapter.subscribe')
-            return adapter.subscribe(processId)
-          }
-        )
+        return Effect.gen(function* () {
+          const adapter = yield* registry.getDefaultAdapter()
+          console.log('[TerminalService] Got adapter, calling subscribe')
+          return yield* adapter.subscribe(processId, onOutput)
+        })
       }
 
-      const subscribeToWatcherEvents: TerminalServiceMethods['subscribeToWatcherEvents'] = (processId) => {
-        return Stream.flatMap(
-          Stream.fromEffect(registry.getDefaultAdapter()),
-          (adapter) => adapter.subscribeToEvents(processId)
-        )
+      const subscribeToWatcherEvents: TerminalServiceMethods['subscribeToWatcherEvents'] = (processId, onEvent) => {
+        return Effect.gen(function* () {
+          const adapter = yield* registry.getDefaultAdapter()
+          return yield* adapter.subscribeToEvents(processId, onEvent)
+        })
       }
 
       return {

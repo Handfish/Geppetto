@@ -1,4 +1,4 @@
-import { Effect, Data, Schema as S, Context, Stream } from 'effect'
+import { Effect, Data, Schema as S, Context } from 'effect'
 
 // Terminal process states
 export class ProcessState extends S.Class<ProcessState>('ProcessState')({
@@ -83,9 +83,9 @@ export interface TerminalPort {
   readonly getState: (processId: string) => Effect.Effect<ProcessState, TerminalError>
   readonly listProcesses: () => Effect.Effect<ReadonlyArray<ProcessState>, never>
 
-  // Stream subscriptions (for IPC)
-  readonly subscribe: (processId: string) => Stream.Stream<OutputChunk, TerminalError>
-  readonly subscribeToEvents: (processId: string) => Stream.Stream<ProcessEvent, TerminalError>
+  // Callback-based subscriptions (push architecture, like VS Code)
+  readonly subscribe: (processId: string, onOutput: (chunk: OutputChunk) => void) => Effect.Effect<() => void, TerminalError>
+  readonly subscribeToEvents: (processId: string, onEvent: (event: ProcessEvent) => void) => Effect.Effect<() => void, TerminalError>
 }
 
 // Port tag for dependency injection
