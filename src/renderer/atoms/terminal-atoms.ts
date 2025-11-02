@@ -1,5 +1,6 @@
 import { Atom } from '@effect-atom/atom-react'
 import { Effect, Duration } from 'effect'
+import { Reactivity } from '@effect/experimental'
 import { ElectronIpcClient } from '../lib/ipc-client'
 import type { WatcherInfo, ProcessState, OutputChunk, ProcessEvent } from '../../shared/schemas/terminal'
 
@@ -13,6 +14,7 @@ import type { WatcherInfo, ProcessState, OutputChunk, ProcessEvent } from '../..
  * - Terminal subscription management
  */
 
+// Reactivity service is automatically available in Atom.runtime
 const terminalRuntime = Atom.runtime(ElectronIpcClient.Default)
 
 /**
@@ -119,6 +121,34 @@ export function clearOutputBuffer(processId: string) {
 }
 
 /**
+ * Global status refresh callbacks
+ * Components register callbacks that get invoked when status updates occur
+ */
+const statusRefreshCallbacks = new Set<() => void>()
+
+/**
+ * Register a callback to be invoked on status updates
+ */
+export function onStatusUpdate(callback: () => void): () => void {
+  console.log('[Terminal Atoms] Registering status update callback')
+  statusRefreshCallbacks.add(callback)
+  return () => {
+    console.log('[Terminal Atoms] Unregistering status update callback')
+    statusRefreshCallbacks.delete(callback)
+  }
+}
+
+/**
+ * Trigger all registered status update callbacks
+ */
+export function triggerStatusUpdate() {
+  console.log('[Terminal Atoms] ⚡ Triggering status update, notifying', statusRefreshCallbacks.size, 'callbacks')
+  for (const callback of statusRefreshCallbacks) {
+    callback()
+  }
+}
+
+/**
  * Check if buffer has been restored for this processId
  */
 export function isBufferRestored(processId: string): boolean {
@@ -195,6 +225,12 @@ class TerminalSubscriptionManager {
         } else if (message.type === 'event') {
           const event = message.data as ProcessEvent
           console.log('[TerminalSubscriptionManager] >>> Event type:', event.type)
+
+          // Trigger status update on status changes (push-based update)
+          if (event.type === 'idle' || event.type === 'active' || event.type === 'started' || event.type === 'stopped') {
+            console.log('[TerminalSubscriptionManager] Triggering status update for:', event.type)
+            triggerStatusUpdate()
+          }
 
           // Notify subscriber - use current callback from Map (not closure!)
           const currentCallback = this.callbacks.get(processId)

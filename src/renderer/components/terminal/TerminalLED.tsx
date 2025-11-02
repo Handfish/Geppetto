@@ -11,6 +11,8 @@ interface TerminalLEDProps {
 }
 
 export function TerminalLED({ state, label, onClick, isActive, className }: TerminalLEDProps) {
+  console.log('[TerminalLED] Rendering with state:', { label, status: state.status, pid: state.pid })
+
   const getStatusColor = () => {
     switch (state.status) {
       case 'running':

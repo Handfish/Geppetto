@@ -27,7 +27,16 @@ export const NodePtyTerminalAdapter = Layer.effect(
         const now = Date.now()
         const timeSinceActivity = now - currentState.lastActivity.getTime()
 
+        console.log('[NodePtyAdapter] updateIdleStatus check:', {
+          processId: instance.config.id,
+          status: currentState.status,
+          timeSinceActivity,
+          idleThreshold: currentState.idleThreshold,
+          willGoIdle: currentState.status === 'running' && timeSinceActivity > currentState.idleThreshold
+        })
+
         if (currentState.status === 'running' && timeSinceActivity > currentState.idleThreshold) {
+          console.log('[NodePtyAdapter] Setting process to IDLE:', instance.config.id)
           yield* Ref.update(instance.state, (s) => ({
             ...s,
             status: 'idle' as const,
@@ -40,6 +49,7 @@ export const NodePtyTerminalAdapter = Layer.effect(
             timestamp: new Date(),
           })
 
+          console.log('[NodePtyAdapter] Invoking', instance.eventCallbacks.size, 'event callbacks for idle')
           // Invoke all event callbacks directly (push-based)
           for (const callback of instance.eventCallbacks) {
             callback(event)
@@ -52,14 +62,17 @@ export const NodePtyTerminalAdapter = Layer.effect(
         const currentTimer = yield* Ref.get(instance.idleTimer)
         if (currentTimer) clearTimeout(currentTimer)
 
+        console.log('[NodePtyAdapter] Setting idle timer for process:', instance.config.id, '(will check in 3s)')
         const newTimer = setTimeout(() => {
+          console.log('[NodePtyAdapter] Idle timer fired for process:', instance.config.id)
           Effect.runPromise(updateIdleStatus(instance)).catch(console.error)
-        }, instance.config.issueContext ? 30000 : 60000) // 30s for issues, 60s default
+        }, 3000) // 3 seconds idle timeout
 
         yield* Ref.set(instance.idleTimer, newTimer as unknown as number)
 
         const state = yield* Ref.get(instance.state)
         if (state.status === 'idle') {
+          console.log('[NodePtyAdapter] Process was IDLE, setting back to ACTIVE:', instance.config.id)
           yield* Ref.update(instance.state, (s) => ({
             ...s,
             status: 'running' as const,
@@ -72,6 +85,7 @@ export const NodePtyTerminalAdapter = Layer.effect(
             timestamp: new Date(),
           })
 
+          console.log('[NodePtyAdapter] Invoking', instance.eventCallbacks.size, 'event callbacks for active')
           // Invoke all event callbacks directly (push-based)
           for (const callback of instance.eventCallbacks) {
             callback(event)
@@ -150,7 +164,7 @@ export const NodePtyTerminalAdapter = Layer.effect(
           status: 'starting' as const,
           pid: ptyProcess.pid,
           lastActivity: new Date(),
-          idleThreshold: config.issueContext ? 30000 : 60000,
+          idleThreshold: 3000, // 3 seconds to match resetIdleTimer
         }))
 
         const idleTimer = yield* Ref.make<number | null>(null)
@@ -166,7 +180,7 @@ export const NodePtyTerminalAdapter = Layer.effect(
 
         // Set up event handlers
         ptyProcess.onData((data: string) => {
-          console.log('[NodePtyAdapter] Received PTY data:', data.substring(0, 100))
+          console.log('[NodePtyAdapter] Received PTY data for', config.id, ':', data.substring(0, 100))
           Effect.runPromise(Effect.gen(function* () {
             const chunk = new OutputChunk({
               processId: config.id,

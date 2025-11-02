@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { useAtomValue, useAtomRefresh } from '@effect-atom/atom-react'
 import { Result } from '@effect-atom/atom-react'
-import { activeWatchersAtom, watcherStateAtom } from '../../atoms/terminal-atoms'
+import { activeWatchersAtom, watcherStateAtom, onStatusUpdate } from '../../atoms/terminal-atoms'
 import { XTerminal } from './XTerminal'
 import { TerminalLED } from './TerminalLED'
 import { TerminalTypeSwitcher } from './TerminalTypeSwitcher'
@@ -203,6 +203,19 @@ function WatcherLEDWithState({
   onClick: () => void
 }) {
   const stateResult = useAtomValue(watcherStateAtom(watcher.processId))
+  const refreshState = useAtomRefresh(watcherStateAtom(watcher.processId))
+
+  console.log('[WatcherLEDWithState] Atom result for', watcher.processId, ':', stateResult)
+
+  // Subscribe to status updates and refresh when notified
+  useEffect(() => {
+    console.log('[WatcherLEDWithState] Subscribing to status updates for:', watcher.processId)
+    const unsubscribe = onStatusUpdate(() => {
+      console.log('[WatcherLEDWithState] Status update received, refreshing state for:', watcher.processId)
+      refreshState()
+    })
+    return unsubscribe
+  }, [refreshState, watcher.processId])
 
   return Result.builder(stateResult)
     .onSuccess((state) => (
