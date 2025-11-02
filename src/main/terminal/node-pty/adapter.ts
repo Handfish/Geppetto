@@ -9,8 +9,8 @@ interface ProcessInstance {
   config: ProcessConfig
   ptyProcess: pty.IPty
   state: Ref.Ref<ProcessState>
-  outputStream: PubSub.PubSub<OutputChunk>  // Changed back to PubSub for multi-consumer support
-  eventStream: PubSub.PubSub<ProcessEvent>
+  outputQueues: Set<Queue.Queue<OutputChunk>>  // Track all subscriber queues
+  eventQueues: Set<Queue.Queue<ProcessEvent>>  // Track all event subscriber queues
   idleTimer: Ref.Ref<number | null>
 }
 
@@ -34,14 +34,16 @@ export const NodePtyTerminalAdapter = Layer.effect(
             lastActivity: new Date(now),
           }))
 
-          yield* PubSub.publish(
-            instance.eventStream,
-            new ProcessEvent({
-              processId: instance.config.id,
-              type: 'idle',
-              timestamp: new Date(),
-            })
-          )
+          const event = new ProcessEvent({
+            processId: instance.config.id,
+            type: 'idle',
+            timestamp: new Date(),
+          })
+
+          // Offer to all event subscriber queues
+          for (const queue of instance.eventQueues) {
+            yield* Queue.offer(queue, event)
+          }
         }
       })
 
@@ -64,14 +66,16 @@ export const NodePtyTerminalAdapter = Layer.effect(
             lastActivity: new Date(),
           }))
 
-          yield* PubSub.publish(
-            instance.eventStream,
-            new ProcessEvent({
-              processId: instance.config.id,
-              type: 'active',
-              timestamp: new Date(),
-            })
-          )
+          const event = new ProcessEvent({
+            processId: instance.config.id,
+            type: 'active',
+            timestamp: new Date(),
+          })
+
+          // Offer to all event subscriber queues
+          for (const queue of instance.eventQueues) {
+            yield* Queue.offer(queue, event)
+          }
         }
       })
 
@@ -149,16 +153,14 @@ export const NodePtyTerminalAdapter = Layer.effect(
           idleThreshold: config.issueContext ? 30000 : 60000,
         }))
 
-        const outputStream = yield* PubSub.unbounded<OutputChunk>()  // Using PubSub for multi-consumer support
-        const eventStream = yield* PubSub.unbounded<ProcessEvent>()
         const idleTimer = yield* Ref.make<number | null>(null)
 
         const instance: ProcessInstance = {
           config,
           ptyProcess,
           state,
-          outputStream,  // Back to outputStream with PubSub
-          eventStream,
+          outputQueues: new Set(),  // Track all output subscribers
+          eventQueues: new Set(),   // Track all event subscribers
           idleTimer,
         }
 
@@ -173,9 +175,14 @@ export const NodePtyTerminalAdapter = Layer.effect(
               type: 'stdout',
             })
 
-            console.log('[NodePtyAdapter] Publishing chunk to PubSub')
-            yield* PubSub.publish(outputStream, chunk)
-            console.log('[NodePtyAdapter] Successfully published to PubSub')
+            console.log('[NodePtyAdapter] Offering chunk to', instance.outputQueues.size, 'subscriber queues')
+
+            // Offer to all subscriber queues
+            for (const queue of instance.outputQueues) {
+              yield* Queue.offer(queue, chunk)
+            }
+
+            console.log('[NodePtyAdapter] Successfully offered to all queues')
 
             yield* Ref.update(state, (s) => ({
               ...s,
@@ -196,15 +203,17 @@ export const NodePtyTerminalAdapter = Layer.effect(
               exitCode: exitCode ?? undefined,
             }))
 
-            yield* PubSub.publish(
-              eventStream,
-              new ProcessEvent({
-                processId: config.id,
-                type: 'stopped',
-                timestamp: new Date(),
-                metadata: { exitCode, signal },
-              })
-            )
+            const event = new ProcessEvent({
+              processId: config.id,
+              type: 'stopped',
+              timestamp: new Date(),
+              metadata: { exitCode, signal },
+            })
+
+            // Offer to all event subscriber queues
+            for (const queue of instance.eventQueues) {
+              yield* Queue.offer(queue, event)
+            }
 
             // Clear idle timer
             const timer = yield* Ref.get(idleTimer)
@@ -221,14 +230,16 @@ export const NodePtyTerminalAdapter = Layer.effect(
           status: 'running' as const,
         }))
 
-        yield* PubSub.publish(
-          eventStream,
-          new ProcessEvent({
-            processId: config.id,
-            type: 'started',
-            timestamp: new Date(),
-          })
-        )
+        const event = new ProcessEvent({
+          processId: config.id,
+          type: 'started',
+          timestamp: new Date(),
+        })
+
+        // Offer to all event subscriber queues
+        for (const queue of instance.eventQueues) {
+          yield* Queue.offer(queue, event)
+        }
 
         // Start idle timer
         yield* resetIdleTimer(instance)
@@ -367,56 +378,77 @@ export const NodePtyTerminalAdapter = Layer.effect(
 
       const subscribe = (processId: string): Stream.Stream<OutputChunk, TerminalError> => {
         console.log('[NodePtyAdapter] Creating output stream subscription for:', processId)
-        return pipe(
-          Stream.fromEffect(
-            pipe(
+
+        // Use asyncScoped for proper resource management
+        return Stream.asyncScoped<OutputChunk, TerminalError>((emit) =>
+          Effect.gen(function* () {
+            console.log('[NodePtyAdapter] Stream asyncScoped callback called')
+
+            const option = yield* pipe(
               Ref.get(processes),
-              Effect.map(HashMap.get(processId as ProcessId)),
-              Effect.flatMap((option) => {
-                if (option._tag === 'Some') {
-                  console.log('[NodePtyAdapter] Found process instance for subscription')
-                  return Effect.succeed(option.value)
-                } else {
-                  console.error('[NodePtyAdapter] Process not found for subscription:', processId)
-                  return Effect.fail(new TerminalError({ reason: 'ProcessNotFound', message: `Process ${processId} not found` }))
+              Effect.map(HashMap.get(processId as ProcessId))
+            )
+
+            if (option._tag === 'None') {
+              console.error('[NodePtyAdapter] Process not found for subscription:', processId)
+              emit.fail(new TerminalError({ reason: 'ProcessNotFound', message: `Process ${processId} not found` }))
+              return
+            }
+
+            const instance = option.value
+            console.log('[NodePtyAdapter] Found process instance, creating queue')
+
+            // Create queue within the scoped effect
+            const queue = yield* Queue.unbounded<OutputChunk>()
+            instance.outputQueues.add(queue)
+            console.log('[NodePtyAdapter] Queue added, total subscribers:', instance.outputQueues.size)
+
+            // Fork a fiber to pull from queue and emit
+            console.log('[NodePtyAdapter] Forking fiber to pull from queue')
+            yield* Effect.forkScoped(
+              Effect.gen(function* () {
+                console.log('[NodePtyAdapter] Pull fiber started')
+                while (true) {
+                  const chunk = yield* Queue.take(queue)
+                  console.log('[NodePtyAdapter] Emitting chunk:', chunk.data.substring(0, 50))
+                  emit.single(chunk)
                 }
               })
             )
-          ),
-          Stream.flatMap((instance) => {
-            console.log('[NodePtyAdapter] Creating PubSub stream for process:', processId)
-            console.log('[NodePtyAdapter] PubSub instance:', instance.outputStream)
-            // PubSub.subscribe() returns a Dequeue (Queue), so use Stream.fromQueue!
-            return Stream.unwrapScoped(
-              Effect.map(
-                PubSub.subscribe(instance.outputStream),
-                (subscriptionQueue) => {
-                  console.log('[NodePtyAdapter] PubSub subscription queue created')
-                  return Stream.fromQueue(subscriptionQueue)  // subscriptionQueue is a Queue!
-                }
-              )
-            )
-          }),
-          Stream.tap((chunk) => Effect.sync(() => {
-            console.log('[NodePtyAdapter] Stream emitting chunk:', chunk.data.substring(0, 50))
-          }))
+
+            console.log('[NodePtyAdapter] AsyncScoped setup complete')
+          })
         )
       }
 
       const subscribeToEvents = (processId: string): Stream.Stream<ProcessEvent, TerminalError> => {
         return pipe(
           Stream.fromEffect(
-            pipe(
-              Ref.get(processes),
-              Effect.map(HashMap.get(processId as ProcessId)),
-              Effect.flatMap((option) =>
-                option._tag === 'Some'
-                  ? Effect.succeed(option.value)
-                  : Effect.fail(new TerminalError({ reason: 'ProcessNotFound', message: `Process ${processId} not found` }))
+            Effect.gen(function* () {
+              const option = yield* pipe(
+                Ref.get(processes),
+                Effect.map(HashMap.get(processId as ProcessId))
               )
-            )
+
+              if (option._tag === 'None') {
+                return yield* Effect.fail(new TerminalError({ reason: 'ProcessNotFound', message: `Process ${processId} not found` }))
+              }
+
+              const instance = option.value
+
+              // Create a new queue for this event subscription
+              const queue = yield* Queue.unbounded<ProcessEvent>()
+
+              // Add queue to the set of event subscribers
+              instance.eventQueues.add(queue)
+
+              return { instance, queue }
+            })
           ),
-          Stream.flatMap((instance) => Stream.fromPubSub(instance.eventStream))
+          Stream.flatMap(({ instance, queue }) => {
+            // Return stream from the subscriber's queue
+            return Stream.fromQueue(queue)
+          })
         )
       }
 

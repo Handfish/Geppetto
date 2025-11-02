@@ -92,7 +92,7 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
     ({ processId }) => {
       console.log('[TerminalHandlers] ========== SUBSCRIPTION HANDLER CALLED ==========')
       console.log('[TerminalHandlers] ProcessId:', processId)
-      return Effect.scoped(Effect.gen(function* () {
+      return Effect.gen(function* () {
         console.log('[TerminalHandlers] ========== INSIDE EFFECT.GEN ==========')
         console.log('[TerminalHandlers] Subscribing to watcher:', processId)
       const subscriptionId = `sub-${processId}-${Date.now()}`
@@ -132,7 +132,7 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
         Effect.catchAllCause((cause) => Effect.sync(() => {
           console.error('[TerminalHandlers] !!! Stream fiber error:', cause)
         })),
-        Effect.forkScoped
+        Effect.fork
       )
 
       // Monitor fiber status
@@ -161,7 +161,7 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
           })
         })),
         Stream.runDrain,
-        Effect.forkScoped
+        Effect.fork
       )
       console.log('[TerminalHandlers] Event fiber created')
 
@@ -175,7 +175,7 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
 
       console.log('[TerminalHandlers] ========== SUBSCRIPTION CREATED:', subscriptionId, '==========')
       return { subscriptionId }
-      }))
+      })
     }
   )
   console.log('[TerminalHandlers] subscribe-to-watcher handler registered')

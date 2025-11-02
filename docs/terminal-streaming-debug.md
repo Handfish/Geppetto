@@ -45,11 +45,19 @@ User Types → XTerminal.onData → writeToWatcher → PTY Process
 - Added `isDestroyed()` checks before sending IPC
 - Prevents crashes from destroyed windows
 
+## Progress Update
+
+### ✅ Adapter Now Emitting (Stream.async pattern)
+Adapter successfully emits chunks after switching to `Stream.async` with manual queue pulling.
+
+### ❌ Terminal Handlers Not Consuming
+Stream emits in adapter but fiber in terminal-handlers doesn't consume/forward to IPC.
+
 ## Remaining Issue
 
-### Stream.fromPubSub Not Consuming ❌
+### Stream Not Reaching Terminal Handlers ❌
 
-**Current Implementation** (not working):
+**Current Implementation** (partially working):
 ```typescript
 return Stream.unwrap(
   Effect.map(
