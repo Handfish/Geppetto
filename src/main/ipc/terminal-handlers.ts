@@ -26,6 +26,9 @@ interface Subscription {
 // Track active subscriptions
 const subscriptions = new Map<string, Subscription>()
 
+// Track active subscription keys to prevent duplicates
+const activeSubscriptionKeys = new Set<string>()
+
 /**
  * Setup Terminal IPC handlers
  */
@@ -93,13 +96,41 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
     console.log('[TerminalHandlers] ========== SUBSCRIPTION HANDLER CALLED ==========')
     console.log('[TerminalHandlers] Sender webContentsId:', event.sender.id)
 
+    // Pre-decode input to get processId synchronously
+    const decoded = S.decodeUnknownSync(TerminalIpcContracts['terminal:subscribe-to-watcher'].input)(input)
+    const processId = decoded.processId
+    const senderWebContentsId = event.sender.id
+    const subscriptionKey = `${processId}-${senderWebContentsId}`
+
+    console.log('[TerminalHandlers] ProcessId:', processId)
+    console.log('[TerminalHandlers] Checking for duplicates - key:', subscriptionKey)
+    console.log('[TerminalHandlers] Active keys:', Array.from(activeSubscriptionKeys))
+
+    // CRITICAL: Check and mark SYNCHRONOUSLY before Effect runs
+    // This prevents race condition in StrictMode double-mount
+    if (activeSubscriptionKeys.has(subscriptionKey)) {
+      console.log('[TerminalHandlers] ⚠️ Duplicate subscription detected - cleaning up old subscription first')
+
+      // Find and cleanup the old subscription
+      for (const [id, sub] of subscriptions.entries()) {
+        if (sub.processId === processId && sub.webContentsId === senderWebContentsId) {
+          console.log('[TerminalHandlers] Cleaning up old subscription:', id)
+          sub.cleanupOutput()
+          sub.cleanupEvents()
+          subscriptions.delete(id)
+          activeSubscriptionKeys.delete(subscriptionKey)
+          break
+        }
+      }
+    }
+
+    // Mark as active IMMEDIATELY to block concurrent calls
+    activeSubscriptionKeys.add(subscriptionKey)
+    console.log('[TerminalHandlers] Marked subscription key as active:', subscriptionKey)
+
     const program = Effect.gen(function* () {
-      // Decode input
-      const { processId } = yield* S.decodeUnknown(TerminalIpcContracts['terminal:subscribe-to-watcher'].input)(input)
-      console.log('[TerminalHandlers] ProcessId:', processId)
 
       const subscriptionId = `sub-${processId}-${Date.now()}`
-      const senderWebContentsId = event.sender.id
 
       // Define callback that sends output via IPC (push-based) - ONLY to the sender window
       const sendOutputViaIpc = (chunk: OutputChunk) => {
@@ -175,7 +206,14 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
       return yield* S.encode(TerminalIpcContracts['terminal:subscribe-to-watcher'].output)({ subscriptionId })
     })
 
-    return await Effect.runPromise(program)
+    try {
+      return await Effect.runPromise(program)
+    } catch (error) {
+      // If subscription fails, remove the key so it can be retried
+      console.error('[TerminalHandlers] Subscription failed, cleaning up key:', subscriptionKey, error)
+      activeSubscriptionKeys.delete(subscriptionKey)
+      throw error
+    }
   })
   console.log('[TerminalHandlers] subscribe-to-watcher handler registered')
 
@@ -186,6 +224,10 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
     ({ subscriptionId }) => Effect.gen(function* () {
       const subscription = subscriptions.get(subscriptionId)
       if (subscription) {
+        // Remove from active tracking
+        const subscriptionKey = `${subscription.processId}-${subscription.webContentsId}`
+        activeSubscriptionKeys.delete(subscriptionKey)
+
         // Call cleanup functions (removes callbacks from adapter)
         subscription.cleanupOutput()
         subscription.cleanupEvents()
@@ -202,6 +244,34 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
 })
 
 /**
+ * Cleanup subscriptions for a specific webContents (call when window closes)
+ */
+export const cleanupSubscriptionsForWindow = (webContentsId: number) => Effect.sync(() => {
+  console.log('[TerminalHandlers] Cleaning up subscriptions for window:', webContentsId)
+  const activeSubKeys = new Set<string>()
+
+  for (const [id, subscription] of subscriptions.entries()) {
+    if (subscription.webContentsId === webContentsId) {
+      console.log('[TerminalHandlers] Cleaning up subscription:', id)
+
+      // Remove from active tracking
+      const subscriptionKey = `${subscription.processId}-${subscription.webContentsId}`
+      activeSubKeys.add(subscriptionKey)
+
+      // Call cleanup functions
+      subscription.cleanupOutput()
+      subscription.cleanupEvents()
+      subscriptions.delete(id)
+    }
+  }
+
+  // Clean up tracking keys
+  for (const key of activeSubKeys) {
+    activeSubscriptionKeys.delete(key)
+  }
+})
+
+/**
  * Cleanup all terminal subscriptions (call on app quit)
  */
 export const cleanupTerminalSubscriptions = Effect.sync(() => {
@@ -210,5 +280,6 @@ export const cleanupTerminalSubscriptions = Effect.sync(() => {
     subscription.cleanupEvents()
   }
   subscriptions.clear()
+  activeSubscriptionKeys.clear()
   console.log('[TerminalHandlers] All subscriptions cleaned up')
 })

@@ -66,6 +66,10 @@ interface OutputBuffer {
 
 const outputBuffers = new Map<string, OutputBuffer>()
 
+// Track which terminals have had their buffer restored in this session
+// This prevents duplicate restoration when switching between terminals
+const bufferRestoredSet = new Set<string>()
+
 export const watcherOutputAtom = Atom.family((processId: string) =>
   terminalRuntime.atom(
     Effect.gen(function* () {
@@ -110,6 +114,22 @@ export function clearOutputBuffer(processId: string) {
   if (buffer) {
     buffer.chunks = []
   }
+  // Also clear the restored flag so buffer can be restored again if needed
+  bufferRestoredSet.delete(processId)
+}
+
+/**
+ * Check if buffer has been restored for this processId
+ */
+export function isBufferRestored(processId: string): boolean {
+  return bufferRestoredSet.has(processId)
+}
+
+/**
+ * Mark buffer as restored for this processId
+ */
+export function markBufferRestored(processId: string): void {
+  bufferRestoredSet.add(processId)
 }
 
 /**
@@ -119,24 +139,34 @@ export function clearOutputBuffer(processId: string) {
 class TerminalSubscriptionManager {
   private subscriptions = new Map<string, string>() // processId -> subscriptionId
   private listeners = new Map<string, (message: { type: 'output' | 'event', data: any }) => void>() // Note: preload removes event param
+  private callbacks = new Map<string, (data: OutputChunk | ProcessEvent) => void>() // Track current callback per processId
   private listenerAttached = new Set<string>() // Track which processIds have listeners attached (prevents duplicates in StrictMode)
 
   subscribe(processId: string, onData: (data: OutputChunk | ProcessEvent) => void) {
     console.log('[TerminalSubscriptionManager] Subscribe called for:', processId)
     return Effect.gen(function* (this: TerminalSubscriptionManager) {
-      // If IPC listener already attached for this processId, don't attach another
-      if (this.listenerAttached.has(processId)) {
-        console.log('[TerminalSubscriptionManager] IPC listener already attached for:', processId)
-        return { unsubscribe: () => this.unsubscribe(processId) }
-      }
+      // Always update the callback - allows StrictMode remounts to update the closure
+      this.callbacks.set(processId, onData)
+      console.log('[TerminalSubscriptionManager] Updated callback for:', processId)
 
-      console.log('[TerminalSubscriptionManager] Invoking terminal:subscribe-to-watcher')
+      // ALWAYS create backend subscription first - backend will cleanup duplicates
+      // This is critical for StrictMode: both mounts need to call backend so second can cleanup first
+      console.log('[TerminalSubscriptionManager] Creating backend subscription for:', processId)
       const client = yield* ElectronIpcClient
       const result = yield* client.invoke('terminal:subscribe-to-watcher', { processId })
       const subscriptionId = result.subscriptionId
       console.log('[TerminalSubscriptionManager] Got subscription ID:', subscriptionId)
-
       this.subscriptions.set(processId, subscriptionId)
+
+      // If IPC listener already attached for this processId, don't attach another
+      if (this.listenerAttached.has(processId)) {
+        console.log('[TerminalSubscriptionManager] IPC listener already attached, reusing it')
+        // Return a no-op unsubscribe - don't destroy the shared listener!
+        return { unsubscribe: () => {
+          console.log('[TerminalSubscriptionManager] No-op unsubscribe (listener shared) for:', processId)
+          // Callback will be updated on next mount, don't delete anything
+        }}
+      }
 
       // Set up IPC listener
       // Note: preload script removes the event parameter, so listener only receives message
@@ -155,14 +185,22 @@ class TerminalSubscriptionManager {
           // Update output buffer
           appendToOutputBuffer(processId, chunk.data)
 
-          // Notify subscriber
-          console.log('[TerminalSubscriptionManager] >>> Calling onData callback')
-          onData(chunk)
-          console.log('[TerminalSubscriptionManager] >>> onData callback completed')
+          // Notify subscriber - use current callback from Map (not closure!)
+          const currentCallback = this.callbacks.get(processId)
+          if (currentCallback) {
+            console.log('[TerminalSubscriptionManager] >>> Calling onData callback')
+            currentCallback(chunk)
+            console.log('[TerminalSubscriptionManager] >>> onData callback completed')
+          }
         } else if (message.type === 'event') {
           const event = message.data as ProcessEvent
           console.log('[TerminalSubscriptionManager] >>> Event type:', event.type)
-          onData(event)
+
+          // Notify subscriber - use current callback from Map (not closure!)
+          const currentCallback = this.callbacks.get(processId)
+          if (currentCallback) {
+            currentCallback(event)
+          }
         }
       }
 
@@ -180,7 +218,22 @@ class TerminalSubscriptionManager {
     }.bind(this))
   }
 
+  /**
+   * Unsubscribe (no-op - keep everything alive for fast switching)
+   * Use destroy() to fully tear down a subscription when killing a watcher
+   */
   unsubscribe(processId: string) {
+    console.log('[TerminalSubscriptionManager] Unsubscribe called for:', processId)
+    // No-op - keep callback and listener alive for fast terminal switching
+    // The callback will be updated on next mount via line 149
+  }
+
+  /**
+   * Destroy a subscription completely (for when watcher is killed)
+   */
+  destroy(processId: string) {
+    console.log('[TerminalSubscriptionManager] Destroying subscription for:', processId)
+
     const subscriptionId = this.subscriptions.get(processId)
     const listener = this.listeners.get(processId)
 
@@ -203,11 +256,14 @@ class TerminalSubscriptionManager {
       this.listeners.delete(processId)
       this.listenerAttached.delete(processId) // Remove from tracking set
     }
+
+    // Clean up callback
+    this.callbacks.delete(processId)
   }
 
-  unsubscribeAll() {
+  destroyAll() {
     Array.from(this.subscriptions.keys()).forEach((processId) => {
-      this.unsubscribe(processId)
+      this.destroy(processId)
     })
   }
 }
@@ -251,8 +307,8 @@ export const killWatcherAtom = terminalRuntime.fn(
       const client = yield* ElectronIpcClient
       yield* client.invoke('terminal:kill-watcher', { processId })
 
-      // Unsubscribe from this watcher
-      terminalSubscriptionManager.unsubscribe(processId)
+      // Destroy subscription completely
+      terminalSubscriptionManager.destroy(processId)
 
       // Clear output buffer
       clearOutputBuffer(processId)
@@ -272,8 +328,8 @@ export const killAllWatchersAtom = terminalRuntime.fn(
       const client = yield* ElectronIpcClient
       yield* client.invoke('terminal:kill-all-watchers', undefined)
 
-      // Unsubscribe from all watchers
-      terminalSubscriptionManager.unsubscribeAll()
+      // Destroy all subscriptions
+      terminalSubscriptionManager.destroyAll()
 
       // Clear all output buffers
       outputBuffers.clear()

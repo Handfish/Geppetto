@@ -34,7 +34,7 @@ export function XTerminal({
   const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null)
 
   const outputResult = useAtomValue(watcherOutputAtom(processId))
-  const refreshOutput = useAtomRefresh(watcherOutputAtom(processId))
+  // Note: refreshOutput is NOT needed - buffer updated by appendToOutputBuffer automatically
 
   // Initialize terminal
   useEffect(() => {
@@ -122,12 +122,14 @@ export function XTerminal({
     if (!xtermRef.current) return
 
     const terminal = xtermRef.current
+    let cancelled = false
 
     console.log(`[XTerminal] ==================== SUBSCRIBING ====================`)
     console.log(`[XTerminal] Process ID: ${processId}`)
     console.log(`[XTerminal] Terminal instance:`, xtermRef.current)
 
     // Subscribe to terminal output
+    // Note: subscription manager handles StrictMode by updating callback in Map
     Effect.runPromise(
       terminalSubscriptionManager.subscribe(processId, (data) => {
         console.log('[XTerminal] !!!!! CALLBACK TRIGGERED !!!!!', data)
@@ -153,42 +155,54 @@ export function XTerminal({
           }
         }
 
-        // Refresh output atom to update buffer
-        refreshOutput()
+        // NOTE: Don't call refreshOutput() here!
+        // The buffer is already updated by appendToOutputBuffer in the subscription manager.
+        // Calling refreshOutput() would trigger the buffer restore effect, causing duplicate output.
       }).pipe(Effect.provide(ElectronIpcClient.Default))
     ).then((subscription) => {
-      console.log('[XTerminal] ==================== SUBSCRIPTION SUCCESSFUL ====================')
-      subscriptionRef.current = subscription
+      // Only set subscription if not cancelled (prevents orphaned subscriptions)
+      if (!cancelled) {
+        console.log('[XTerminal] ==================== SUBSCRIPTION SUCCESSFUL ====================')
+        subscriptionRef.current = subscription
+      } else {
+        // Effect cleaned up before promise resolved - unsubscribe immediately
+        console.log('[XTerminal] ==================== SUBSCRIPTION CANCELLED - CLEANING UP ====================')
+        subscription.unsubscribe()
+      }
     }).catch((error) => {
-      console.error('[XTerminal] ==================== SUBSCRIPTION FAILED ====================', error)
+      if (!cancelled) {
+        console.error('[XTerminal] ==================== SUBSCRIPTION FAILED ====================', error)
+      }
     })
 
     return () => {
       console.log(`[XTerminal] Unsubscribing from process ${processId}`)
+      cancelled = true  // Mark as cancelled to prevent orphaned subscriptions
       subscriptionRef.current?.unsubscribe()
+      subscriptionRef.current = null
     }
-  }, [processId, refreshOutput])
+  }, [processId])
 
   // Load existing output when switching to this terminal
-  // StrictMode protection: track if we've already loaded to prevent duplicates
-  const hasLoadedRef = useRef(false)
-  const isLoadingRef = useRef(false)
+  // Use component-instance ref to prevent duplicate restoration in StrictMode
+  const hasLoadedBufferRef = useRef(false)
+  const isLoadingBufferRef = useRef(false)
 
   useEffect(() => {
     if (!xtermRef.current) return
-    if (isLoadingRef.current) return  // StrictMode protection: prevent concurrent loads
-    if (hasLoadedRef.current) return  // Already loaded
+    if (isLoadingBufferRef.current) return  // StrictMode protection
+    if (hasLoadedBufferRef.current) return  // Already loaded for this instance
 
-    isLoadingRef.current = true
+    isLoadingBufferRef.current = true
 
     Result.matchWithError(outputResult, {
       onSuccess: (chunks) => {
-        if (chunks && chunks.value.length > 0 && xtermRef.current && !hasLoadedRef.current) {
-          console.log('[XTerminal] Loading', chunks.value.length, 'chunks of history')
+        if (chunks && chunks.value.length > 0 && xtermRef.current && !hasLoadedBufferRef.current) {
+          console.log('[XTerminal] Loading', chunks.value.length, 'chunks of history for:', processId)
           // Write all raw chunks - concatenate without adding newlines!
           const fullOutput = chunks.value.join('')
           xtermRef.current.write(fullOutput)
-          hasLoadedRef.current = true
+          hasLoadedBufferRef.current = true
         }
       },
       onError: () => {},
@@ -196,13 +210,13 @@ export function XTerminal({
       onInitial: () => {},
     })
 
-    isLoadingRef.current = false
-  }, [outputResult])
+    isLoadingBufferRef.current = false
+  }, [outputResult, processId])
 
-  // Reset loaded flags when processId changes
+  // Reset buffer loaded flag when processId changes
   useEffect(() => {
-    hasLoadedRef.current = false
-    isLoadingRef.current = false
+    hasLoadedBufferRef.current = false
+    isLoadingBufferRef.current = false
   }, [processId])
 
   // Handle active state changes
