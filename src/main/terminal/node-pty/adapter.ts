@@ -32,10 +32,10 @@ export const NodePtyTerminalAdapter = Layer.effect(
           status: currentState.status,
           timeSinceActivity,
           idleThreshold: currentState.idleThreshold,
-          willGoIdle: currentState.status === 'running' && timeSinceActivity > currentState.idleThreshold
+          willGoIdle: currentState.status === 'running' && timeSinceActivity >= currentState.idleThreshold
         })
 
-        if (currentState.status === 'running' && timeSinceActivity > currentState.idleThreshold) {
+        if (currentState.status === 'running' && timeSinceActivity >= currentState.idleThreshold) {
           console.log('[NodePtyAdapter] Setting process to IDLE:', instance.config.id)
           yield* Ref.update(instance.state, (s) => ({
             ...s,
@@ -62,9 +62,11 @@ export const NodePtyTerminalAdapter = Layer.effect(
         const currentTimer = yield* Ref.get(instance.idleTimer)
         if (currentTimer) clearTimeout(currentTimer)
 
-        console.log('[NodePtyAdapter] Setting idle timer for process:', instance.config.id, '(will check in 3s)')
+        const now = Date.now()
+        console.log('[NodePtyAdapter] Setting idle timer for process:', instance.config.id, '(will check in 3s) at', now)
         const newTimer = setTimeout(() => {
-          console.log('[NodePtyAdapter] Idle timer fired for process:', instance.config.id)
+          const fired = Date.now()
+          console.log('[NodePtyAdapter] Idle timer fired for process:', instance.config.id, 'at', fired, '(delta:', fired - now, 'ms)')
           Effect.runPromise(updateIdleStatus(instance)).catch(console.error)
         }, 3000) // 3 seconds idle timeout
 
@@ -238,10 +240,10 @@ export const NodePtyTerminalAdapter = Layer.effect(
         // Store process instance
         yield* Ref.update(processes, HashMap.set(config.id, instance))
 
-        // Update state to running
+        // Update state to idle (terminals start idle until user interacts)
         yield* Ref.update(state, (s) => ({
           ...s,
-          status: 'running' as const,
+          status: 'idle' as const,
         }))
 
         const event = new ProcessEvent({
@@ -255,7 +257,7 @@ export const NodePtyTerminalAdapter = Layer.effect(
           callback(event)
         }
 
-        // Start idle timer
+        // Start idle timer (will transition to active on first activity)
         yield* resetIdleTimer(instance)
 
         return yield* Ref.get(state)

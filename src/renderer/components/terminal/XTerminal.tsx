@@ -32,6 +32,7 @@ export function XTerminal({
   const fitAddonRef = useRef<FitAddon | null>(null)
   const searchAddonRef = useRef<SearchAddon | null>(null)
   const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null)
+  const initialMountTimeRef = useRef<number>(0)
 
   const outputResult = useAtomValue(watcherOutputAtom(processId))
   // Note: refreshOutput is NOT needed - buffer updated by appendToOutputBuffer automatically
@@ -39,6 +40,10 @@ export function XTerminal({
   // Initialize terminal
   useEffect(() => {
     if (!terminalRef.current) return
+
+    // Record mount time to ignore initial resize events
+    initialMountTimeRef.current = Date.now()
+    console.log('[XTerminal] Recording initial mount time:', initialMountTimeRef.current)
 
     const terminal = new Terminal({
       theme: {
@@ -108,6 +113,13 @@ export function XTerminal({
 
     // Handle resize
     terminal.onResize(({ rows, cols }) => {
+      // Ignore resize events within 500ms of initial mount to avoid triggering
+      // activity when switching tabs (which causes bash prompt redraws)
+      const timeSinceMount = Date.now() - initialMountTimeRef.current
+      if (timeSinceMount < 500) {
+        console.log('[XTerminal] Ignoring resize during initial mount period (', timeSinceMount, 'ms)')
+        return
+      }
       onResize?.(rows, cols)
     })
 
