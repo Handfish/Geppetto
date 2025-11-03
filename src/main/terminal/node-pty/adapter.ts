@@ -12,6 +12,7 @@ interface ProcessInstance {
   outputCallbacks: Set<(chunk: OutputChunk) => void>  // Simple callbacks for push-based streaming
   eventCallbacks: Set<(event: ProcessEvent) => void>  // Simple callbacks for events
   idleTimer: Ref.Ref<number | null>
+  lastResize: Ref.Ref<number>  // Timestamp of last resize to ignore prompt redraws
 }
 
 // Export as Layer
@@ -57,13 +58,26 @@ export const NodePtyTerminalAdapter = Layer.effect(
         }
       })
 
-      // Helper to reset idle timer
+      // Helper to start idle timer without changing status (used at spawn)
+      const startIdleTimer = (instance: ProcessInstance) => Effect.gen(function* () {
+        const now = Date.now()
+        console.log('[NodePtyAdapter] Starting idle timer for process:', instance.config.id, '(will check in 3s) at', now)
+        const newTimer = setTimeout(() => {
+          const fired = Date.now()
+          console.log('[NodePtyAdapter] Idle timer fired for process:', instance.config.id, 'at', fired, '(delta:', fired - now, 'ms)')
+          Effect.runPromise(updateIdleStatus(instance)).catch(console.error)
+        }, 3000) // 3 seconds idle timeout
+
+        yield* Ref.set(instance.idleTimer, newTimer as unknown as number)
+      })
+
+      // Helper to reset idle timer (called on activity)
       const resetIdleTimer = (instance: ProcessInstance) => Effect.gen(function* () {
         const currentTimer = yield* Ref.get(instance.idleTimer)
         if (currentTimer) clearTimeout(currentTimer)
 
         const now = Date.now()
-        console.log('[NodePtyAdapter] Setting idle timer for process:', instance.config.id, '(will check in 3s) at', now)
+        console.log('[NodePtyAdapter] Resetting idle timer for process:', instance.config.id, '(will check in 3s) at', now)
         const newTimer = setTimeout(() => {
           const fired = Date.now()
           console.log('[NodePtyAdapter] Idle timer fired for process:', instance.config.id, 'at', fired, '(delta:', fired - now, 'ms)')
@@ -147,12 +161,6 @@ export const NodePtyTerminalAdapter = Layer.effect(
 
             console.log('[NodePtyAdapter] Process spawned successfully, PID:', pty.pid)
 
-            // Write a test message to the PTY immediately to see if it appears
-            setTimeout(() => {
-              console.log('[NodePtyAdapter] Writing test message to PTY')
-              pty.write('echo "PTY Test: If you see this, the PTY is working!"\r')
-            }, 500)
-
             return pty
           },
           catch: (error) => {
@@ -170,6 +178,8 @@ export const NodePtyTerminalAdapter = Layer.effect(
         }))
 
         const idleTimer = yield* Ref.make<number | null>(null)
+        // Initialize lastResize to current time to ignore initial prompt draws
+        const lastResize = yield* Ref.make(Date.now())
 
         const instance: ProcessInstance = {
           config,
@@ -178,6 +188,7 @@ export const NodePtyTerminalAdapter = Layer.effect(
           outputCallbacks: new Set(),  // Track all output callbacks
           eventCallbacks: new Set(),   // Track all event callbacks
           idleTimer,
+          lastResize,
         }
 
         // Set up event handlers
@@ -200,12 +211,35 @@ export const NodePtyTerminalAdapter = Layer.effect(
 
             console.log('[NodePtyAdapter] All callbacks invoked')
 
-            yield* Ref.update(state, (s) => ({
-              ...s,
-              lastActivity: new Date(),
-            }))
+            // Check if this data arrived within 2s of a resize/spawn (likely prompt redraw)
+            const lastResizeTime = yield* Ref.get(lastResize)
+            const timeSinceResize = Date.now() - lastResizeTime
+            const isPromptRedraw = timeSinceResize < 2000
 
-            yield* resetIdleTimer(instance)
+            if (isPromptRedraw) {
+              console.log('[NodePtyAdapter] ⏭️  Ignoring PTY data within 2s of resize/spawn (prompt redraw, delta:', timeSinceResize, 'ms)')
+              // Still update lastActivity
+              yield* Ref.update(state, (s) => ({
+                ...s,
+                lastActivity: new Date(),
+              }))
+
+              // Still need to reset the timer if running, just don't transition idle→running
+              const currentState = yield* Ref.get(state)
+              if (currentState.status === 'running') {
+                console.log('[NodePtyAdapter] Process is running, restarting idle timer without status change')
+                yield* startIdleTimer(instance)
+              }
+              // If idle, don't touch the timer (would transition to running)
+            } else {
+              // Normal PTY data - update activity and reset idle timer
+              yield* Ref.update(state, (s) => ({
+                ...s,
+                lastActivity: new Date(),
+              }))
+
+              yield* resetIdleTimer(instance)
+            }
           })).catch((error) => {
             console.error('[NodePtyAdapter] Error in onData handler:', error)
           })
@@ -246,19 +280,30 @@ export const NodePtyTerminalAdapter = Layer.effect(
           status: 'idle' as const,
         }))
 
-        const event = new ProcessEvent({
+        // Send started event
+        const startedEvent = new ProcessEvent({
           processId: config.id,
           type: 'started',
           timestamp: new Date(),
         })
 
-        // Invoke all event callbacks directly (push-based)
         for (const callback of instance.eventCallbacks) {
-          callback(event)
+          callback(startedEvent)
         }
 
-        // Start idle timer (will transition to active on first activity)
-        yield* resetIdleTimer(instance)
+        // Also send idle event to ensure frontend knows initial state
+        const idleEvent = new ProcessEvent({
+          processId: config.id,
+          type: 'idle',
+          timestamp: new Date(),
+        })
+
+        for (const callback of instance.eventCallbacks) {
+          callback(idleEvent)
+        }
+
+        // Start idle timer WITHOUT changing status (stays idle until activity)
+        yield* startIdleTimer(instance)
 
         return yield* Ref.get(state)
       })
@@ -364,6 +409,10 @@ export const NodePtyTerminalAdapter = Layer.effect(
           try: () => instance.ptyProcess.resize(cols, rows),
           catch: (error) => new TerminalError({ reason: 'PermissionDenied', message: `Failed to resize process: ${error}` })
         })
+
+        // Record resize time to ignore subsequent prompt redraws (within 2s)
+        yield* Ref.set(instance.lastResize, Date.now())
+        console.log('[NodePtyAdapter] Resize recorded at', Date.now(), 'for process:', processId)
       })
 
       const getState = (processId: string) => Effect.gen(function* () {
