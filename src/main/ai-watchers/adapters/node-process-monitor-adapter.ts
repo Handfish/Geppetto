@@ -816,63 +816,100 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
               sessionName = targetPane
             }
 
-            console.log(
+            yield* Effect.logDebug(
               `[${handle.id.slice(0, 8)}] Extracted session="${sessionName}", paneId="${targetPaneId}"`
             )
 
             // TRY PTY-BASED CONTROL MODE FIRST - provides real-time activity detection
             // Uses node-pty to create proper PTY for tmux -CC
-            console.log(
+            yield* Effect.logInfo(
               `[${handle.id.slice(0, 8)}] Attempting PTY-based control mode for session: ${sessionName}`
             )
 
-            // Spawn control mode client with node-pty PTY support
-            const controlClient = yield* TmuxControlClient.spawnWithPty(sessionName, targetPaneId)
-
-            // Create event stream from PTY-based control client
-            const eventStream = TmuxControlClient.createEventStream(controlClient)
-
-            // Create a scope for the control mode stream
-            const controlScope = yield* Scope.make()
-            yield* Ref.set(info.tmuxPipeScopeRef, controlScope)
-
-            // Fork the event stream processor in background
-            console.log(
-              `[${handle.id.slice(0, 8)}] Forking control mode event stream`
-            )
-            yield* Effect.forkIn(
-              eventStream.pipe(
-                Stream.tap((event) =>
-                  Effect.gen(function* () {
-                    console.log(
-                      `[${handle.id.slice(0, 8)}] Event received: type=${event.type}, paneId=${event.processId}`
-                    )
-
-                    // Mark activity immediately on output event
-                    if (event.type === 'stdout') {
-                      yield* markActivity(handle.id)
-                    }
-
-                    // Map the event's processId (pane ID) back to the watcher's handle ID
-                    const mappedEvent = event
-                    ;(mappedEvent as any).processId = handle.id
-                    yield* emitEvent(handle.id, mappedEvent)
+            // Try to spawn control mode with PTY, fall back to pipe-pane if it fails
+            const controlModeResult = yield* Effect.either(
+              TmuxControlClient.spawnWithPty(sessionName, targetPaneId).pipe(
+                Effect.tap((controlClient) =>
+                  Effect.sync(() => {
+                    console.log(`[${handle.id.slice(0, 8)}] Control mode spawned successfully`)
                   })
+                )
+              )
+            )
+
+            if (controlModeResult._tag === 'Right') {
+              const controlClient = controlModeResult.right
+
+              // Create event stream from PTY-based control client
+              const eventStream = TmuxControlClient.createEventStream(controlClient)
+
+              // Create a scope for the control mode stream
+              const controlScope = yield* Scope.make()
+              yield* Ref.set(info.tmuxPipeScopeRef, controlScope)
+
+              // Fork the event stream processor in background
+              yield* Effect.logInfo(
+                `[${handle.id.slice(0, 8)}] Forking control mode event stream for session: ${sessionName}`
+              )
+              yield* Effect.forkIn(
+                eventStream.pipe(
+                  Stream.tap((event) =>
+                    Effect.gen(function* () {
+                      console.log(
+                        `[${handle.id.slice(0, 8)}] Event from control mode: type=${event.type}, paneId=${event.processId}`
+                      )
+                      yield* Effect.logDebug(
+                        `[${handle.id.slice(0, 8)}] Event received: type=${event.type}, paneId=${event.processId}`
+                      )
+
+                      // Mark activity immediately on output event
+                      if (event.type === 'stdout') {
+                        yield* markActivity(handle.id)
+                      }
+
+                      // Map the event's processId (pane ID) back to the watcher's handle ID
+                      const mappedEvent = event
+                      ;(mappedEvent as any).processId = handle.id
+                      yield* emitEvent(handle.id, mappedEvent)
+                    })
+                  ),
+                  Stream.runDrain
+                ).pipe(
+                  Effect.catchAll((error) =>
+                    Effect.gen(function* () {
+                      console.error(
+                        `[${handle.id.slice(0, 8)}] Stream error: ${String(error)}`
+                      )
+                      yield* Effect.logError(
+                        `[${handle.id.slice(0, 8)}] Control mode stream error: ${String(error)}`
+                      )
+                    })
+                  )
                 ),
-                Stream.runDrain
-              ),
-              controlScope
-            )
+                controlScope
+              )
 
-            console.log(
-              `[${handle.id.slice(0, 8)}] PTY-based control mode active for session: ${sessionName}`
-            )
+              yield* Effect.logInfo(
+                `[${handle.id.slice(0, 8)}] PTY-based control mode ACTIVE for session: ${sessionName}`
+              )
 
-            return yield* Effect.void
+              return yield* Effect.void
+            } else {
+              // Control mode failed - log error
+              const error = controlModeResult.left
+              console.error(
+                `[${handle.id.slice(0, 8)}] Control mode FAILED: ${error.message}`
+              )
+              yield* Effect.logError(
+                `[${handle.id.slice(0, 8)}] PTY-based control mode failed: ${error.message}`
+              )
+              // For now, treat this as a fatal error rather than falling back
+              return yield* Effect.fail(error)
+            }
 
             // FALLBACK: If control mode fails, use pipe-pane + FIFO (legacy method)
-            console.log(
-              `[${handle.id.slice(0, 8)}] Control mode unavailable, falling back to pipe-pane for ${targetPane}`
+            yield* Effect.logInfo(
+              `[${handle.id.slice(0, 8)}] Setting up tmux pipe-pane monitoring for ${targetPane}`
             )
 
             // Create temp directory for FIFO

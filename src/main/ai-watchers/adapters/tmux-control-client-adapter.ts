@@ -25,45 +25,22 @@ interface ControlModeClientState {
  *
  * Uses node-pty to create a proper pseudo-terminal for tmux -CC,
  * enabling real-time event streaming without buffering delays.
- *
- * Provides helpers for:
- * - Spawning tmux -CC with proper PTY support
- * - Parsing %output events from control mode stream
- * - Sending input via send-keys
- * - Creating event streams from pane output
- *
- * Control Mode Protocol:
- * - %output %<pane-id> <data>       : Pane output event
- * - %window-pane-changed %<pane-id> : Pane focus changed
- * - %session-changed %<session-id>  : Session changed
- * - %exit <code>                     : Client exiting
- *
- * INTEGRATION: Used by NodeProcessMonitorAdapter.pipeTmuxSession() to provide
- * real-time activity detection (< 10ms latency) without FIFO buffering delays.
  */
 export namespace TmuxControlClient {
   /**
    * Spawn a tmux control mode client with a proper PTY
-   * This enables tmux -CC to work correctly in Node environment
    */
   export const spawnWithPty = (
     sessionName: string,
     targetPaneId: string | null
   ): Effect.Effect<ControlModeClientState, ProcessMonitorError> =>
     Effect.gen(function* () {
-      console.log(
-        `[TmuxControl] Spawning control mode with PTY for session: ${sessionName}, paneId: ${targetPaneId || 'all'}`
-      )
-
-      // Get node-pty module
       const ptyModule = yield* getPty()
 
-      // Spawn tmux -CC attach-session with a real PTY
+      console.log(`[TmuxControl:${sessionName}] Spawning tmux -CC attach-session`)
+
       const ptyProcess = yield* Effect.try({
         try: () => {
-          console.log(
-            `[TmuxControl] Creating PTY for: tmux -CC attach-session -t ${sessionName}`
-          )
           const pty = ptyModule.spawn('tmux', ['-CC', 'attach-session', '-t', sessionName], {
             name: 'xterm-256color',
             cols: 200,
@@ -75,17 +52,17 @@ export namespace TmuxControlClient {
             } as Record<string, string>,
           })
 
-          console.log(
-            `[TmuxControl] PTY created successfully, PID: ${pty.pid}`
-          )
+          console.log(`[TmuxControl:${sessionName}] PTY spawned successfully, PID=${pty.pid}`)
           return pty
         },
-        catch: (error) =>
-          new ProcessMonitorError({
+        catch: (error) => {
+          console.error(`[TmuxControl:${sessionName}] Failed to spawn PTY:`, error)
+          return new ProcessMonitorError({
             message: `Failed to spawn tmux control mode PTY: ${String(error)}`,
             processId: sessionName,
             cause: error,
-          }),
+          })
+        },
       })
 
       const client: ControlModeClientState = {
@@ -102,101 +79,83 @@ export namespace TmuxControlClient {
 
   /**
    * Create a stream of ProcessEvents from a control mode client
-   * Parses %output lines and emits them as ProcessEvent objects
+   * This uses async generator approach which properly executes immediately
    */
   export const createEventStream = (
     client: ControlModeClientState
   ): Stream.Stream<ProcessEvent, ProcessMonitorError> => {
-    console.log(
-      `[TmuxControl] Creating event stream for session: ${client.sessionName}`
-    )
+    return Stream.fromAsyncIterable(
+      (async function* () {
+        console.log(`[TmuxControl:${client.sessionName}] Stream created`)
 
-    // Create an async stream that receives data from PTY onData callbacks
-    return Stream.async<ProcessEvent, ProcessMonitorError>((emit) =>
-      Effect.gen(function* () {
-        console.log(`[TmuxControl] Setting up PTY onData handler`)
+        let streamEnded = false
+        const events: ProcessEvent[] = []
 
         // Handler for incoming data from PTY
         const onDataHandler = (data: string) => {
-          console.log(
-            `[TmuxControl] Raw PTY data (${data.length} bytes): ${JSON.stringify(data.slice(0, 100))}`
-          )
+          if (streamEnded) return
+
+          console.log(`[TmuxControl:${client.sessionName}] onData (${data.length}b): ${JSON.stringify(data.slice(0, 100))}`)
 
           // Accumulate in buffer
           client.buffer += data
-          console.log(`[TmuxControl] Buffer size: ${client.buffer.length}`)
 
           // Split into lines
           const lines = client.buffer.split('\n')
           // Keep incomplete last line in buffer
           client.buffer = lines.pop() ?? ''
 
-          // Process each complete line
-          for (const line of lines) {
-            if (!line.trim()) continue
+          console.log(`[TmuxControl:${client.sessionName}] Buffer state: lines=${lines.length}, remaining=${client.buffer.length}b`)
+          if (lines.length > 0) {
+            console.log(`[TmuxControl:${client.sessionName}] First line: ${JSON.stringify(lines[0].slice(0, 50))}`)
+          }
 
-            console.log(`[TmuxControl] Processing line: ${JSON.stringify(line.slice(0, 80))}`)
+          // Process each complete line (trim \r\n)
+          for (const line of lines) {
+            const cleanLine = line.replace(/\r\n?$/, '')
+            if (!cleanLine.trim()) continue
 
             // Parse %output events
-            if (line.startsWith('%output ')) {
-              const match = line.match(/%output %(\d+) (.*)$/)
+            if (cleanLine.startsWith('%output ')) {
+              console.log(`[TmuxControl:${client.sessionName}] Found %output line (${cleanLine.length}b): ${JSON.stringify(cleanLine.slice(0, 50))}`)
+              const match = cleanLine.match(/^%output %(\d+) (.*)$/)
               if (match) {
                 const paneId = match[1]
-                const data = match[2]
+                const eventData = match[2]
 
                 // Filter by target pane if specified
                 if (client.targetPaneId && paneId !== client.targetPaneId) {
-                  console.log(
-                    `[TmuxControl] Skipping event from pane ${paneId} (target: ${client.targetPaneId})`
-                  )
                   continue
                 }
 
-                console.log(
-                  `[TmuxControl] ✓ %output pane=${paneId}, bytes=${data.length}`
-                )
+                console.log(`[TmuxControl:${client.sessionName}] ✓ %output pane=${paneId} (${eventData.length}b)`)
 
                 client.paneIds.add(paneId)
 
-                // Unescape data
-                const unescapedData = data
-                  .replace(/\\e/g, '\x1b')
-                  .replace(/\\\\n/g, '\n')
+                // Unescape data - the data comes escaped with \\033 not \033
+                const unescapedData = eventData
+                  .replace(/\\033/g, '\x1b')
+                  .replace(/\\(\d+)/g, (match, code) => String.fromCharCode(parseInt(code, 8)))
 
                 const event = new ProcessEvent({
                   type: 'stdout',
-                  data: unescapedData + '\n',
+                  data: unescapedData,
                   timestamp: new Date(),
                   processId: paneId,
                 })
 
-                // Emit the event
-                emit.single(event)
+                events.push(event)
+              } else {
+                console.log(`[TmuxControl:${client.sessionName}] ✗ %output regex mismatch: ${JSON.stringify(cleanLine.slice(0, 50))}`)
               }
-            } else if (line.startsWith('%window-pane-changed ')) {
-              const match = line.match(/%window-pane-changed %(\d+)/)
-              if (match) {
-                console.log(`[TmuxControl] ✓ %window-pane-changed pane=${match[1]}`)
-              }
-            } else if (line.startsWith('%exit ')) {
-              const match = line.match(/%exit (\d+)/)
-              const exitCode = match ? parseInt(match[1]) : 0
-              console.log(
-                `[TmuxControl] ✓ Control mode exiting with code ${exitCode}`
-              )
-              // End the stream on exit
-              emit.end()
-            } else if (line.startsWith('%begin ')) {
-              console.log(`[TmuxControl] ✓ %begin: ${line}`)
-            } else if (line.startsWith('%end ')) {
-              console.log(`[TmuxControl] ✓ %end: ${line}`)
-            } else {
-              console.log(
-                `[TmuxControl] ⚠️ Unhandled line: ${JSON.stringify(line.slice(0, 80))}`
-              )
+            } else if (cleanLine.startsWith('%exit ')) {
+              console.log(`[TmuxControl:${client.sessionName}] %exit`)
+              streamEnded = true
             }
           }
         }
+
+        console.log(`[TmuxControl:${client.sessionName}] Registering handlers`)
 
         // Set up PTY data handler
         client.ptyProcess.onData((data: string) => {
@@ -205,20 +164,31 @@ export namespace TmuxControlClient {
 
         // Set up exit handler
         client.ptyProcess.onExit(({ exitCode, signal }) => {
-          console.log(
-            `[TmuxControl] PTY exited with code ${exitCode}, signal ${signal}`
-          )
-          emit.end()
+          console.log(`[TmuxControl:${client.sessionName}] PTY.onExit code=${exitCode}`)
+          streamEnded = true
         })
 
-        console.log(`[TmuxControl] PTY handlers configured, stream is ready`)
+        console.log(`[TmuxControl:${client.sessionName}] Sending list-windows`)
+        try {
+          client.ptyProcess.write('list-windows\n')
+        } catch (e) {
+          console.error(`[TmuxControl:${client.sessionName}] Write failed:`, e)
+        }
 
-        // Return cleanup function
-        return Effect.sync(() => {
-          console.log(`[TmuxControl] Cleaning up PTY stream`)
-          client.ptyProcess.kill()
-        })
-      })
+        // Yield events as they arrive
+        while (!streamEnded || events.length > 0) {
+          if (events.length > 0) {
+            const event = events.shift()!
+            console.log(`[TmuxControl:${client.sessionName}] YIELDING ${event.type}`)
+            yield event
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 50))
+          }
+        }
+
+        console.log(`[TmuxControl:${client.sessionName}] Stream ended`)
+        client.ptyProcess.kill()
+      })()
     )
   }
 
@@ -233,9 +203,7 @@ export namespace TmuxControlClient {
     Effect.try({
       try: () => {
         const command = `send-keys -t %${paneId} "${keys.replace(/"/g, '\\"')}"\n`
-
-        console.log(`[TmuxControl] Sending keys to pane=${paneId}: ${keys.slice(0, 50)}`)
-
+        console.log(`[TmuxControl] Sending keys to pane=${paneId}`)
         client.ptyProcess.write(command)
       },
       catch: (error) =>
