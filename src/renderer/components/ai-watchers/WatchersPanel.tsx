@@ -12,12 +12,12 @@ export function WatchersPanel(): React.ReactNode {
   const [, switchToSession] = useAtom(switchToTmuxSessionAtom)
   const refreshWatchers = useAtomRefresh(aiWatchersAtom)
 
-  // Poll for watcher status updates every 2 seconds
+  // Poll for watcher status updates every 500ms for responsive LED updates
+  // This ensures status changes (idle → running) appear quickly in the UI
   useEffect(() => {
     const interval = setInterval(() => {
-      console.log('[WatchersPanel] Polling for watcher updates...')
       refreshWatchers()
-    }, 2000)
+    }, 500)
 
     return () => clearInterval(interval)
   }, [refreshWatchers])

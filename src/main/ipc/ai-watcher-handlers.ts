@@ -101,10 +101,6 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
 
   // Switch to tmux session
   registerIpcHandler(AiWatcherIpcContracts['ai-watcher:switch-tmux'], (input) =>
-    Effect.gen(function* () {
-      console.log('[ai-watcher-handlers] switch-tmux IPC handler called for:', input.sessionName)
-      yield* tmuxManager.switchToSession(input.sessionName)
-      console.log('[ai-watcher-handlers] switch-tmux completed')
-    })
+    tmuxManager.switchToSession(input.sessionName)
   )
 })

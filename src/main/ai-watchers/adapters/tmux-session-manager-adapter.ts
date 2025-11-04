@@ -200,9 +200,9 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
 
           // Pipe the tmux pane output
           yield* Effect.logDebug(
-            `attachSessionByName: Calling pipeTmuxSession with paneId="${paneId}"`
+            `attachSessionByName: Calling pipeTmuxSession with sessionName="${sessionName}", paneId="${paneId}"`
           )
-          yield* processMonitor.pipeTmuxSession(handle, paneId)
+          yield* processMonitor.pipeTmuxSession(handle, `${sessionName}:${paneId}`)
           yield* Effect.logDebug(
             `attachSessionByName: Successfully piped tmux session`
           )
@@ -433,13 +433,10 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
          */
         switchToSession: (sessionName: string) =>
           Effect.gen(function* () {
-            console.log('[TmuxSessionManagerAdapter] switchToSession called for:', sessionName)
             yield* Effect.logInfo(
               `Switching tmux client to session "${sessionName}"`
             )
-            console.log('[TmuxSessionManagerAdapter] Executing tmux switch-client command...')
-            const result = yield* executeTmuxCommand(`tmux switch-client -t '${sessionName}'`)
-            console.log('[TmuxSessionManagerAdapter] Command result:', result)
+            yield* executeTmuxCommand(`tmux switch-client -t '${sessionName}'`)
             yield* Effect.logInfo(
               `Successfully switched to session "${sessionName}"`
             )

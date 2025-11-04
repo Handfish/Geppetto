@@ -24,6 +24,7 @@ import {
   ProcessKillError,
   ProcessNotFoundError,
 } from '../errors'
+import { TmuxControlClient } from './tmux-control-client-adapter'
 
 const execAsync = promisify(exec)
 
@@ -77,6 +78,11 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
       // Map of process ID to process information
       const processes = new Map<string, ProcessInfo>()
 
+      // Mutex to serialize FIFO opening (prevents cross-contamination when multiple watchers start)
+      // Uses a bounded queue with size 1 as a simple mutex: take() = acquire, offer() = release
+      const fifoOpenMutex = yield* Queue.bounded<void>(1)
+      yield* Queue.offer(fifoOpenMutex, undefined) // Initialize with one permit
+
       /**
        * Mark activity for a process
        */
@@ -84,8 +90,10 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
         Effect.gen(function* () {
           const info = processes.get(processId)
           if (!info) {
+            console.log(`[${processId.slice(0, 8)}] markActivity called but process not found!`)
             return yield* Effect.void
           }
+          console.log(`[${processId.slice(0, 8)}] markActivity called`)
           yield* Ref.set(info.lastActivityRef, Date.now())
         })
 
@@ -99,9 +107,11 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
         Effect.gen(function* () {
           const info = processes.get(processId)
           if (!info) {
+            console.log(`[${processId.slice(0, 8)}] emitEvent called but process not found!`)
             return yield* Effect.void
           }
 
+          console.log(`[${processId.slice(0, 8)}] emitEvent called, type=${event.type}, dataLength=${event.data?.length ?? 0}`)
           yield* Queue.offer(info.queue, event).pipe(
             Effect.catchAll((error) =>
               Effect.logError(
@@ -277,6 +287,9 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
       ): Stream.Stream<string, ProcessMonitorError, Scope.Scope> =>
         Stream.asyncScoped<string, ProcessMonitorError>((emit) =>
           Effect.gen(function* () {
+            // Open FIFO in blocking mode
+            // This will block until a writer connects, which is fine because
+            // we call this AFTER the tmux writer has been started
             const readStream = yield* Effect.try({
               try: () =>
                 Fs.createReadStream(fifoPath, {
@@ -348,33 +361,114 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
       /**
        * Setup tmux pipe streaming in a scoped manner
        * The stream fiber is tied to the current scope and will be cleaned up automatically
+       *
+       * CRITICAL: Uses mutex to serialize FIFO opening (prevents cross-contamination)
        */
       const setupTmuxPipeStream = (
         handle: ProcessHandle,
         config: TmuxPipeConfig
-      ): Effect.Effect<void, never, Scope.Scope> =>
+      ): Effect.Effect<Fiber.RuntimeFiber<void, never>, never, Scope.Scope> =>
         Effect.gen(function* () {
-          // Create stream from FIFO
-          const fifoStream = createFifoStream(config.fifoPath, handle.id)
+          // Acquire mutex (blocks until permit available)
+          yield* Effect.logDebug(
+            `[${handle.id.slice(0, 8)}] Waiting to acquire FIFO mutex...`
+          )
+          yield* Queue.take(fifoOpenMutex)
+          yield* Effect.logDebug(
+            `[${handle.id.slice(0, 8)}] Acquired FIFO mutex, opening ${config.fifoPath}`
+          )
 
-          // Fork scoped fiber to process the stream
-          yield* Effect.forkScoped(
-            fifoStream.pipe(
-              Stream.tap((chunk: string) =>
-                Effect.gen(function* () {
-                  yield* markActivity(handle.id)
-                  const event = new ProcessEvent({
-                    type: 'stdout',
-                    data: chunk,
-                    timestamp: new Date(),
-                    processId: handle.id,
-                  })
-                  yield* emitEvent(handle.id, event)
+          // Ensure mutex is released even on error
+          const result = yield* Effect.gen(function* () {
+            // Open the FIFO synchronously BEFORE releasing the mutex
+            // Stream.asyncScoped is lazy, so we need to force the open
+            const readStream = yield* Effect.try({
+              try: () => {
+                const stream = Fs.createReadStream(config.fifoPath, {
+                  encoding: 'utf8',
+                  flags: 'r',
+                  highWaterMark: 64, // Small buffer (64 bytes) for more responsive reads
                 })
-              ),
-              Stream.runDrain
+                console.log(`[${handle.id.slice(0, 8)}] FIFO opened: ${config.fifoPath}`)
+                return stream
+              },
+              catch: (error) =>
+                new ProcessMonitorError({
+                  message: 'Failed to open FIFO for tmux pipe',
+                  processId: handle.id,
+                  cause: error,
+                }),
+            })
+
+            // Now create the stream using the already-opened readStream
+            const fifoStream = Stream.asyncScoped<string, ProcessMonitorError>((emit) =>
+              Effect.sync(() => {
+                // Register event handlers
+                readStream.on('data', (chunk: string | Buffer) => {
+                  const data = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+                  console.log(`[${handle.id.slice(0, 8)}] FIFO data received: ${data.length} bytes`)
+                  emit.single(data)
+                })
+
+                readStream.on('error', (error: Error) => {
+                  console.log(`[${handle.id.slice(0, 8)}] FIFO error: ${error.message}`)
+                  emit.fail(
+                    new ProcessMonitorError({
+                      message: `FIFO read error: ${error.message}`,
+                      processId: handle.id,
+                      cause: error,
+                    })
+                  )
+                })
+
+                readStream.on('end', () => {
+                  console.log(`[${handle.id.slice(0, 8)}] FIFO stream ended`)
+                  emit.end()
+                })
+
+                console.log(`[${handle.id.slice(0, 8)}] FIFO event handlers registered`)
+                // Return cleanup effect
+                return Effect.sync(() => {
+                  readStream.removeAllListeners()
+                  readStream.destroy()
+                })
+              })
+            )
+
+            // Fork scoped fiber to process the stream
+            const fiber = yield* Effect.forkScoped(
+              fifoStream.pipe(
+                Stream.tap((chunk: string) =>
+                  Effect.gen(function* () {
+                    yield* markActivity(handle.id)
+                    const event = new ProcessEvent({
+                      type: 'stdout',
+                      data: chunk,
+                      timestamp: new Date(),
+                      processId: handle.id,
+                    })
+                    yield* emitEvent(handle.id, event)
+                  })
+                ),
+                Stream.runDrain
+              )
+            )
+
+            yield* Effect.logDebug(
+              `[${handle.id.slice(0, 8)}] FIFO stream fiber forked, releasing mutex`
+            )
+            console.log(`[${handle.id.slice(0, 8)}] Releasing FIFO mutex`)
+
+            return fiber
+          }).pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                console.log(`[${handle.id.slice(0, 8)}] FIFO mutex released`)
+              }).pipe(Effect.zipRight(Queue.offer(fifoOpenMutex, undefined)))
             )
           )
+
+          return result
         })
 
       /**
@@ -709,6 +803,78 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
               yield* Ref.set(info.tmuxPipeRef, null)
             }
 
+            // Extract session name and pane ID from target
+            // Format can be "session:paneId" or just "session" (legacy)
+            const colonIndex = targetPane.indexOf(':')
+            let sessionName: string
+            let targetPaneId: string | null = null
+
+            if (colonIndex > -1) {
+              sessionName = targetPane.substring(0, colonIndex)
+              targetPaneId = targetPane.substring(colonIndex + 1)
+            } else {
+              sessionName = targetPane
+            }
+
+            console.log(
+              `[${handle.id.slice(0, 8)}] Extracted session="${sessionName}", paneId="${targetPaneId}"`
+            )
+
+            // TRY PTY-BASED CONTROL MODE FIRST - provides real-time activity detection
+            // Uses node-pty to create proper PTY for tmux -CC
+            console.log(
+              `[${handle.id.slice(0, 8)}] Attempting PTY-based control mode for session: ${sessionName}`
+            )
+
+            // Spawn control mode client with node-pty PTY support
+            const controlClient = yield* TmuxControlClient.spawnWithPty(sessionName, targetPaneId)
+
+            // Create event stream from PTY-based control client
+            const eventStream = TmuxControlClient.createEventStream(controlClient)
+
+            // Create a scope for the control mode stream
+            const controlScope = yield* Scope.make()
+            yield* Ref.set(info.tmuxPipeScopeRef, controlScope)
+
+            // Fork the event stream processor in background
+            console.log(
+              `[${handle.id.slice(0, 8)}] Forking control mode event stream`
+            )
+            yield* Effect.forkIn(
+              eventStream.pipe(
+                Stream.tap((event) =>
+                  Effect.gen(function* () {
+                    console.log(
+                      `[${handle.id.slice(0, 8)}] Event received: type=${event.type}, paneId=${event.processId}`
+                    )
+
+                    // Mark activity immediately on output event
+                    if (event.type === 'stdout') {
+                      yield* markActivity(handle.id)
+                    }
+
+                    // Map the event's processId (pane ID) back to the watcher's handle ID
+                    const mappedEvent = event
+                    ;(mappedEvent as any).processId = handle.id
+                    yield* emitEvent(handle.id, mappedEvent)
+                  })
+                ),
+                Stream.runDrain
+              ),
+              controlScope
+            )
+
+            console.log(
+              `[${handle.id.slice(0, 8)}] PTY-based control mode active for session: ${sessionName}`
+            )
+
+            return yield* Effect.void
+
+            // FALLBACK: If control mode fails, use pipe-pane + FIFO (legacy method)
+            console.log(
+              `[${handle.id.slice(0, 8)}] Control mode unavailable, falling back to pipe-pane for ${targetPane}`
+            )
+
             // Create temp directory for FIFO
             const tempDir = yield* Effect.tryPromise({
               try: () => FsPromises.mkdtemp(path.join(tmpdir(), 'tmux-pipe-')),
@@ -754,9 +920,11 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
               `Failed to capture tmux pane ${targetPane}`
             ).pipe(Effect.catchAll(() => Effect.succeed('')))
 
-            // Start tmux pipe
+            // Start tmux pipe (writer) FIRST
+            // This must happen before we open the FIFO reader, otherwise the blocking open() will deadlock
+            console.log(`[${handle.id.slice(0, 8)}] Starting tmux pipe-pane writer for ${targetPane}`)
             yield* runTmuxCommandVoid(
-              ['pipe-pane', '-t', targetPane, `cat > ${quoteForShell(fifoPath)}`],
+              ['pipe-pane', '-t', targetPane, `dd bs=1 of=${quoteForShell(fifoPath)} 2>/dev/null`],
               handle.id,
               `Failed to start tmux pipe for ${targetPane}`
             ).pipe(
@@ -766,16 +934,21 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
                 )
               )
             )
+            console.log(`[${handle.id.slice(0, 8)}] Tmux pipe-pane writer started`)
 
             // Store pipe config
             yield* Ref.set(info.tmuxPipeRef, pipeConfig)
 
-            // Emit captured output if any
+            // Emit captured output if any (for display only - doesn't mark activity)
+            // Captured output is historical data, not new activity
             if (captured) {
+              console.log(
+                `[${handle.id.slice(0, 8)}] Emitting ${captured.split('\n').length} lines of captured output`
+              )
               const lines = captured.replace(/\r/g, '').split('\n')
               for (const line of lines) {
                 if (!line) continue
-                yield* markActivity(handle.id)
+                // Don't call markActivity() - captured output is not new activity
                 const event = new ProcessEvent({
                   type: 'stdout',
                   data: line + '\n',
@@ -787,17 +960,16 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
             }
 
             // Create a dedicated scope for the tmux pipe stream
-            // This scope will be closed during cleanup to properly interrupt all streaming fibers
             const pipeScope = yield* Scope.make()
             yield* Ref.set(info.tmuxPipeScopeRef, pipeScope)
 
-            // Setup the tmux pipe stream in the dedicated scope
-            // This forks a scoped fiber to process the FIFO stream
-            yield* Scope.extend(setupTmuxPipeStream(handle, pipeConfig), pipeScope)
-
-            // The stream fiber is now running in the dedicated scope
-            // We don't need to fork Effect.never because the scope keeps the fiber alive
-            // The fiber will be interrupted when we close the scope in cleanup
+            // Setup the FIFO reader stream AFTER the writer is connected
+            console.log(`[${handle.id.slice(0, 8)}] Forking FIFO reader setup`)
+            yield* Effect.forkIn(
+              setupTmuxPipeStream(handle, pipeConfig),
+              pipeScope
+            )
+            console.log(`[${handle.id.slice(0, 8)}] FIFO reader setup forked, pipeTmuxSession returning`)
           }),
       }
 
