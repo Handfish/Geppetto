@@ -430,18 +430,112 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
           }),
 
         /**
-         * Switch the tmux client to a specific session
+         * Switch the tmux client to a specific session using choose-session UI
+         *
+         * This approach opens the interactive chooser UI on the target client and
+         * uses keyboard navigation to select the desired session. This avoids
+         * contention with control-mode clients and ensures smooth interaction.
+         *
+         * Process:
+         * 1. Find the best interactive client (non-control-mode preferred)
+         * 2. Get list of all sessions and find the target session's index
+         * 3. Open choose-session UI on that client
+         * 4. Navigate to the target session by index
+         * 5. Select it with Enter
+         *
+         * Priority order for target client:
+         * 1. Client named "xterm-ghostty" (if you renamed your Ghostty terminal)
+         * 2. /dev/pts/0 (the main interactive terminal)
+         * 3. First non-control-mode client
+         * 4. Any client (fallback)
          *
          * @param sessionName - Name of the session to switch to
          */
         switchToSession: (sessionName: string) =>
           Effect.gen(function* () {
             yield* Effect.logInfo(
-              `Switching tmux client to session "${sessionName}"`
+              `Switching tmux client to session "${sessionName}" using choose-session`
             )
-            yield* executeTmuxCommand(`tmux switch-client -t '${sessionName}'`)
+
+            // Get detailed client info to find the best interactive client
+            const clientList = yield* executeTmuxCommand(
+              `tmux list-clients -F "#{client_name}|#{client_tty}|#{client_flags}"`
+            )
+
+            const clients = clientList.split('\n').filter(Boolean)
+            yield* Effect.logDebug(
+              `Found ${clients.length} tmux clients`
+            )
+
+            interface ClientInfo {
+              name: string
+              tty: string
+              isControlMode: boolean
+              isGhostty: boolean
+              isPts0: boolean
+            }
+
+            const parsedClients: ClientInfo[] = clients.map((line) => {
+              const [name, tty, flags] = line.split('|')
+              return {
+                name,
+                tty,
+                isControlMode: flags?.includes('control-mode') ?? false,
+                isGhostty: name?.includes('xterm-ghostty') ?? false,
+                isPts0: tty === '/dev/pts/0',
+              }
+            })
+
+            // Apply priority selection to find the best interactive client
+            const targetClient =
+              parsedClients.find((c) => c.isGhostty) ??
+              parsedClients.find((c) => c.isPts0) ??
+              parsedClients.find((c) => !c.isControlMode) ??
+              parsedClients[0]
+
+            if (!targetClient) {
+              yield* Effect.logWarning(
+                `No clients found, cannot switch`
+              )
+              return
+            }
+
+            yield* Effect.logDebug(
+              `Targeting client ${targetClient.tty} - control-mode: ${targetClient.isControlMode}`
+            )
+
+            // Get list of all sessions to find the target session's index
+            const sessionList = yield* executeTmuxCommand(
+              `tmux list-sessions -F "#{session_name}"`
+            )
+
+            const sessions = sessionList.split('\n').filter(Boolean)
+            const targetIndex = sessions.indexOf(sessionName)
+
+            if (targetIndex < 0) {
+              yield* Effect.logWarning(
+                `Session "${sessionName}" not found among: ${sessions.join(', ')}`
+              )
+              return
+            }
+
+            yield* Effect.logDebug(
+              `Found session "${sessionName}" at index ${targetIndex} (total: ${sessions.length})`
+            )
+
+            // Simple and direct approach: just open the filtered chooser
+            // User sees only the target watcher session and must press Enter to select
+            // No send-keys needed - filter does all the work
+            const filterExpression = `#{m:${sessionName},#{session_name}}`
+
+            yield* executeTmuxCommand(
+              `tmux choose-session -t ${targetClient.tty} -f '${filterExpression}'`
+            ).pipe(
+              Effect.catchAll(() => Effect.void) // Ignore errors
+            )
+
             yield* Effect.logInfo(
-              `Successfully switched to session "${sessionName}"`
+              `Successfully initiated session switch to "${sessionName}"`
             )
           }),
       }
