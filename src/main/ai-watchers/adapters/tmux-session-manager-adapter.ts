@@ -523,14 +523,25 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
               `Found session "${sessionName}" at index ${targetIndex} (total: ${sessions.length})`
             )
 
-            // Simple and direct approach: just open the filtered chooser
-            // User sees only the target watcher session and must press Enter to select
-            // No send-keys needed - filter does all the work
+            // Use tmux choose-session with filtering to show only the target session
+            // The -f (filter) option uses tmux format strings with pattern matching
+            // #{m:pattern,string} returns the string if pattern matches, else empty string
+            // This filters the list to show only the matching session
             const filterExpression = `#{m:${sessionName},#{session_name}}`
 
-            yield* executeTmuxCommand(
-              `tmux choose-session -t ${targetClient.tty} -f '${filterExpression}'`
-            ).pipe(
+            // Build command sequence:
+            // 1. Open choose-session filtered to target session
+            // 2. Wait for UI to fully render (longer wait to ensure filter applies)
+            // 3. Send Enter to select the first (and only) item in the filtered list
+            const commands: string[] = [
+              `tmux choose-session -t ${targetClient.tty} -f '${filterExpression}'`,
+              'sleep 0.15',
+              `tmux send-keys -t ${targetClient.tty} Enter`,
+            ]
+
+            const fullCommandString = commands.join(' ; ')
+
+            yield* executeTmuxCommand(fullCommandString).pipe(
               Effect.catchAll(() => Effect.void) // Ignore errors
             )
 
