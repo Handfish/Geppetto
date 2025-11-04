@@ -115,16 +115,22 @@ export namespace TmuxControlClient {
             const cleanLine = line.replace(/\r\n?$/, '')
             if (!cleanLine.trim()) continue
 
+            // Debug: log all non-empty lines we're processing
+            const lineStart = cleanLine.slice(0, 30)
+            console.log(`[TmuxControl:${client.sessionName}] Processing line: ${JSON.stringify(lineStart)}...`)
+
             // Parse %output events
             if (cleanLine.startsWith('%output ')) {
               console.log(`[TmuxControl:${client.sessionName}] Found %output line (${cleanLine.length}b): ${JSON.stringify(cleanLine.slice(0, 50))}`)
               const match = cleanLine.match(/^%output %(\d+) (.*)$/)
+              console.log(`[TmuxControl:${client.sessionName}] Regex match result: ${match ? 'YES' : 'NO'} (${match ? `paneId=${match[1]}` : 'no match'})`)
               if (match) {
                 const paneId = match[1]
                 const eventData = match[2]
 
                 // Filter by target pane if specified
                 if (client.targetPaneId && paneId !== client.targetPaneId) {
+                  console.log(`[TmuxControl:${client.sessionName}] Filtering out pane ${paneId} (target=${client.targetPaneId})`)
                   continue
                 }
 
@@ -144,6 +150,7 @@ export namespace TmuxControlClient {
                   processId: paneId,
                 })
 
+                console.log(`[TmuxControl:${client.sessionName}] Pushing event to queue, total events: ${events.length + 1}`)
                 events.push(event)
               } else {
                 console.log(`[TmuxControl:${client.sessionName}] ✗ %output regex mismatch: ${JSON.stringify(cleanLine.slice(0, 50))}`)

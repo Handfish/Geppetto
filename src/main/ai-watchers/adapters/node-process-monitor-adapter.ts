@@ -772,8 +772,11 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
 
         pipeTmuxSession: (handle: ProcessHandle, targetPane: string) =>
           Effect.gen(function* () {
+            console.log(`[NodeProcessMonitorAdapter] pipeTmuxSession called for handle=${handle.id}, targetPane="${targetPane}"`)
+
             const info = processes.get(handle.id)
             if (!info) {
+              console.log(`[NodeProcessMonitorAdapter] Process ${handle.id} not found in registry`)
               return yield* Effect.fail(
                 new ProcessMonitorError({
                   message: `Process ${handle.id} not found`,
@@ -781,6 +784,8 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
                 })
               )
             }
+
+            console.log(`[NodeProcessMonitorAdapter] Found process ${handle.id} in registry, setting up control mode`)
 
             // Check if already piping this pane
             const currentPipe = yield* Ref.get(info.tmuxPipeRef)

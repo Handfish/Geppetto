@@ -159,7 +159,10 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
             )
           )
 
-          const [paneId, panePidStr] = paneInfo.split(':')
+          const [paneIdRaw, panePidStr] = paneInfo.split(':')
+          // tmux #{pane_id} format returns "%373", we need just "373"
+          const paneId = paneIdRaw.startsWith('%') ? paneIdRaw.substring(1) : paneIdRaw
+
           if (!paneId || !panePidStr) {
             yield* Effect.logError(
               `attachSessionByName: Invalid pane info format: "${paneInfo}"`
