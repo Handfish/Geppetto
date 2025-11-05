@@ -7,14 +7,13 @@ import * as Schedule from 'effect/Schedule'
 import * as Duration from 'effect/Duration'
 import * as Scope from 'effect/Scope'
 import * as Exit from 'effect/Exit'
-import { Path } from '@effect/platform'
+import { Path, Command } from '@effect/platform'
+import { NodeContext } from '@effect/platform-node'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { promises as FsPromises } from 'node:fs'
 import * as Fs from 'node:fs'
 import { tmpdir } from 'node:os'
-import { promisify } from 'node:util'
-import { exec } from 'node:child_process'
 import type { ProcessMonitorPort, ProcessConfig } from '../../ports'
 import { ProcessHandle, ProcessEvent, TmuxPipeConfig } from '../../schemas'
 import {
@@ -25,8 +24,6 @@ import {
   ProcessNotFoundError,
 } from '../../errors'
 import { TmuxControlClient } from '../tmux-session-manager/tmux-control-client-adapter'
-
-const execAsync = promisify(exec)
 
 /**
  * Internal process information tracked by the monitor
@@ -732,21 +729,41 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
               // Exit event will be emitted by child process listener
             } else if (info.isAttached) {
               // For attached processes, use kill command
-              yield* Effect.tryPromise({
-                try: async () => {
-                  const { exec } = await import('node:child_process')
-                  const { promisify } = await import('node:util')
-                  const execAsync = promisify(exec)
-                  await execAsync(`kill -TERM ${handle.pid}`)
-                },
-                catch: (error) =>
+              const killCmd = Command.make('kill', '-TERM', String(handle.pid))
+
+              yield* Command.start(killCmd).pipe(
+                Effect.flatMap((process) =>
+                  Effect.all([
+                    process.exitCode,
+                    process.stderr.pipe(
+                      Stream.decodeText('utf8'),
+                      Stream.runFold('', (acc, chunk) => acc + chunk)
+                    ),
+                  ])
+                ),
+                Effect.provide(NodeContext.layer),
+                Effect.flatMap(([exitCode, stderr]) => {
+                  // Exit code 0 = success, 1 = process not found (already dead)
+                  if (exitCode === 0 || exitCode === 1) {
+                    return Effect.void
+                  }
+                  return Effect.fail(
+                    new ProcessKillError({
+                      message: `Failed to kill attached process (exit ${exitCode}): ${stderr}`,
+                      processId: handle.id,
+                      pid: handle.pid,
+                      cause: new Error(stderr),
+                    })
+                  )
+                }),
+                Effect.mapError((error) =>
                   new ProcessKillError({
                     message: `Failed to kill attached process: ${error instanceof Error ? error.message : String(error)}`,
                     processId: handle.id,
                     pid: handle.pid,
                     cause: error,
-                  }),
-              }).pipe(
+                  })
+                ),
                 // Ignore "No such process" errors - process already dead
                 Effect.catchAll((error) => {
                   if (error.cause && String(error.cause).includes('No such process')) {
@@ -930,16 +947,39 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
 
             const fifoPath = path.join(tempDir, 'pane.fifo')
 
-            // Create FIFO
-            yield* Effect.tryPromise({
-              try: () => execAsync(`mkfifo ${quoteForShell(fifoPath)}`),
-              catch: (error) =>
+            // Create FIFO using mkfifo command
+            const mkfifoCmd = Command.make('mkfifo', fifoPath)
+            yield* Command.start(mkfifoCmd).pipe(
+              Effect.flatMap((process) =>
+                Effect.all([
+                  process.exitCode,
+                  process.stderr.pipe(
+                    Stream.decodeText('utf8'),
+                    Stream.runFold('', (acc, chunk) => acc + chunk)
+                  ),
+                ])
+              ),
+              Effect.provide(NodeContext.layer),
+              Effect.flatMap(([exitCode, stderr]) => {
+                if (exitCode === 0) {
+                  return Effect.void
+                }
+                return Effect.fail(
+                  new ProcessMonitorError({
+                    message: `Failed to create FIFO (exit ${exitCode}): ${stderr}`,
+                    processId: handle.id,
+                    cause: new Error(stderr),
+                  })
+                )
+              }),
+              Effect.mapError((error) =>
                 new ProcessMonitorError({
                   message: 'Failed to create FIFO for tmux pipe',
                   processId: handle.id,
                   cause: error,
-                }),
-            })
+                })
+              )
+            )
 
             // Create pipe config
             const pipeConfig = new TmuxPipeConfig({
