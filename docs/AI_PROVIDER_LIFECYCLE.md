@@ -15,7 +15,7 @@ This document traces the complete lifecycle of an AI provider (OpenAI, Claude, C
 
 ### Step 1: Port Definition - The Contract
 
-**File:** `src/main/ai/provider-port.ts`
+**File:** `src/main/ai-provider-usage-webscraper/provider-port.ts`
 
 ```typescript
 // Define the contract that ALL providers must implement
@@ -75,7 +75,7 @@ export const CoreInfrastructureLayer = Layer.mergeAll(
 3. This constant is a **reference** that can be reused everywhere
 4. Effect will memoize by this reference
 
-**File:** `src/main/ai/infrastructure-layer.ts`
+**File:** `src/main/ai-provider-usage-webscraper/infrastructure-layer.ts`
 
 ```typescript
 // Re-export to ensure same reference is used
@@ -91,7 +91,7 @@ export const AiInfrastructureLayer = CoreInfrastructureLayer
 
 ### Step 3: Adapter Implementation - The Concrete Provider
 
-**File:** `src/main/ai/openai/browser-provider-adapter.ts`
+**File:** `src/main/ai-provider-usage-webscraper/openai/browser-provider-adapter.ts`
 
 ```typescript
 const PROVIDER: 'openai' = 'openai'
@@ -144,7 +144,7 @@ export const OpenAiBrowserProviderAdapter = Layer.effect(
 
 ### Step 4: Adapters Layer - Composition
 
-**File:** `src/main/ai/adapters-layer.ts`
+**File:** `src/main/ai-provider-usage-webscraper/adapters-layer.ts`
 
 ```typescript
 export const AiAdaptersLayer = Layer.mergeAll(
@@ -164,7 +164,7 @@ export const AiAdaptersLayer = Layer.mergeAll(
 
 ### Step 5: Registry Service - Dynamic Lookup
 
-**File:** `src/main/ai/registry.ts`
+**File:** `src/main/ai-provider-usage-webscraper/registry.ts`
 
 ```typescript
 export class AiProviderRegistryService extends Effect.Service<...>()(..., {
@@ -482,11 +482,11 @@ IPC Handlers → Services → Registry → Adapters
 
 | Step | File | What to look for |
 |------|------|------------------|
-| **Port definition** | `src/main/ai/provider-port.ts` | `AiProviderPort` interface, `AiProviderTags` class |
+| **Port definition** | `src/main/ai-provider-usage-webscraper/provider-port.ts` | `AiProviderPort` interface, `AiProviderTags` class |
 | **Infrastructure** | `src/main/core-infrastructure-layer.ts` | `CoreInfrastructureLayer` constant |
-| **Adapter implementation** | `src/main/ai/openai/browser-provider-adapter.ts` | `OpenAiBrowserProviderAdapter` constant |
-| **Adapters composition** | `src/main/ai/adapters-layer.ts` | `AiAdaptersLayer` constant |
-| **Registry** | `src/main/ai/registry.ts` | `AiProviderRegistryService` class |
+| **Adapter implementation** | `src/main/ai-provider-usage-webscraper/openai/browser-provider-adapter.ts` | `OpenAiBrowserProviderAdapter` constant |
+| **Adapters composition** | `src/main/ai-provider-usage-webscraper/adapters-layer.ts` | `AiAdaptersLayer` constant |
+| **Registry** | `src/main/ai-provider-usage-webscraper/registry.ts` | `AiProviderRegistryService` class |
 | **Wiring** | `src/main/index.ts` | `MainLayer` with `Layer.provide` |
 | **Usage** | `src/main/ipc/ai-provider-handlers.ts` | IPC handlers calling service methods |
 

@@ -22,7 +22,7 @@ Start with Phase 1: Terminal Port & Adapter Architecture
 - Create the TerminalPort interface in src/main/terminal/terminal-port.ts
 - Implement NodePtyTerminalAdapter as an Effect Layer
 - Create the Terminal Registry and Service
-- Follow the pattern from src/main/ai/ (AiProviderPort, adapters, registry)
+- Follow the pattern from src/main/ai-provider-usage-webscraper/ (AiProviderPort, adapters, registry)
 
 Key requirements:
 - Process management with spawn/kill/restart

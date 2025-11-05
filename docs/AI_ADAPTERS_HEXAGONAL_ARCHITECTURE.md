@@ -20,7 +20,7 @@ The AI Adapters layer has been refactored to follow a proper **Hexagonal (Ports 
 
 ## Architecture Components
 
-### 1. Port Definition (`src/main/ai/provider-port.ts`)
+### 1. Port Definition (`src/main/ai-provider-usage-webscraper/provider-port.ts`)
 
 The `AiProviderPort` interface defines the contract that all AI providers must implement:
 
@@ -50,9 +50,9 @@ const CursorProviderTag = AiProviderTags.register('cursor')
 
 Each provider is now a **Layer** that implements the `AiProviderPort`:
 
-- **OpenAI**: `OpenAiBrowserProviderAdapter` (`src/main/ai/openai/browser-provider-adapter.ts`)
-- **Claude**: `ClaudeBrowserProviderAdapter` (`src/main/ai/claude/browser-provider-adapter.ts`)
-- **Cursor**: `CursorBrowserProviderAdapter` (`src/main/ai/cursor/browser-provider-adapter.ts`)
+- **OpenAI**: `OpenAiBrowserProviderAdapter` (`src/main/ai-provider-usage-webscraper/openai/browser-provider-adapter.ts`)
+- **Claude**: `ClaudeBrowserProviderAdapter` (`src/main/ai-provider-usage-webscraper/claude/browser-provider-adapter.ts`)
+- **Cursor**: `CursorBrowserProviderAdapter` (`src/main/ai-provider-usage-webscraper/cursor/browser-provider-adapter.ts`)
 
 **Example adapter structure:**
 
@@ -81,7 +81,7 @@ export const OpenAiBrowserProviderAdapter = Layer.effect(
 All adapters are composed into a single layer:
 
 ```typescript
-// src/main/ai/adapters-layer.ts
+// src/main/ai-provider-usage-webscraper/adapters-layer.ts
 export const AiAdaptersLayer = Layer.mergeAll(
   OpenAiBrowserProviderAdapter,
   ClaudeBrowserProviderAdapter,
@@ -122,7 +122,7 @@ const MainLayer = Layer.mergeAll(
 - `C.pipe(Layer.provide(A))` or `Layer.provide(C, A)` - Layer A's services available in C's context
 - Without `Layer.provide`, the registry service can't access adapters via `yield* tag`
 
-### 6. Registry Service (`src/main/ai/registry.ts`)
+### 6. Registry Service (`src/main/ai-provider-usage-webscraper/registry.ts`)
 
 The registry **captures adapters at construction time** to avoid context requirements at call time:
 
@@ -217,7 +217,7 @@ Effect.runPromise(
 
 To add a new AI provider (e.g., Gemini):
 
-1. **Create the adapter layer** (`src/main/ai/gemini/browser-provider-adapter.ts`):
+1. **Create the adapter layer** (`src/main/ai-provider-usage-webscraper/gemini/browser-provider-adapter.ts`):
 
 ```typescript
 const PROVIDER: 'gemini' = 'gemini'
@@ -238,7 +238,7 @@ export const GeminiBrowserProviderAdapter = Layer.effect(
 )
 ```
 
-2. **Add to AiAdaptersLayer** (`src/main/ai/adapters-layer.ts`):
+2. **Add to AiAdaptersLayer** (`src/main/ai-provider-usage-webscraper/adapters-layer.ts`):
 
 ```typescript
 export const AiAdaptersLayer = Layer.mergeAll(
@@ -379,29 +379,29 @@ export class AiProviderRegistryService extends Effect.Service<AiProviderRegistry
 ## Files Changed
 
 ### Created
-- ✅ `src/main/ai/provider-port.ts` - Port definition and tag registry
-- ✅ `src/main/ai/adapters-layer.ts` - Layer composition
-- ✅ `src/main/ai/infrastructure-layer.ts` - AI infrastructure layer (re-exports CoreInfrastructureLayer)
-- ✅ `src/main/ai/usage-page/types.ts` - Clean type definitions (replaces ports.ts)
+- ✅ `src/main/ai-provider-usage-webscraper/provider-port.ts` - Port definition and tag registry
+- ✅ `src/main/ai-provider-usage-webscraper/adapters-layer.ts` - Layer composition
+- ✅ `src/main/ai-provider-usage-webscraper/infrastructure-layer.ts` - AI infrastructure layer (re-exports CoreInfrastructureLayer)
+- ✅ `src/main/ai-provider-usage-webscraper/usage-page/types.ts` - Clean type definitions (replaces ports.ts)
 - ✅ `src/main/core-infrastructure-layer.ts` - **CRITICAL:** Shared infrastructure services for memoization
 - ✅ `docs/AI_ADAPTERS_HEXAGONAL_ARCHITECTURE.md` - This document
 
 ### Modified
-- ✅ `src/main/ai/openai/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
-- ✅ `src/main/ai/claude/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
-- ✅ `src/main/ai/cursor/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
-- ✅ `src/main/ai/registry.ts` - Dynamic tag-based lookup + captures adapters at construction time
-- ✅ `src/main/ai/ai-provider-service.ts` - Removed narrow type annotations + updated imports
-- ✅ `src/main/ai/browser/cookie-usage-page-adapter.ts` - Updated imports to use types.ts
-- ✅ `src/main/ai/usage-page/usage-metric-utils.ts` - Updated imports to use types.ts
+- ✅ `src/main/ai-provider-usage-webscraper/openai/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
+- ✅ `src/main/ai-provider-usage-webscraper/claude/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
+- ✅ `src/main/ai-provider-usage-webscraper/cursor/browser-provider-adapter.ts` - Converted to Layer + uses shared infrastructure
+- ✅ `src/main/ai-provider-usage-webscraper/registry.ts` - Dynamic tag-based lookup + captures adapters at construction time
+- ✅ `src/main/ai-provider-usage-webscraper/ai-provider-service.ts` - Removed narrow type annotations + updated imports
+- ✅ `src/main/ai-provider-usage-webscraper/browser/cookie-usage-page-adapter.ts` - Updated imports to use types.ts
+- ✅ `src/main/ai-provider-usage-webscraper/usage-page/usage-metric-utils.ts` - Updated imports to use types.ts
 - ✅ `src/main/index.ts` - Uses `CoreInfrastructureLayer` and `AiAdaptersLayer` with proper memoization
 
 ### Removed (Cleanup - No Backward Compatibility)
-- ❌ `src/main/ai/ports.ts` - **REMOVED:** Deprecated, replaced by provider-port.ts and registry.ts
-- ❌ `src/main/ai/openai/provider-adapter.ts` - **REMOVED:** Old implementation (pre-hexagonal)
-- ❌ `src/main/ai/claude/provider-adapter.ts` - **REMOVED:** Old implementation (pre-hexagonal)
-- ❌ `src/main/ai/usage-page/web-usage-page-adapter.ts` - **REMOVED:** Replaced by cookie-usage-page-adapter.ts
-- ❌ `src/main/ai/usage-page/ports.ts` - **REMOVED:** Replaced by types.ts (cleaner naming)
+- ❌ `src/main/ai-provider-usage-webscraper/ports.ts` - **REMOVED:** Deprecated, replaced by provider-port.ts and registry.ts
+- ❌ `src/main/ai-provider-usage-webscraper/openai/provider-adapter.ts` - **REMOVED:** Old implementation (pre-hexagonal)
+- ❌ `src/main/ai-provider-usage-webscraper/claude/provider-adapter.ts` - **REMOVED:** Old implementation (pre-hexagonal)
+- ❌ `src/main/ai-provider-usage-webscraper/usage-page/web-usage-page-adapter.ts` - **REMOVED:** Replaced by cookie-usage-page-adapter.ts
+- ❌ `src/main/ai-provider-usage-webscraper/usage-page/ports.ts` - **REMOVED:** Replaced by types.ts (cleaner naming)
 
 ### Memoization Improvements
 - ✅ Shared `CoreInfrastructureLayer` prevents duplicate service construction
@@ -585,13 +585,13 @@ export const CoreInfrastructureLayer = Layer.mergeAll(
 )
 ```
 
-**File: `src/main/ai/infrastructure-layer.ts`**
+**File: `src/main/ai-provider-usage-webscraper/infrastructure-layer.ts`**
 ```typescript
 // Re-export CoreInfrastructureLayer - ensures same reference
 export const AiInfrastructureLayer = CoreInfrastructureLayer
 ```
 
-**File: `src/main/ai/adapters-layer.ts`**
+**File: `src/main/ai-provider-usage-webscraper/adapters-layer.ts`**
 ```typescript
 // All adapters use the same infrastructure reference
 export const OpenAiBrowserProviderAdapter = Layer.effect(...).pipe(

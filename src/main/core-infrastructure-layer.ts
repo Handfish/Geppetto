@@ -1,9 +1,9 @@
 import { Layer } from "effect";
 import { SecureStoreService } from "./github/store-service";
 import { TierService } from "./tier/tier-service";
-import { BrowserAuthService } from "./ai/browser/browser-auth-service";
-import { CookieUsagePageAdapter } from "./ai/browser/cookie-usage-page-adapter";
-import { ElectronSessionService } from "./ai/browser/electron-session-service";
+import { BrowserAuthService } from "./ai-provider-usage-webscraper/browser/browser-auth-service";
+import { CookieUsagePageAdapter } from "./ai-provider-usage-webscraper/browser/cookie-usage-page-adapter";
+import { ElectronSessionService } from "./ai-provider-usage-webscraper/browser/electron-session-service";
 import { PlatformLayer } from "./platform/platform-layer";
 
 /**

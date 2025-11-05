@@ -75,7 +75,7 @@ The application implements hexagonal architecture using Effect's Layer system:
 - **Clean dependency injection**: Adapters captured at construction time
 - **Zero coupling**: Business logic depends on abstract ports, not concrete implementations
 
-**Architecture Components** (see `src/main/ai/` for reference implementation):
+**Architecture Components** (see `src/main/ai-provider-usage-webscraper/` for reference implementation):
 - **Port** (`provider-port.ts`): Interface all providers implement + tag registry
 - **Adapters** (`{provider}/adapter.ts`): Layer implementations of the port
 - **Adapters Layer** (`adapters-layer.ts`): Composition of all provider adapters
@@ -137,7 +137,7 @@ This organization enables:
 
 **Domain Services**:
 - **VCS** (`src/main/github/`): HTTP, Auth, API services + provider adapter
-- **AI** (`src/main/ai/`): Port, adapters (OpenAI/Claude/Cursor), registry, orchestration services
+- **AI** (`src/main/ai-provider-usage-webscraper/`): Port, adapters (OpenAI/Claude/Cursor), registry, orchestration services
 
 **Layer Composition** (`src/main/index.ts`):
 ```typescript
@@ -283,7 +283,7 @@ All data models use Effect Schema:
 
 ### 1. Hexagonal Architecture (Ports & Adapters)
 
-**See "Layer-Based Hexagonal Architecture" section above** for complete pattern. Reference implementation: `src/main/ai/` and `src/main/terminal/`
+**See "Layer-Based Hexagonal Architecture" section above** for complete pattern. Reference implementation: `src/main/ai-provider-usage-webscraper/` and `src/main/terminal/`
 
 **⚠️ IMPORTANT**: If you encounter TypeScript type inference issues with Effect services, consult `docs/EFFECT_PORTS_AND_LAYERS_GUIDE.md` for proper patterns and common anti-patterns.
 
@@ -409,7 +409,7 @@ Tier-specific (`.env.free`, `.env.pro`):
 
 Example: Adding Gemini to AI providers
 
-1. **Implement adapter** (`src/main/ai/gemini/adapter.ts`): Register tag, implement `AiProviderPort` as Layer
+1. **Implement adapter** (`src/main/ai-provider-usage-webscraper/gemini/adapter.ts`): Register tag, implement `AiProviderPort` as Layer
 2. **Add to AdaptersLayer** (`adapters-layer.ts`): Merge with existing adapters
 3. **Add domain errors** (if needed): `errors.ts` and `error-mapper.ts`
 
@@ -425,7 +425,7 @@ Example: Email domain with Gmail/Outlook
 4. **Registry Service**: Captures adapters at construction
 5. **Domain Service**: Business logic via registry
 6. **MainLayer integration**: Inject adapters into services
-7. **IPC contracts, handlers, atoms**: Follow existing domain patterns (see `src/main/ai/` or `src/main/github/`)
+7. **IPC contracts, handlers, atoms**: Follow existing domain patterns (see `src/main/ai-provider-usage-webscraper/` or `src/main/github/`)
 
 ### Key Principles
 
@@ -462,7 +462,7 @@ src/
 │   ├── account/                 # Multi-account management
 │   │   └── account-context-service.ts
 │   │
-│   ├── ai/                      # AI domain (Hexagonal)
+│   ├── ai-provider-usage-webscraper/  # AI Provider Usage Webscraper (Hexagonal)
 │   │   ├── provider-port.ts     # Port definition + tag registry
 │   │   ├── infrastructure-layer.ts  # Re-exports CoreInfrastructureLayer
 │   │   ├── adapters-layer.ts    # Composes all AI adapters

@@ -7,7 +7,7 @@
 
 import { Effect } from 'effect'
 import { AiProviderIpcContracts } from '../../shared/ipc-contracts'
-import { AiProviderService } from '../ai/ai-provider-service'
+import { AiProviderService } from '../ai-provider-usage-webscraper/ai-provider-service'
 import { registerIpcHandler } from './ipc-handler-setup'
 
 /**

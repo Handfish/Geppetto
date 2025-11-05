@@ -478,7 +478,7 @@ UI: "Connection lost. Retrying..." with retry button
 ### Reference Code
 
 1. **src/main/providers/ports.ts** - Adapter port pattern
-2. **src/main/ai/ports.ts** - AiProviderAdapter pattern
+2. **src/main/ai-provider-usage-webscraper/ports.ts** - AiProviderAdapter pattern
 3. **src/main/source-control/ports.ts** - Secondary port pattern
 4. **src/main/ipc/error-mapper.ts** - Error mapping pattern
 5. **docs/TmuxPrompts/tmux-logger.ts** - Tmux implementation

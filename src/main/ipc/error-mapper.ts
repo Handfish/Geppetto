@@ -61,7 +61,7 @@ import {
   AiProviderNotRegisteredError,
   AiProviderUsageError,
   AiAccountNotFoundError,
-} from '../ai/errors'
+} from '../ai-provider-usage-webscraper/errors'
 import {
   ProcessSpawnError,
   ProcessAttachError,

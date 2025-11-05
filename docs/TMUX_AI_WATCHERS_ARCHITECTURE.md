@@ -46,7 +46,7 @@ Geppetto already implements hexagonal architecture across multiple concerns:
 
 **Key Files:**
 - `src/main/providers/ports.ts` - ProviderAdapter interface (primary port)
-- `src/main/ai/ports.ts` - AiProviderAdapter interface (primary port)
+- `src/main/ai-provider-usage-webscraper/ports.ts` - AiProviderAdapter interface (primary port)
 - `src/main/source-control/ports.ts` - GitCommandRunnerPort (secondary port)
 - `src/main/*/index.ts` - Service implementations
 - `src/main/index.ts` - Layer composition
