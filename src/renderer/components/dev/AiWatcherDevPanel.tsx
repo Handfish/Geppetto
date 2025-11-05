@@ -77,7 +77,7 @@ function RunnerLogsDisplay({
   // Debug: Track renders
   renderCountRef.current++;
   console.log(
-    `[WatcherLogsDisplay ${watcherId}] Render #${renderCountRef.current}`,
+    `[WatcherLogsDisplay ${runnerId}] Render #${renderCountRef.current}`,
     {
       autoRefresh,
       logsResultTag: logsResult._tag,
@@ -93,13 +93,13 @@ function RunnerLogsDisplay({
   useEffect(() => {
     if (!autoRefresh) {
       console.log(
-        `[WatcherLogsDisplay ${watcherId}] Auto-refresh disabled, skipping`,
+        `[WatcherLogsDisplay ${runnerId}] Auto-refresh disabled, skipping`,
       );
       return;
     }
 
     console.log(
-      `[WatcherLogsDisplay ${watcherId}] Starting auto-refresh (${LOG_REFRESH_INTERVAL_MS}ms interval)`,
+      `[WatcherLogsDisplay ${runnerId}] Starting auto-refresh (${LOG_REFRESH_INTERVAL_MS}ms interval)`,
     );
 
     let intervalId: number | undefined;
@@ -107,13 +107,13 @@ function RunnerLogsDisplay({
 
     const runRefresh = () => {
       if (cancelled) {
-        console.log(`[WatcherLogsDisplay ${watcherId}] Refresh cancelled`);
+        console.log(`[WatcherLogsDisplay ${runnerId}] Refresh cancelled`);
         return;
       }
 
       refreshCountRef.current++;
       console.log(
-        `[WatcherLogsDisplay ${watcherId}] Calling refreshLogs #${refreshCountRef.current}`,
+        `[WatcherLogsDisplay ${runnerId}] Calling refreshLogs #${refreshCountRef.current}`,
       );
 
       // Use the ref to call the latest refreshLogs
@@ -128,14 +128,14 @@ function RunnerLogsDisplay({
 
     return () => {
       console.log(
-        `[WatcherLogsDisplay ${watcherId}] Cleaning up auto-refresh effect`,
+        `[WatcherLogsDisplay ${runnerId}] Cleaning up auto-refresh effect`,
       );
       cancelled = true;
       if (intervalId !== undefined) {
         window.clearInterval(intervalId);
       }
     };
-  }, [autoRefresh, watcherId]); // ✅ Only depend on autoRefresh and watcherId
+  }, [autoRefresh, runnerId]); // ✅ Only depend on autoRefresh and runnerId
 
   // Auto-scroll to bottom when logs change (only if already at bottom)
   useEffect(() => {
@@ -431,7 +431,7 @@ export function ProcessRunnerDevPanel() {
           </h4>
           <button
             className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded"
-            onClick={() => window.__DEV_AI_WATCHERS__?.listTmuxSessions()}
+            onClick={() => window.__DEV_PROCESS_RUNNERS__?.listTmuxSessions()}
           >
             List Tmux Sessions
           </button>
@@ -457,8 +457,8 @@ export function ProcessRunnerDevPanel() {
                             className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
                             onClick={() => {
                               attachToSession(session.name);
-                              // Refresh watchers list after a short delay to show the new watcher
-                              setTimeout(() => refreshWatchers(), 500);
+                              // Refresh runners list after a short delay to show the new runner
+                              setTimeout(() => refreshRunners(), 500);
                             }}
                           >
                             Attach

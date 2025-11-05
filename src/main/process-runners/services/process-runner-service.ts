@@ -243,22 +243,29 @@ export class ProcessRunnerService extends Effect.Service<ProcessRunnerService>()
       const implementation: ProcessRunnerPort = {
         create: (config: ProcessRunnerConfig) =>
           Effect.gen(function* () {
+            console.log(`[ProcessRunnerService] create() called with config:`, { type: config.type, name: config.name })
+
             // Normalize config into the local schema to avoid constructor parse errors
             const baseConfig =
               config instanceof ProcessRunnerConfig ? config : new ProcessRunnerConfig(config)
 
             const runnerId = yield* Effect.sync(() => randomUUID())
+            console.log(`[ProcessRunnerService] Generated runner ID: ${runnerId}`)
 
             let processHandle: ProcessHandle | undefined = baseConfig.processHandle
 
             // Create a dedicated scope for this runner's lifecycle
             // This scope will live until the runner is explicitly stopped
             const runnerScope = yield* Scope.make()
+            console.log(`[ProcessRunnerService] Created runner scope`)
 
             // If no process handle provided, create a new tmux session
             if (!processHandle) {
               const sessionName = `runner-${baseConfig.type}-${runnerId.slice(0, 8)}`
               const { command, args } = getRunnerCommand(baseConfig)
+
+              console.log(`[ProcessRunnerService] Creating tmux session: ${sessionName}`)
+              console.log(`[ProcessRunnerService] Command: ${command}, Args: ${JSON.stringify(args)}`)
 
               // Extend the createSession scope into the runner's scope
               // This ensures tmux lifecycle is bound to runner lifecycle
@@ -269,8 +276,9 @@ export class ProcessRunnerService extends Effect.Service<ProcessRunnerService>()
                   args,
                   baseConfig.workingDirectory
                 ).pipe(
-                  Effect.mapError((error: unknown) =>
-                    new ProcessRunnerCreateError({
+                  Effect.mapError((error: unknown) => {
+                    console.error(`[ProcessRunnerService] Failed to create tmux session:`, error)
+                    return new ProcessRunnerCreateError({
                       message: `Failed to create tmux session: ${error instanceof Error ? error.message : String(error)}`,
                       config: {
                         type: baseConfig.type,
@@ -278,10 +286,11 @@ export class ProcessRunnerService extends Effect.Service<ProcessRunnerService>()
                       },
                       cause: error,
                     })
-                  )
+                  })
                 ),
                 runnerScope
               )
+              console.log(`[ProcessRunnerService] Tmux session created and scope extended`)
             }
 
             // At this point, processHandle must be defined

@@ -25,6 +25,7 @@ export const processRunnersAtom = processRunnerRuntime
   .atom(
     Effect.gen(function* () {
       const client = yield* ProcessRunnerClient
+      // Use new method names (ProcessRunnerClient has both old and new)
       return yield* client.listRunners()
     })
   )
@@ -32,9 +33,6 @@ export const processRunnersAtom = processRunnerRuntime
     Atom.withReactivity(['process-runners:list'])
     // No TTL - RunnersPanel polls every 2s via useAtomRefresh
   )
-
-// Backwards compatibility alias
-export const aiWatchersAtom = processRunnersAtom
 
 /**
  * Get individual runner by ID
@@ -55,9 +53,6 @@ export const processRunnerAtom = Atom.family((runnerId: string) =>
     )
 )
 
-// Backwards compatibility alias
-export const aiWatcherAtom = processRunnerAtom
-
 /**
  * Get logs for a specific runner
  * Manual refresh only - no auto-refresh TTL
@@ -72,7 +67,7 @@ export const processRunnerLogsAtom = Atom.family(
         Effect.gen(function* () {
           console.log(`[processRunnerLogsAtom] Effect running for runnerId=${params.runnerId}`)
           const client = yield* ProcessRunnerClient
-          const result = yield* client.getRunnerLogs(params.runnerId, params.limit)
+          const result = yield* client.getWatcherLogs(params.runnerId, params.limit)
           console.log(`[processRunnerLogsAtom] Got ${result.length} logs for runnerId=${params.runnerId}`)
           return result
         })
@@ -83,9 +78,6 @@ export const processRunnerLogsAtom = Atom.family(
       )
   }
 )
-
-// Backwards compatibility alias
-export const aiWatcherLogsAtom = processRunnerLogsAtom
 
 /**
  * List all tmux sessions
@@ -118,9 +110,6 @@ export const createRunnerAtom = processRunnerRuntime.fn(
   }
 )
 
-// Backwards compatibility alias
-export const createWatcherAtom = createRunnerAtom
-
 /**
  * Attach to an existing tmux session
  * Invalidates runner list on success
@@ -151,9 +140,6 @@ export const stopRunnerAtom = processRunnerRuntime.fn(
   }
 )
 
-// Backwards compatibility alias
-export const stopWatcherAtom = stopRunnerAtom
-
 /**
  * Start a stopped runner
  * Invalidates runner list and specific runner
@@ -168,9 +154,6 @@ export const startRunnerAtom = processRunnerRuntime.fn(
     reactivityKeys: ['process-runners:list', 'process-runners:runner'],
   }
 )
-
-// Backwards compatibility alias
-export const startWatcherAtom = startRunnerAtom
 
 /**
  * Switch to a tmux session

@@ -1,15 +1,15 @@
 import * as Effect from 'effect/Effect'
 import * as Stream from 'effect/Stream'
-import type { ProcessHandle, ProcessEvent, AiWatcher, AiWatcherConfig, AiWatcherStatus, LogEntry } from './schemas'
+import type { ProcessHandle, ProcessEvent, ProcessRunner, ProcessRunnerConfig, ProcessRunnerStatus, LogEntry } from './schemas'
 import type {
   ProcessSpawnError,
   ProcessAttachError,
   ProcessMonitorError,
   ProcessKillError,
-  AiWatcherCreateError,
-  AiWatcherStartError,
-  AiWatcherStopError,
-  WatcherNotFoundError,
+  ProcessRunnerCreateError,
+  ProcessRunnerStartError,
+  ProcessRunnerStopError,
+  RunnerNotFoundError,
 } from './errors'
 
 /**
@@ -126,53 +126,56 @@ export interface SessionManagerPort {
 }
 
 /**
- * AI watcher port - orchestrates AI agent lifecycle
+ * Process Runner port - orchestrates background process lifecycle
  *
- * This port provides high-level AI agent management:
- * - Creating and configuring AI watchers
- * - Starting and stopping watchers
- * - Retrieving watcher status
- * - Listing and querying watchers
- * - Streaming and retrieving logs from watchers
+ * This port provides high-level process runner management:
+ * - Creating and configuring process runners
+ * - Starting and stopping runners
+ * - Retrieving runner status
+ * - Listing and querying runners
+ * - Streaming and retrieving logs from runners
  */
-export interface AiWatcherPort {
+export interface ProcessRunnerPort {
   /**
-   * Create a new AI watcher with the given configuration
+   * Create a new process runner with the given configuration
    */
-  create(config: AiWatcherConfig): Effect.Effect<AiWatcher, AiWatcherCreateError>
+  create(config: ProcessRunnerConfig): Effect.Effect<ProcessRunner, ProcessRunnerCreateError>
 
   /**
-   * Start a watcher (begins monitoring the AI agent process)
+   * Start a runner (begins monitoring the process)
    */
-  start(watcher: AiWatcher): Effect.Effect<void, AiWatcherStartError>
+  start(runner: ProcessRunner): Effect.Effect<void, ProcessRunnerStartError>
 
   /**
-   * Stop a watcher (stops monitoring and optionally kills the process)
+   * Stop a runner (stops monitoring and optionally kills the process)
    */
-  stop(watcher: AiWatcher): Effect.Effect<void, AiWatcherStopError>
+  stop(runner: ProcessRunner): Effect.Effect<void, ProcessRunnerStopError>
 
   /**
-   * Get the current status of a watcher
+   * Get the current status of a runner
    */
-  getStatus(watcher: AiWatcher): Effect.Effect<AiWatcherStatus, never>
+  getStatus(runner: ProcessRunner): Effect.Effect<ProcessRunnerStatus, never>
 
   /**
-   * Get a watcher by ID
+   * Get a runner by ID
    */
-  get(watcherId: string): Effect.Effect<AiWatcher, WatcherNotFoundError>
+  get(runnerId: string): Effect.Effect<ProcessRunner, RunnerNotFoundError>
 
   /**
-   * List all watchers
+   * List all runners
    */
-  listAll(): Effect.Effect<AiWatcher[], never>
+  listAll(): Effect.Effect<ProcessRunner[], never>
 
   /**
-   * Get logs from a watcher (existing logs only)
+   * Get logs from a runner (existing logs only)
    */
-  getLogs(watcherId: string, limit?: number): Effect.Effect<LogEntry[], WatcherNotFoundError>
+  getLogs(runnerId: string, limit?: number): Effect.Effect<LogEntry[], RunnerNotFoundError>
 
   /**
-   * Stream logs from a watcher (existing + live)
+   * Stream logs from a runner (existing + live)
    */
-  streamLogs(watcher: AiWatcher): Stream.Stream<LogEntry, never>
+  streamLogs(runner: ProcessRunner): Stream.Stream<LogEntry, never>
 }
+
+// Backwards compatibility alias
+export type AiWatcherPort = ProcessRunnerPort

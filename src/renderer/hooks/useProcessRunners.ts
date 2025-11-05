@@ -16,13 +16,6 @@ import {
   attachToTmuxSessionAtom,
   stopRunnerAtom,
   startRunnerAtom,
-  // Backwards compat
-  aiWatchersAtom,
-  aiWatcherAtom,
-  aiWatcherLogsAtom,
-  createWatcherAtom,
-  stopWatcherAtom,
-  startWatcherAtom,
 } from '../atoms/process-runner-atoms'
 
 /**
@@ -67,9 +60,6 @@ export function useProcessRunners() {
   }
 }
 
-// Backwards compatibility alias
-export const useAiWatchers = useProcessRunners
-
 /**
  * Hook for individual watcher details
  *
@@ -107,14 +97,14 @@ export function useWatcher(watcherId: string) {
  *
  * IMPORTANT: Includes rate limiting to prevent IPC spam (max 1 request per 500ms)
  */
-export function useWatcherLogs(watcherId: string, limit?: number) {
-  console.log(`[useWatcherLogs] Called with watcherId=${watcherId}, limit=${limit}`)
+export function useWatcherLogs(runnerId: string, limit?: number) {
+  console.log(`[useWatcherLogs] Called with runnerId=${runnerId}, limit=${limit}`)
 
   // Memoize params to ensure stable atom identity
-  const params = useMemo(() => ({ watcherId, limit }), [watcherId, limit])
+  const params = useMemo(() => ({ runnerId, limit }), [runnerId, limit])
 
-  const logsResult = useAtomValue(aiWatcherLogsAtom(params))
-  const rawRefreshLogs = useAtomRefresh(aiWatcherLogsAtom(params))
+  const logsResult = useAtomValue(processRunnerLogsAtom(params))
+  const rawRefreshLogs = useAtomRefresh(processRunnerLogsAtom(params))
 
   // Store rawRefreshLogs in a ref to keep refreshLogs stable
   const rawRefreshLogsRef = useRef(rawRefreshLogs)

@@ -97,13 +97,13 @@ export class TmuxPipeConfig extends S.Class<TmuxPipeConfig>('TmuxPipeConfig')({
 }) {}
 
 /**
- * Log entry for AI watcher logs
+ * Log entry for process runner logs
  */
 export class LogEntry extends S.Class<LogEntry>('LogEntry')({
   timestamp: S.Date,
   level: S.Literal('info', 'error', 'debug', 'stdout', 'stderr'),
   message: S.String,
-  watcherId: S.String,
+  runnerId: S.String,
 }) {}
 
 /**

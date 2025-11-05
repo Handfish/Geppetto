@@ -12,15 +12,15 @@ export function ProcessRunnersPanel(): React.ReactNode {
   const [, switchToSession] = useAtom(switchToTmuxSessionAtom)
   const refreshRunners = useAtomRefresh(processRunnersAtom)
 
-  // Poll for watcher status updates every 500ms for responsive LED updates
+  // Poll for runner status updates every 500ms for responsive LED updates
   // This ensures status changes (idle → running) appear quickly in the UI
   useEffect(() => {
     const interval = setInterval(() => {
-      refreshWatchers()
+      refreshRunners()
     }, 500)
 
     return () => clearInterval(interval)
-  }, [refreshWatchers])
+  }, [refreshRunners])
 
   const handleClearRunner = (runnerId: string) => {
     stopRunner(runnerId)

@@ -250,6 +250,9 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
               tmuxArgs.push(...args)
             }
 
+            console.log(`[TmuxAdapter] Creating tmux session: ${name}`)
+            console.log(`[TmuxAdapter] Command: tmux ${tmuxArgs.join(' ')}`)
+
             yield* Effect.logInfo(
               `Creating monitored tmux session "${name}" with command: "${command}"${args ? ` args: ${JSON.stringify(args)}` : ''}`
             )
@@ -259,15 +262,20 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
 
             // Create the detached session
             const createCmd = Command.make('tmux', ...tmuxArgs)
+            console.log(`[TmuxAdapter] Command object created`)
+
             const createProcess = yield* Command.start(createCmd).pipe(
               Effect.provide(NodeContext.layer),
-              Effect.mapError((error) =>
-                new TmuxSessionNotFoundError({
+              Effect.mapError((error) => {
+                console.error(`[TmuxAdapter] Command.start failed:`, error)
+                return new TmuxSessionNotFoundError({
                   message: `Failed to start tmux: ${String(error)}`,
                   sessionName: name,
                 })
-              )
+              })
             )
+
+            console.log(`[TmuxAdapter] Command started successfully`)
 
             // Wait for session creation to complete
             const [createStdout, createStderr, createExitCode] = yield* Effect.all([

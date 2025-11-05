@@ -283,27 +283,27 @@ export class AiWatcherClient extends Effect.Service<AiWatcherClient>()(
       >
 
       return {
-        createWatcher: (config: CreateWatcherInput) =>
-          ipc.invoke('ai-watcher:create', config),
-        attachToTmuxSession: (sessionName: AttachTmuxInput['sessionName']) =>
-          ipc.invoke('ai-watcher:attach-tmux', { sessionName }),
-        listWatchers: () => ipc.invoke('ai-watcher:list', undefined),
-        getWatcher: (watcherId: GetWatcherInput['watcherId']) =>
-          ipc.invoke('ai-watcher:get', { watcherId }),
-        stopWatcher: (watcherId: StopWatcherInput['watcherId']) =>
-          ipc.invoke('ai-watcher:stop', { watcherId }),
-        startWatcher: (watcherId: StartWatcherInput['watcherId']) =>
-          ipc.invoke('ai-watcher:start', { watcherId }),
+        createRunner: (config: CreateWatcherInput) =>
+          ipc.invoke('process-runner:create', config),
+        listRunners: () => ipc.invoke('process-runner:list', undefined),
+        getRunner: (runnerId: GetWatcherInput['watcherId']) =>
+          ipc.invoke('process-runner:get', { runnerId }),
+        stopRunner: (runnerId: StopWatcherInput['watcherId']) =>
+          ipc.invoke('process-runner:stop', { runnerId }),
+        startRunner: (runnerId: StartWatcherInput['watcherId']) =>
+          ipc.invoke('process-runner:start', { runnerId }),
         getWatcherLogs: (
-          watcherId: GetLogsInput['watcherId'],
+          runnerId: GetLogsInput['watcherId'],
           limit?: GetLogsInput['limit']
-        ) => ipc.invoke('ai-watcher:get-logs', { watcherId, limit }),
-        listTmuxSessions: () => ipc.invoke('ai-watcher:list-tmux', undefined),
+        ) => ipc.invoke('process-runner:get-logs', { runnerId, limit }),
+        listTmuxSessions: () => ipc.invoke('process-runner:list-tmux', undefined),
+        attachToTmuxSession: (sessionName: AttachTmuxInput['sessionName']) =>
+          ipc.invoke('process-runner:attach-tmux', { sessionName }),
         switchToTmuxSession: (sessionName: SwitchTmuxInput['sessionName']) =>
           Effect.gen(function* () {
-            console.log('[AiWatcherClient] switchToTmuxSession called for:', sessionName)
-            const result = yield* ipc.invoke('ai-watcher:switch-tmux', { sessionName })
-            console.log('[AiWatcherClient] switchToTmuxSession result:', result)
+            console.log('[ProcessRunnerClient] switchToTmuxSession called for:', sessionName)
+            const result = yield* ipc.invoke('process-runner:switch-tmux', { sessionName })
+            console.log('[ProcessRunnerClient] switchToTmuxSession result:', result)
             return result
           }),
       } as const
@@ -438,5 +438,4 @@ export class SourceControlClient extends Effect.Service<SourceControlClient>()(
   }
 ) {}
 
-// Backwards compatibility alias
 export const ProcessRunnerClient = AiWatcherClient
