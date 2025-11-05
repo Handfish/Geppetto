@@ -242,7 +242,7 @@ class TerminalSubscriptionManager {
 
       this.listeners.set(processId, listener)
       console.log('[TerminalSubscriptionManager] Registering IPC listener for channel:', `terminal:stream:${processId}`)
-      window.electron.ipcRenderer.on(`terminal:stream:${processId}`, listener)
+      window.electron.ipcRenderer.on(`terminal:stream:${processId}`, listener as (...args: unknown[]) => void)
 
       // Mark listener as attached to prevent duplicates
       this.listenerAttached.add(processId)
@@ -288,7 +288,7 @@ class TerminalSubscriptionManager {
 
     if (listener) {
       console.log('[TerminalSubscriptionManager] Removing IPC listener for:', processId)
-      window.electron.ipcRenderer.removeListener(`terminal:stream:${processId}`, listener)
+      window.electron.ipcRenderer.removeListener(`terminal:stream:${processId}`, listener as (...args: unknown[]) => void)
       this.listeners.delete(processId)
       this.listenerAttached.delete(processId) // Remove from tracking set
     }

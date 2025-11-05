@@ -195,7 +195,13 @@ export namespace TmuxControlClient {
 
         console.log(`[TmuxControl:${client.sessionName}] Stream ended`)
         client.ptyProcess.kill()
-      })()
+      })(),
+      (error) =>
+        new ProcessMonitorError({
+          message: `Stream async iterable error: ${error instanceof Error ? error.message : String(error)}`,
+          processId: client.sessionName,
+          cause: error,
+        })
     )
   }
 

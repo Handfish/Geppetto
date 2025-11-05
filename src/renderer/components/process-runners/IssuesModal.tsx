@@ -397,7 +397,7 @@ function IssuesModalContent({
                               issue={issue}
                               key={issue.number}
                               onToggle={toggleShortlist}
-                              ref={(el) => (issueRowRefs.current[index] = el)}
+                              ref={(el) => { issueRowRefs.current[index] = el }}
                               selectedAgent={getIssueAgent(issue.number)}
                             />
                           ))}

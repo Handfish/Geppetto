@@ -136,7 +136,7 @@ export const NodePtyTerminalAdapter = Layer.effect(
             // SIMPLIFIED: Just spawn the command directly in PTY for testing
             // This should work for bash and simple commands
             const spawnCommand = config.command
-            const spawnArgs = config.args
+            const spawnArgs = [...config.args] // Convert readonly array to mutable
 
             console.log('[NodePtyAdapter] Spawning directly in PTY:', {
               command: spawnCommand,

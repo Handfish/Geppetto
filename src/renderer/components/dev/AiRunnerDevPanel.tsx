@@ -17,9 +17,9 @@ import type {
   ProcessRunner,
   TmuxSession,
   LogEntry,
-} from '../../shared/schemas/process-runners';
-import type { NetworkError } from "../../shared/schemas/errors";
-import type { RunnerNotFoundError } from '../../shared/schemas/process-runners/errors';
+} from '../../../shared/schemas/process-runners';
+import type { NetworkError } from "../../../shared/schemas/errors";
+import type { RunnerNotFoundError } from '../../../shared/schemas/process-runners/errors';
 
 // Type-safe window extension for dev API
 interface DevProcessRunnersAPI {

@@ -154,10 +154,10 @@ export class KeyboardLayerManager extends Context.Tag('KeyboardLayerManager')<
             const newStack = [...stack.slice(0, layerIndex), ...stack.slice(layerIndex + 1)]
 
             // Ensure we never have an empty stack - default to 'carousel'
-            const finalStack = newStack.length === 0 ? ['carousel'] : newStack
+            const finalStack: KeyboardLayer[] = newStack.length === 0 ? ['carousel'] : newStack
             yield* Ref.set(layerStackRef, finalStack)
 
-            const activeLayer = finalStack[finalStack.length - 1]
+            const activeLayer: KeyboardLayer = finalStack[finalStack.length - 1]
             console.log(`[KeyboardLayerManager] Pop '${layer}' → Active: '${activeLayer}', Stack: [${finalStack.join(', ')}]`)
 
             updateShortcuts(activeLayer)

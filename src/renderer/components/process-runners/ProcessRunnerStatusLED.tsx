@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import type { ProcessRunner } from '../../shared/schemas/process-runners'
+import type { ProcessRunner } from '../../../shared/schemas/process-runners'
 import { X } from 'lucide-react'
 
 const getProviderFavicon = (type: string) => {

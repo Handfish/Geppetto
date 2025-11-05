@@ -4,7 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import { processRunnersAtom, stopRunnerAtom, switchToTmuxSessionAtom } from '../../atoms/process-runner-atoms'
 import { ProcessRunnerStatusLED } from './ProcessRunnerStatusLED'
 import { Result } from '@effect-atom/atom-react'
-import type { ProcessRunner } from '../../shared/schemas/process-runners'
+import type { ProcessRunner } from '../../../shared/schemas/process-runners'
 
 export function ProcessRunnersPanel(): React.ReactNode {
   const runnersResult = useAtomValue(processRunnersAtom)

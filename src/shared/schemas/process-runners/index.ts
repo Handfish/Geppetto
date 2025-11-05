@@ -36,6 +36,15 @@ export class ProcessRunnerConfig extends S.Class<ProcessRunnerConfig>('ProcessRu
   env: S.optional(S.Record({ key: S.String, value: S.String })),
   command: S.optional(S.String), // Custom command for 'custom' type
   args: S.optional(S.Array(S.String)), // Custom args for 'custom' type
+  processHandle: S.optional(ProcessHandle), // For attaching to existing processes
+  issueContext: S.optional(
+    S.Struct({
+      owner: S.String,
+      repo: S.String,
+      issueNumber: S.Number,
+      issueTitle: S.String,
+    })
+  ), // GitHub issue context when runner is launched from issue
 }) {}
 
 // Backwards compatibility alias for Phase B
