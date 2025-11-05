@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import type { AiWatcher } from '../../../shared/schemas/ai-watchers'
+import type { ProcessRunner } from '../../shared/schemas/process-runners'
 import { X } from 'lucide-react'
 
 const getProviderFavicon = (type: string) => {
@@ -16,7 +16,7 @@ const getProviderFavicon = (type: string) => {
   }
 }
 
-const getStatusColor = (status: AiWatcher['status']) => {
+const getStatusColor = (status: ProcessRunner['status']) => {
   switch (status) {
     case 'starting':
       return {
@@ -57,28 +57,28 @@ const getStatusColor = (status: AiWatcher['status']) => {
   }
 }
 
-interface WatcherLEDProps {
-  watcher: AiWatcher
-  onClear?: (watcherId: string) => void
-  onClick?: (watcher: AiWatcher) => void
+interface ProcessRunnerLEDProps {
+  watcher: ProcessRunner
+  onClear?: (runnerId: string) => void
+  onClick?: (runner: ProcessRunner) => void
 }
 
-export function WatcherStatusLED({ watcher, onClear, onClick }: WatcherLEDProps) {
+export function ProcessRunnerStatusLED({ watcher, onClear, onClick }: ProcessRunnerLEDProps) {
   const colors = getStatusColor(watcher.status)
   const favicon = getProviderFavicon(watcher.type)
   const isActive = watcher.status === 'starting' || watcher.status === 'running' || watcher.status === 'idle'
   const isDead = watcher.status === 'stopped' || watcher.status === 'errored'
 
   const handleClick = () => {
-    console.log('[WatcherStatusLED] Button clicked!')
-    console.log('[WatcherStatusLED] Watcher:', watcher.id, 'Status:', watcher.status)
-    console.log('[WatcherStatusLED] isDead:', isDead, 'onClick defined:', !!onClick)
+    console.log('[ProcessRunnerStatusLED] Button clicked!')
+    console.log('[ProcessRunnerStatusLED] Runner:', watcher.id, 'Status:', watcher.status)
+    console.log('[ProcessRunnerStatusLED] isDead:', isDead, 'onClick defined:', !!onClick)
 
     if (onClick && !isDead) {
-      console.log('[WatcherStatusLED] Calling onClick handler...')
+      console.log('[ProcessRunnerStatusLED] Calling onClick handler...')
       onClick(watcher)
     } else {
-      console.log('[WatcherStatusLED] NOT calling onClick - isDead:', isDead, 'onClick:', !!onClick)
+      console.log('[ProcessRunnerStatusLED] NOT calling onClick - isDead:', isDead, 'onClick:', !!onClick)
     }
   }
 
@@ -149,3 +149,6 @@ export function WatcherStatusLED({ watcher, onClear, onClick }: WatcherLEDProps)
     </motion.div>
   )
 }
+
+// Backwards compatibility alias
+export const WatcherStatusLED = ProcessRunnerStatusLED

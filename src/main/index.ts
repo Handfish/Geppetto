@@ -404,7 +404,7 @@ app.whenReady().then(async () => {
           setupProviderIpcHandlers,
           setupGitHubIssueIpcHandlers,
           setupAiProviderIpcHandlers,
-          setupAiWatcherIpcHandlers,
+          setupProcessRunnerIpcHandlers,
           setupSourceControlIpcHandlers,
           setupWorkspaceIpcHandlers,
           setupTerminalIpcHandlers,

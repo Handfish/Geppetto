@@ -7,10 +7,14 @@ export const AiAgentType = S.Literal('claude-code', 'codex', 'cursor', 'custom')
 export type AiAgentType = S.Schema.Type<typeof AiAgentType>
 
 /**
- * Watcher status - lifecycle states of an AI watcher
+ * Process Runner status - lifecycle states of a process runner
  */
-export const AiWatcherStatus = S.Literal('starting', 'running', 'idle', 'stopped', 'errored')
-export type AiWatcherStatus = S.Schema.Type<typeof AiWatcherStatus>
+export const ProcessRunnerStatus = S.Literal('starting', 'running', 'idle', 'stopped', 'errored')
+export type ProcessRunnerStatus = S.Schema.Type<typeof ProcessRunnerStatus>
+
+// Backwards compatibility alias for Phase B
+export const AiWatcherStatus = ProcessRunnerStatus
+export type AiWatcherStatus = ProcessRunnerStatus
 
 /**
  * Process handle - represents a process being monitored
@@ -23,9 +27,9 @@ export class ProcessHandle extends S.Class<ProcessHandle>('ProcessHandle')({
 }) {}
 
 /**
- * AI watcher configuration (for IPC input)
+ * Process Runner configuration (for IPC input)
  */
-export class AiWatcherConfig extends S.Class<AiWatcherConfig>('AiWatcherConfig')({
+export class ProcessRunnerConfig extends S.Class<ProcessRunnerConfig>('ProcessRunnerConfig')({
   type: AiAgentType,
   name: S.optional(S.String),
   workingDirectory: S.String,
@@ -34,29 +38,44 @@ export class AiWatcherConfig extends S.Class<AiWatcherConfig>('AiWatcherConfig')
   args: S.optional(S.Array(S.String)), // Custom args for 'custom' type
 }) {}
 
+// Backwards compatibility alias for Phase B
+export const AiWatcherConfig = ProcessRunnerConfig
+
 /**
- * AI watcher - represents a monitored AI agent instance
+ * Process Runner - represents a monitored process instance
  */
-export class AiWatcher extends S.Class<AiWatcher>('AiWatcher')({
+export class ProcessRunner extends S.Class<ProcessRunner>('ProcessRunner')({
   id: S.String,
   name: S.String,
   type: AiAgentType,
   processHandle: ProcessHandle,
-  status: AiWatcherStatus,
-  config: AiWatcherConfig,
+  status: ProcessRunnerStatus,
+  config: ProcessRunnerConfig,
   createdAt: S.Date,
   lastActivityAt: S.Date,
 }) {}
 
+// Backwards compatibility alias for Phase B
+export const AiWatcher = ProcessRunner
+
 /**
- * Log entry for AI watcher logs
+ * Log entry for process runner logs
  */
 export class LogEntry extends S.Class<LogEntry>('LogEntry')({
   timestamp: S.Date,
   level: S.Literal('info', 'error', 'debug', 'stdout', 'stderr'),
   message: S.String,
-  watcherId: S.String,
+  runnerId: S.String,
 }) {}
+
+// Backwards compatibility: also accept watcherId
+export const LogEntryCompat = S.Class<any>('LogEntry')({
+  timestamp: S.Date,
+  level: S.Literal('info', 'error', 'debug', 'stdout', 'stderr'),
+  message: S.String,
+  watcherId: S.optional(S.String),
+  runnerId: S.optional(S.String),
+})
 
 /**
  * Tmux session information

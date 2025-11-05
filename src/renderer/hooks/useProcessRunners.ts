@@ -6,59 +6,69 @@ import {
 } from '@effect-atom/atom-react'
 import { Result } from '@effect-atom/atom-react'
 import { useMemo, useRef, useCallback } from 'react'
-import type { AiWatcherConfig } from '../../shared/schemas/ai-watchers'
+import type { ProcessRunnerConfig } from '../../shared/schemas/process-runners'
 import {
+  processRunnersAtom,
+  processRunnerAtom,
+  processRunnerLogsAtom,
+  tmuxSessionsAtom,
+  createRunnerAtom,
+  attachToTmuxSessionAtom,
+  stopRunnerAtom,
+  startRunnerAtom,
+  // Backwards compat
   aiWatchersAtom,
   aiWatcherAtom,
   aiWatcherLogsAtom,
-  tmuxSessionsAtom,
   createWatcherAtom,
-  attachToTmuxSessionAtom,
   stopWatcherAtom,
   startWatcherAtom,
-} from '../atoms/ai-watcher-atoms'
+} from '../atoms/process-runner-atoms'
 
 /**
- * Rate limiter configuration for watcher logs
+ * Rate limiter configuration for runner logs
  * Set to false to disable rate limiting (useful for debugging)
  */
 const ENABLE_LOGS_RATE_LIMITER = false
 
 /**
- * Hook for AI watcher list management
+ * Hook for process runner list management
  *
  * Returns full Results for exhaustive error handling in components.
  * Also provides convenience properties and actions for common use cases.
  */
-export function useAiWatchers() {
-  const watchersResult = useAtomValue(aiWatchersAtom)
-  const [createResult, createWatcher] = useAtom(createWatcherAtom)
-  const refreshWatchers = useAtomRefresh(aiWatchersAtom)
-  const stopWatcher = useAtomSet(stopWatcherAtom)
-  const startWatcher = useAtomSet(startWatcherAtom)
+export function useProcessRunners() {
+  const runnersResult = useAtomValue(processRunnersAtom)
+  const [createResult, createRunner] = useAtom(createRunnerAtom)
+  const refreshRunners = useAtomRefresh(processRunnersAtom)
+  const stopRunner = useAtomSet(stopRunnerAtom)
+  const startRunner = useAtomSet(startRunnerAtom)
 
   // Computed convenience properties
-  const watchers = Result.getOrElse(watchersResult, () => [])
-  const isLoading = watchersResult._tag === 'Initial' && watchersResult.waiting
+  const runners = Result.getOrElse(runnersResult, () => [])
+  const isLoading = runnersResult._tag === 'Initial' && runnersResult.waiting
   const isCreating = createResult.waiting
 
   return {
     // Primary: Full Results for exhaustive error handling
-    watchersResult,
+    runnersResult,
     createResult,
 
     // Actions
-    createWatcher,
-    stopWatcher,
-    startWatcher,
-    refreshWatchers,
+    createRunner,
+    stopRunner,
+    startRunner,
+    refreshRunners,
 
     // Computed convenience properties
-    watchers,
+    runners,
     isLoading,
     isCreating,
   }
 }
+
+// Backwards compatibility alias
+export const useAiWatchers = useProcessRunners
 
 /**
  * Hook for individual watcher details

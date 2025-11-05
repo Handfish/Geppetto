@@ -80,7 +80,7 @@ import {
   WatcherNotFoundError as IpcWatcherNotFoundError,
   WatcherOperationError,
   TmuxError,
-} from '../../shared/schemas/ai-watchers/errors'
+} from '../../shared/schemas/process-runners/errors'
 import {
   TerminalError as SharedTerminalError,
 } from '../../shared/schemas/terminal/errors'

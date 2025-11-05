@@ -1,39 +1,39 @@
 /**
- * Development-only AI Watcher Testing Panel
+ * Development-only Process Runner Testing Panel
  *
- * Allows testing AI watcher functionality in development mode.
- * Exposes window.__DEV_AI_WATCHERS__ API in console.
+ * Allows testing process runner functionality in development mode.
+ * Exposes window.__DEV_PROCESS_RUNNERS__ API in console.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { Result } from "@effect-atom/atom-react";
 import {
-  useAiWatchers,
+  useProcessRunners,
   useTmuxSessions,
   useWatcherLogs,
-} from "../../hooks/useAiWatchers";
+} from "../../hooks/useProcessRunners";
 import type {
-  AiWatcherConfig,
-  AiWatcher,
+  ProcessRunnerConfig,
+  ProcessRunner,
   TmuxSession,
   LogEntry,
-} from "../../../shared/schemas/ai-watchers";
-import type { NetworkError } from "../../../shared/schemas/errors";
-import type { WatcherNotFoundError } from "../../../shared/schemas/ai-watchers/errors";
+} from '../../shared/schemas/process-runners';
+import type { NetworkError } from "../../shared/schemas/errors";
+import type { RunnerNotFoundError } from '../../shared/schemas/process-runners/errors';
 
 // Type-safe window extension for dev API
-interface DevAiWatchersAPI {
-  listWatchers: () => readonly AiWatcher[];
+interface DevProcessRunnersAPI {
+  listRunners: () => readonly ProcessRunner[];
   listTmuxSessions: () => readonly TmuxSession[];
-  createWatcher: (config: Partial<AiWatcherConfig>) => void;
+  createRunner: (config: Partial<ProcessRunnerConfig>) => void;
   attachToTmux: (sessionName: string) => void;
-  stopWatcher: (watcherId: string) => void;
-  startWatcher: (watcherId: string) => void;
+  stopRunner: (runnerId: string) => void;
+  startRunner: (runnerId: string) => void;
   showPanel: () => void;
   hidePanel: () => void;
   togglePanel: () => void;
   getResults: () => {
-    watchers: unknown;
+    runners: unknown;
     sessions: unknown;
     createResult: unknown;
   };
@@ -41,7 +41,7 @@ interface DevAiWatchersAPI {
 
 declare global {
   interface Window {
-    __DEV_AI_WATCHERS__?: DevAiWatchersAPI;
+    __DEV_PROCESS_RUNNERS__?: DevProcessRunnersAPI;
   }
 }
 
@@ -60,16 +60,16 @@ function cleanConfig<T extends Record<string, unknown>>(obj: T): Partial<T> {
 const LOG_REFRESH_INTERVAL_MS = 1000; // Simple 1-second refresh
 
 /**
- * Component to display logs for a watcher
+ * Component to display logs for a runner
  */
-function WatcherLogsDisplay({
-  watcherId,
+function RunnerLogsDisplay({
+  runnerId,
   autoRefresh,
 }: {
-  watcherId: string;
+  runnerId: string;
   autoRefresh: boolean;
 }) {
-  const { logsResult, refreshLogs } = useWatcherLogs(watcherId, 50);
+  const { logsResult, refreshLogs } = useWatcherLogs(runnerId, 50);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const renderCountRef = useRef(0);
   const refreshCountRef = useRef(0);
@@ -181,9 +181,9 @@ function WatcherLogsDisplay({
           .onErrorTag("NetworkError", (error: NetworkError) => (
             <div className="text-red-400">Network error: {error.message}</div>
           ))
-          .onErrorTag("WatcherNotFoundError", (error: WatcherNotFoundError) => (
+          .onErrorTag("RunnerNotFoundError", (error: RunnerNotFoundError) => (
             <div className="text-yellow-400">
-              Watcher not found: {error.message}
+              Runner not found: {error.message}
             </div>
           ))
           .onSuccess((logs: readonly LogEntry[]) => {
@@ -228,15 +228,15 @@ function WatcherLogsDisplay({
   );
 }
 
-export function AiWatcherDevPanel() {
+export function ProcessRunnerDevPanel() {
   const {
-    watchersResult,
+    runnersResult,
     createResult,
-    createWatcher,
-    stopWatcher,
-    startWatcher,
-    refreshWatchers,
-  } = useAiWatchers();
+    createRunner,
+    stopRunner,
+    startRunner,
+    refreshRunners,
+  } = useProcessRunners();
 
   const { sessionsResult, attachToSession, refreshSessions } =
     useTmuxSessions();
@@ -254,30 +254,30 @@ export function AiWatcherDevPanel() {
       hasLoggedRef.current = true;
 
       console.log(
-        "%c[AI Watcher] Developer panel loaded!",
+        "%c[Process Runner] Developer panel loaded!",
         "color: #8b5cf6; font-weight: bold",
       );
       console.log(
-        "%cUse window.__DEV_AI_WATCHERS__ to interact:",
+        "%cUse window.__DEV_PROCESS_RUNNERS__ to interact:",
         "color: #6b7280",
       );
-      console.log("  • listWatchers()          - List all AI watchers");
+      console.log("  • listRunners()           - List all process runners");
       console.log("  • listTmuxSessions()      - List all tmux sessions");
       console.log(
-        "  • createWatcher(config)   - Create new watcher (config: {type, name, workingDirectory, command, args})",
+        "  • createRunner(config)    - Create new runner (config: {type, name, workingDirectory, command, args})",
       );
       console.log("  • attachToTmux(name)      - Attach to tmux session");
-      console.log("  • stopWatcher(id)         - Stop a watcher");
-      console.log("  • startWatcher(id)        - Start a watcher");
+      console.log("  • stopRunner(id)          - Stop a runner");
+      console.log("  • startRunner(id)         - Start a runner");
       console.log("  • showPanel()             - Show visual panel");
       console.log("  • hidePanel()             - Hide visual panel");
       console.log("  • getResults()            - Get current Results");
       console.log("");
       console.log("Examples:");
-      console.log("  window.__DEV_AI_WATCHERS__.listTmuxSessions()");
-      console.log("  window.__DEV_AI_WATCHERS__.createWatcher({");
+      console.log("  window.__DEV_PROCESS_RUNNERS__.listTmuxSessions()");
+      console.log("  window.__DEV_PROCESS_RUNNERS__.createRunner({");
       console.log('    type: "custom",');
-      console.log('    name: "MyWatcher",');
+      console.log('    name: "MyRunner",');
       console.log('    workingDirectory: "/tmp",');
       console.log('    command: "bash",');
       console.log('    args: ["-c", "echo test"]');
@@ -291,29 +291,29 @@ export function AiWatcherDevPanel() {
       // Expose API to console
       const api = {
         // List operations
-        listWatchers: () => {
-          console.log("[AI Watcher] Listing watchers...");
-          refreshWatchers();
-          const watchers: readonly AiWatcher[] = Result.getOrElse(
-            watchersResult,
+        listRunners: () => {
+          console.log("[Process Runner] Listing runners...");
+          refreshRunners();
+          const runners: readonly ProcessRunner[] = Result.getOrElse(
+            runnersResult,
             () => [],
           );
-          if (watchers && watchers.length > 0) {
+          if (runners && runners.length > 0) {
             console.table(
-              watchers.map((w) => ({
-                id: w.id,
-                name: w.name,
-                type: w.type,
-                status: w.status,
-                pid: w.processHandle.pid,
+              runners.map((r) => ({
+                id: r.id,
+                name: r.name,
+                type: r.type,
+                status: r.status,
+                pid: r.processHandle.pid,
               })),
             );
           }
-          return watchers;
+          return runners;
         },
 
         listTmuxSessions: () => {
-          console.log("[AI Watcher] Listing tmux sessions...");
+          console.log("[Process Runner] Listing tmux sessions...");
           refreshSessions();
           const sessions: readonly TmuxSession[] = Result.getOrElse(
             sessionsResult,
@@ -332,8 +332,8 @@ export function AiWatcherDevPanel() {
         },
 
         // Create operations
-        createWatcher: (config: Partial<AiWatcherConfig>) => {
-          console.log("[AI Watcher] Creating watcher...", config);
+        createRunner: (config: Partial<ProcessRunnerConfig>) => {
+          console.log("[Process Runner] Creating runner...", config);
           // Build config with defaults and remove undefined fields for Effect Schema
           const fullConfig = cleanConfig({
             type: config.type || "custom",
@@ -344,33 +344,33 @@ export function AiWatcherDevPanel() {
             env: config.env,
           });
 
-          createWatcher(fullConfig as AiWatcherConfig);
-          setTimeout(() => refreshWatchers(), 500);
+          createRunner(fullConfig as ProcessRunnerConfig);
+          setTimeout(() => refreshRunners(), 500);
           console.log(
-            "[AI Watcher] Create request sent. Watchers will refresh.",
+            "[Process Runner] Create request sent. Runners will refresh.",
           );
         },
 
         attachToTmux: (sessionName: string) => {
-          console.log("[AI Watcher] Attaching to tmux session:", sessionName);
+          console.log("[Process Runner] Attaching to tmux session:", sessionName);
           attachToSession(sessionName);
-          setTimeout(() => refreshWatchers(), 500);
+          setTimeout(() => refreshRunners(), 500);
           console.log(
-            "[AI Watcher] Attach request sent. Watchers will refresh.",
+            "[Process Runner] Attach request sent. Runners will refresh.",
           );
         },
 
         // Control operations
-        stopWatcher: (watcherId: string) => {
-          console.log("[AI Watcher] Stopping watcher:", watcherId);
-          stopWatcher(watcherId);
-          setTimeout(() => refreshWatchers(), 500);
+        stopRunner: (runnerId: string) => {
+          console.log("[Process Runner] Stopping runner:", runnerId);
+          stopRunner(runnerId);
+          setTimeout(() => refreshRunners(), 500);
         },
 
-        startWatcher: (watcherId: string) => {
-          console.log("[AI Watcher] Starting watcher:", watcherId);
-          startWatcher(watcherId);
-          setTimeout(() => refreshWatchers(), 500);
+        startRunner: (runnerId: string) => {
+          console.log("[Process Runner] Starting runner:", runnerId);
+          startRunner(runnerId);
+          setTimeout(() => refreshRunners(), 500);
         },
 
         // UI toggle
@@ -380,29 +380,29 @@ export function AiWatcherDevPanel() {
 
         // Results
         getResults: () => ({
-          watchers: watchersResult,
+          runners: runnersResult,
           sessions: sessionsResult,
           createResult,
         }),
       };
 
-      window.__DEV_AI_WATCHERS__ = api;
+      window.__DEV_PROCESS_RUNNERS__ = api;
     }
 
     return () => {
       if (process.env.NODE_ENV === "development") {
-        delete window.__DEV_AI_WATCHERS__;
+        delete window.__DEV_PROCESS_RUNNERS__;
       }
     };
   }, [
-    watchersResult,
+    runnersResult,
     sessionsResult,
     createResult,
-    createWatcher,
-    stopWatcher,
-    startWatcher,
+    createRunner,
+    stopRunner,
+    startRunner,
     attachToSession,
-    refreshWatchers,
+    refreshRunners,
     refreshSessions,
   ]);
 
@@ -411,7 +411,7 @@ export function AiWatcherDevPanel() {
   return (
     <div className="fixed bottom-4 right-4 w-96 bg-gray-800 border border-purple-500 rounded-lg shadow-2xl z-50">
       <div className="flex items-center justify-between p-4 border-b border-gray-700">
-        <h3 className="text-purple-400 font-bold">AI Watcher Dev Panel</h3>
+        <h3 className="text-purple-400 font-bold">Process Runner Dev Panel</h3>
         <button
           className="text-gray-400 hover:text-white"
           onClick={() => setShowPanel(false)}
@@ -481,10 +481,10 @@ export function AiWatcherDevPanel() {
           </div>
         </div>
 
-        {/* AI Watchers Section */}
+        {/* Process Runners Section */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-semibold text-gray-300">AI Watchers</h4>
+            <h4 className="text-sm font-semibold text-gray-300">Process Runners</h4>
             <label className="flex items-center gap-2 text-xs text-gray-400">
               <input
                 checked={autoRefreshLogs}
@@ -498,9 +498,9 @@ export function AiWatcherDevPanel() {
           <div className="flex gap-2 mb-2">
             <button
               className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded"
-              onClick={() => window.__DEV_AI_WATCHERS__?.listWatchers()}
+              onClick={() => window.__DEV_PROCESS_RUNNERS__?.listRunners()}
             >
-              List Watchers
+              List Runners
             </button>
             <button
               className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
@@ -516,54 +516,54 @@ export function AiWatcherDevPanel() {
                     'for i in {1..10}; do echo "Test output $i"; sleep 2; done; echo "Going idle for 1 minute..."; sleep 60; echo "Done, exiting..."',
                   ],
                 };
-                createWatcher(config);
-                setTimeout(() => refreshWatchers(), 500);
+                createRunner(config);
+                setTimeout(() => refreshRunners(), 500);
               }}
-              title="Create a test watcher: counts to 10, goes idle for 1 min, then exits"
+              title="Create a test runner: counts to 10, goes idle for 1 min, then exits"
             >
               Create Test
             </button>
           </div>
 
           <div className="mt-2">
-            {Result.builder(watchersResult)
+            {Result.builder(runnersResult)
               .onInitial(() => (
                 <div className="text-xs text-gray-500">
-                  Click button to load watchers...
+                  Click button to load runners...
                 </div>
               ))
-              .onSuccess((watchers: readonly AiWatcher[]) => {
-                if (watchers.length > 0) {
+              .onSuccess((runners: readonly ProcessRunner[]) => {
+                if (runners.length > 0) {
                   return (
                     <div className="space-y-1">
-                      {watchers.map((watcher) => (
+                      {runners.map((runner) => (
                         <div
                           className="text-xs p-2 bg-gray-700 rounded"
-                          key={watcher.id}
+                          key={runner.id}
                         >
                           <div className="flex justify-between items-center">
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
                                 <span className="text-gray-300">
-                                  {watcher.name}
+                                  {runner.name}
                                 </span>
                                 <span
                                   className={`px-2 py-0.5 rounded text-xs ${
-                                    watcher.status === "running"
+                                    runner.status === "running"
                                       ? "bg-green-600"
-                                      : watcher.status === "idle"
+                                      : runner.status === "idle"
                                         ? "bg-yellow-600"
-                                        : watcher.status === "stopped"
+                                        : runner.status === "stopped"
                                           ? "bg-gray-600"
                                           : "bg-red-600"
                                   } text-white`}
                                 >
-                                  {watcher.status}
+                                  {runner.status}
                                 </span>
                               </div>
                               <div className="text-gray-500 mt-1">
-                                PID: {watcher.processHandle.pid} | Type:{" "}
-                                {watcher.type}
+                                PID: {runner.processHandle.pid} | Type:{" "}
+                                {runner.type}
                               </div>
                             </div>
                             <div className="flex gap-1">
@@ -571,27 +571,27 @@ export function AiWatcherDevPanel() {
                                 className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs"
                                 onClick={() => {
                                   setExpandedWatcherId(
-                                    expandedWatcherId === watcher.id
+                                    expandedWatcherId === runner.id
                                       ? null
-                                      : watcher.id,
+                                      : runner.id,
                                   );
                                 }}
                                 title={
-                                  expandedWatcherId === watcher.id
+                                  expandedWatcherId === runner.id
                                     ? "Hide logs"
                                     : "View logs"
                                 }
                               >
-                                {expandedWatcherId === watcher.id ? "▼" : "▶"}
+                                {expandedWatcherId === runner.id ? "▼" : "▶"}
                               </button>
-                              {watcher.status === "stopped" ? (
+                              {runner.status === "stopped" ? (
                                 <button
                                   className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs"
                                   onClick={() => {
-                                    startWatcher(watcher.id);
-                                    setTimeout(() => refreshWatchers(), 500);
+                                    startRunner(runner.id);
+                                    setTimeout(() => refreshRunners(), 500);
                                   }}
-                                  title="Start watcher"
+                                  title="Start runner"
                                 >
                                   ▶
                                 </button>
@@ -599,20 +599,20 @@ export function AiWatcherDevPanel() {
                                 <button
                                   className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs"
                                   onClick={() => {
-                                    stopWatcher(watcher.id);
-                                    setTimeout(() => refreshWatchers(), 500);
+                                    stopRunner(runner.id);
+                                    setTimeout(() => refreshRunners(), 500);
                                   }}
-                                  title="Stop watcher"
+                                  title="Stop runner"
                                 >
                                   ■
                                 </button>
                               )}
                             </div>
                           </div>
-                          {expandedWatcherId === watcher.id && (
-                            <WatcherLogsDisplay
+                          {expandedWatcherId === runner.id && (
+                            <RunnerLogsDisplay
                               autoRefresh={autoRefreshLogs}
-                              watcherId={watcher.id}
+                              runnerId={runner.id}
                             />
                           )}
                         </div>
@@ -620,7 +620,7 @@ export function AiWatcherDevPanel() {
                     </div>
                   );
                 }
-                return <div className="text-xs text-gray-500">No watchers</div>;
+                return <div className="text-xs text-gray-500">No runners</div>;
               })
               .onDefect((defect) => (
                 <div className="text-xs text-red-400">
@@ -633,9 +633,12 @@ export function AiWatcherDevPanel() {
 
         {/* Console Hint */}
         <div className="text-xs text-gray-500 italic">
-          See console for full API: window.__DEV_AI_WATCHERS__
+          See console for full API: window.__DEV_PROCESS_RUNNERS__
         </div>
       </div>
     </div>
   );
 }
+
+// Backwards compatibility alias
+export const AiWatcherDevPanel = ProcessRunnerDevPanel

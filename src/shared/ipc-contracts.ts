@@ -37,17 +37,21 @@ import {
 } from './schemas/account-context'
 import { WorkspaceConfig } from './schemas/workspace'
 import {
-  AiWatcher,
-  AiWatcherConfig,
+  ProcessRunner,
+  ProcessRunnerConfig,
   LogEntry,
   TmuxSession,
-} from './schemas/ai-watchers'
+  AiWatcher,
+  AiWatcherConfig,
+} from './schemas/process-runners'
 import {
   ProcessError,
+  RunnerNotFoundError,
+  RunnerOperationError,
+  TmuxError,
   WatcherNotFoundError,
   WatcherOperationError,
-  TmuxError,
-} from './schemas/ai-watchers/errors'
+} from './schemas/process-runners/errors'
 import {
   ProcessState,
   OutputChunk,
@@ -310,75 +314,85 @@ export const WorkspaceIpcContracts = {
 } as const
 
 /**
- * AI Watcher IPC Contracts
+ * Process Runner IPC Contracts
  */
-export const AiWatcherIpcContracts = {
-  'ai-watcher:create': {
-    channel: 'ai-watcher:create' as const,
-    input: AiWatcherConfig,
-    output: AiWatcher,
-    errors: S.Union(ProcessError, WatcherOperationError),
+export const ProcessRunnerIpcContracts = {
+  'process-runner:create': {
+    channel: 'process-runner:create' as const,
+    input: ProcessRunnerConfig,
+    output: ProcessRunner,
+    errors: S.Union(ProcessError, RunnerOperationError),
   },
 
-  'ai-watcher:attach-tmux': {
-    channel: 'ai-watcher:attach-tmux' as const,
+  'process-runner:attach-tmux': {
+    channel: 'process-runner:attach-tmux' as const,
     input: S.Struct({ sessionName: S.String }),
-    output: AiWatcher,
-    errors: S.Union(TmuxError, ProcessError, WatcherOperationError),
+    output: ProcessRunner,
+    errors: S.Union(TmuxError, ProcessError, RunnerOperationError),
   },
 
-  'ai-watcher:list': {
-    channel: 'ai-watcher:list' as const,
+  'process-runner:list': {
+    channel: 'process-runner:list' as const,
     input: S.Void,
-    output: S.Array(AiWatcher),
+    output: S.Array(ProcessRunner),
     errors: S.Never,
   },
 
-  'ai-watcher:get': {
-    channel: 'ai-watcher:get' as const,
-    input: S.Struct({ watcherId: S.String }),
-    output: AiWatcher,
-    errors: S.Union(WatcherNotFoundError),
+  'process-runner:get': {
+    channel: 'process-runner:get' as const,
+    input: S.Struct({ runnerId: S.String }),
+    output: ProcessRunner,
+    errors: S.Union(RunnerNotFoundError),
   },
 
-  'ai-watcher:stop': {
-    channel: 'ai-watcher:stop' as const,
-    input: S.Struct({ watcherId: S.String }),
+  'process-runner:stop': {
+    channel: 'process-runner:stop' as const,
+    input: S.Struct({ runnerId: S.String }),
     output: S.Void,
-    errors: S.Union(WatcherNotFoundError, ProcessError),
+    errors: S.Union(RunnerNotFoundError, ProcessError),
   },
 
-  'ai-watcher:start': {
-    channel: 'ai-watcher:start' as const,
-    input: S.Struct({ watcherId: S.String }),
+  'process-runner:start': {
+    channel: 'process-runner:start' as const,
+    input: S.Struct({ runnerId: S.String }),
     output: S.Void,
-    errors: S.Union(WatcherNotFoundError, WatcherOperationError),
+    errors: S.Union(RunnerNotFoundError, RunnerOperationError),
   },
 
-  'ai-watcher:get-logs': {
-    channel: 'ai-watcher:get-logs' as const,
+  'process-runner:get-logs': {
+    channel: 'process-runner:get-logs' as const,
     input: S.Struct({
-      watcherId: S.String,
+      runnerId: S.String,
       limit: S.optional(S.Number),
     }),
     output: S.Array(LogEntry),
-    errors: S.Union(WatcherNotFoundError),
+    errors: S.Union(RunnerNotFoundError),
   },
 
-  'ai-watcher:list-tmux': {
-    channel: 'ai-watcher:list-tmux' as const,
+  'process-runner:list-tmux': {
+    channel: 'process-runner:list-tmux' as const,
     input: S.Void,
     output: S.Array(TmuxSession),
     errors: S.Union(TmuxError),
   },
 
-  'ai-watcher:switch-tmux': {
-    channel: 'ai-watcher:switch-tmux' as const,
+  'process-runner:switch-tmux': {
+    channel: 'process-runner:switch-tmux' as const,
     input: S.Struct({ sessionName: S.String }),
     output: S.Void,
     errors: S.Union(TmuxError),
   },
+
+  'process-runner:get-output': {
+    channel: 'process-runner:get-output' as const,
+    input: S.Struct({ runnerId: S.String }),
+    output: S.String,
+    errors: S.Union(RunnerNotFoundError),
+  },
 } as const
+
+// Backwards compatibility alias for Phase B
+export const AiWatcherIpcContracts = ProcessRunnerIpcContracts
 
 /**
  * Source Control IPC Contracts

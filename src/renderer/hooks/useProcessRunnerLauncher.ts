@@ -1,35 +1,35 @@
 import { useState } from 'react'
 import { useAtom } from '@effect-atom/atom-react'
-import { createWatcherAtom } from '../atoms/ai-watcher-atoms'
+import { createRunnerAtom } from '../atoms/process-runner-atoms'
 import { spawnWatcherAtom } from '../atoms/terminal-atoms'
 import type { GitHubIssue } from '../../shared/schemas/github/issue'
-import type { AiWatcherConfig } from '../../main/ai-watchers/schemas'
+import type { ProcessRunnerConfig } from '../../shared/schemas/process-runners'
 import { SourceControlClient, WorkspaceClient } from '../lib/ipc-client'
 import { Effect } from 'effect'
 import { toast } from 'sonner'
 import { useTerminalType } from '../atoms/terminal-settings-atoms'
 
 /**
- * Hook for launching AI watchers for GitHub issues
+ * Hook for launching process runners for GitHub issues
  *
  * Features:
  * - Creates isolated git worktrees per issue
- * - Launches watchers with issue context
+ * - Launches runners with issue context
  * - Sequential launching to avoid git conflicts
  * - Toast notifications for user feedback
  */
-export function useAiWatcherLauncher() {
-  const [createResult, createWatcher] = useAtom(createWatcherAtom)
+export function useProcessRunnerLauncher() {
+  const [createResult, createRunner] = useAtom(createRunnerAtom)
   const [spawnResult, spawnWatcher] = useAtom(spawnWatcherAtom)
   const [isCreatingWorktree, setIsCreatingWorktree] = useState(false)
   const { terminalType } = useTerminalType()
 
   /**
-   * Launch a watcher for a specific GitHub issue
+   * Launch a runner for a specific GitHub issue
    *
-   * Creates a git worktree in `issue#<number>` branch, then launches AI watcher in that worktree
+   * Creates a git worktree in `issue#<number>` branch, then launches process runner in that worktree
    */
-  const launchWatcherForIssue = async (
+  const launchRunnerForIssue = async (
     issue: GitHubIssue,
     provider: 'claude-code' | 'codex' | 'cursor',
     repositoryId: { value: string } | null,
@@ -42,7 +42,7 @@ export function useAiWatcherLauncher() {
 
     try {
       // Step 1: Get fresh repository ID from workspace (handles cache invalidation)
-      console.log(`[useAiWatcherLauncher] Checking workspace for ${owner}/${repo}`)
+      console.log(`[useProcessRunnerLauncher] Checking workspace for ${owner}/${repo}`)
 
       const workspaceCheck = await Effect.runPromise(
         Effect.gen(function* () {
@@ -61,10 +61,10 @@ export function useAiWatcherLauncher() {
       }
 
       const currentRepositoryId = workspaceCheck.repositoryId
-      console.log(`[useAiWatcherLauncher] Using current repository ID: ${currentRepositoryId.value}`)
+      console.log(`[useProcessRunnerLauncher] Using current repository ID: ${currentRepositoryId.value}`)
 
       // Step 2: Create worktree for the issue
-      console.log(`[useAiWatcherLauncher] Creating worktree for issue #${issue.number}`)
+      console.log(`[useProcessRunnerLauncher] Creating worktree for issue #${issue.number}`)
 
       const worktreeResult = await Effect.runPromise(
         Effect.gen(function* () {
@@ -77,7 +77,7 @@ export function useAiWatcherLauncher() {
       )
 
       console.log(
-        `[useAiWatcherLauncher] Worktree created: ${worktreeResult.worktreePath}`
+        `[useProcessRunnerLauncher] Worktree created: ${worktreeResult.worktreePath}`
       )
 
       // Only show toast for newly created branches (not existing ones)
@@ -87,8 +87,8 @@ export function useAiWatcherLauncher() {
         )
       }
 
-      // Step 3: Create AI watcher config with worktree path
-      const config: AiWatcherConfig = {
+      // Step 3: Create process runner config with worktree path
+      const config: ProcessRunnerConfig = {
         type: provider,
         name: `${provider}: #${issue.number} ${issue.title}`,
         workingDirectory: worktreeResult.worktreePath,
@@ -100,8 +100,8 @@ export function useAiWatcherLauncher() {
         },
       }
 
-      // Step 4: Launch the watcher (use terminal type preference)
-      console.log(`[useAiWatcherLauncher] Launching ${provider} watcher with ${terminalType}`)
+      // Step 4: Launch the runner (use terminal type preference)
+      console.log(`[useProcessRunnerLauncher] Launching ${provider} runner with ${terminalType}`)
 
       if (terminalType === 'xterm') {
         // Use new xterm.js + node-pty terminal
@@ -120,7 +120,7 @@ export function useAiWatcherLauncher() {
         })
       } else {
         // Use traditional tmux terminal
-        createWatcher(config)
+        createRunner(config)
       }
 
       toast.success(
@@ -130,7 +130,7 @@ export function useAiWatcherLauncher() {
         }
       )
     } catch (error) {
-      console.error('[useAiWatcherLauncher] Failed to launch watcher:', error)
+      console.error('[useProcessRunnerLauncher] Failed to launch runner:', error)
 
       // Extract error message and stderr if available
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -150,11 +150,11 @@ export function useAiWatcherLauncher() {
   }
 
   /**
-   * Launch watchers for multiple issues sequentially
+   * Launch runners for multiple issues sequentially
    *
    * Sequential launching prevents git worktree conflicts
    */
-  const launchWatchersForIssues = async (
+  const launchRunnersForIssues = async (
     issues: GitHubIssue[],
     provider: 'claude-code' | 'codex' | 'cursor',
     repositoryId: { value: string },
@@ -162,16 +162,19 @@ export function useAiWatcherLauncher() {
     repo: string
   ) => {
     for (const issue of issues) {
-      await launchWatcherForIssue(issue, provider, repositoryId, owner, repo)
+      await launchRunnerForIssue(issue, provider, repositoryId, owner, repo)
     }
   }
 
   return {
-    launchWatcherForIssue,
-    launchWatchersForIssues,
+    launchRunnerForIssue,
+    launchRunnersForIssues,
     isLaunching: createResult.waiting || spawnResult.waiting || isCreatingWorktree,
     createResult,
     spawnResult,
     terminalType,
   }
 }
+
+// Backwards compatibility alias
+export const useAiWatcherLauncher = useProcessRunnerLauncher

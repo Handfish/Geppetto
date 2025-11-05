@@ -33,7 +33,7 @@ import { cloneToWorkspaceAtom } from '../../atoms/workspace-atoms'
 import { WorkspaceClient } from '../../lib/ipc-client'
 import { Effect } from 'effect'
 import { toast } from 'sonner'
-import { IssuesModal } from '../ai-watchers/IssuesModal'
+import { IssuesModal } from '../process-runners/IssuesModal'
 import { useDropdownKeyboardNavigation } from '../../hooks/useDropdownKeyboardNavigation'
 import { useKeyboardLayer } from '../../hooks/useKeyboardLayer'
 

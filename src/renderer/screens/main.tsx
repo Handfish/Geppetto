@@ -32,7 +32,7 @@ import {
   clearConsoleError,
 } from '../lib/console-error-channel'
 import { WorkspaceSelector } from '../components/WorkspaceSelector'
-import { WatchersPanel } from '../components/ai-watchers/WatchersPanel'
+import { ProcessRunnersPanel as WatchersPanel } from '../components/process-runners/ProcessRunnersPanel'
 import { toast } from 'sonner'
 import { useCrossWindowSync } from '../hooks/useCrossWindowSync'
 

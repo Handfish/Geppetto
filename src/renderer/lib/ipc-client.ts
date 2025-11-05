@@ -437,3 +437,6 @@ export class SourceControlClient extends Effect.Service<SourceControlClient>()(
     }),
   }
 ) {}
+
+// Backwards compatibility alias
+export const ProcessRunnerClient = AiWatcherClient

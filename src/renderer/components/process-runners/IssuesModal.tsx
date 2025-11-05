@@ -16,7 +16,7 @@ import {
   size,
 } from '@floating-ui/react'
 import { repositoryIssuesAtom } from '../../atoms/github-issue-atoms'
-import { useAiWatcherLauncher } from '../../hooks/useAiWatcherLauncher'
+import { useProcessRunnerLauncher } from '../../hooks/useProcessRunnerLauncher'
 import { useIssueModalKeyboardNavigation } from '../../hooks/useIssueModalKeyboardNavigation'
 import { useKeyboardLayer } from '../../hooks/useKeyboardLayer'
 import type { AccountId } from '../../../shared/schemas/account-context'
@@ -85,7 +85,7 @@ function IssuesModalContent({
   const [shortlist, setShortlist] = useState<Set<number>>(new Set())
   const [selectedProvider, setSelectedProvider] = useState<'claude-code' | 'codex' | 'cursor'>('claude-code')
 
-  const { launchWatcherForIssue, isLaunching } = useAiWatcherLauncher()
+  const { launchRunnerForIssue, isLaunching } = useProcessRunnerLauncher()
 
   // Issue navigation state
   const [focusedIssueIndex, setFocusedIssueIndex] = useState(0)
@@ -241,7 +241,7 @@ function IssuesModalContent({
       for (const issue of shortlistedIssues) {
         const agent = getIssueAgent(issue.number)
 
-        await launchWatcherForIssue(
+        await launchRunnerForIssue(
           issue,
           agent,
           repositoryId,
