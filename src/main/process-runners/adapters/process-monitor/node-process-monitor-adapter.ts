@@ -1,5 +1,4 @@
 import * as Effect from 'effect/Effect'
-import * as Fiber from 'effect/Fiber'
 import * as Stream from 'effect/Stream'
 import * as Queue from 'effect/Queue'
 import * as Ref from 'effect/Ref'
@@ -7,18 +6,14 @@ import * as Schedule from 'effect/Schedule'
 import * as Duration from 'effect/Duration'
 import * as Scope from 'effect/Scope'
 import * as Exit from 'effect/Exit'
-import { Path, Command } from '@effect/platform'
+import { Command } from '@effect/platform'
 import { NodeContext } from '@effect/platform-node'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { promises as FsPromises } from 'node:fs'
-import * as Fs from 'node:fs'
-import { tmpdir } from 'node:os'
 import type { ProcessMonitorPort, ProcessConfig } from '../../ports'
-import { ProcessHandle, ProcessEvent, TmuxPipeConfig } from '../../schemas'
+import { ProcessHandle, ProcessEvent } from '../../schemas'
 import {
   ProcessSpawnError,
-  ProcessAttachError,
   ProcessMonitorError,
   ProcessKillError,
   ProcessNotFoundError,
@@ -34,9 +29,7 @@ interface ProcessInfo {
   queue: Queue.Queue<ProcessEvent>
   lastActivityRef: Ref.Ref<number>
   isAttached: boolean
-  tmuxPipeRef: Ref.Ref<TmuxPipeConfig | null>
-  tmuxPipeFiberRef: Ref.Ref<Fiber.RuntimeFiber<void, never> | null>
-  tmuxPipeScopeRef: Ref.Ref<Scope.CloseableScope | null>
+  tmuxPipeScopeRef: Ref.Ref<Scope.CloseableScope | null> // Scope for tmux control mode
 }
 
 /**
@@ -65,20 +58,9 @@ const ACTIVITY_CHECK_INTERVAL = Duration.seconds(5)
 export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitorAdapter>()(
   'NodeProcessMonitorAdapter',
   {
-    dependencies: [
-      Path.layer,
-    ],
     effect: Effect.gen(function* () {
-      // Inject Path service from @effect/platform
-      const path = yield* Path.Path
-
       // Map of process ID to process information
       const processes = new Map<string, ProcessInfo>()
-
-      // Mutex to serialize FIFO opening (prevents cross-contamination when multiple runners start)
-      // Uses a bounded queue with size 1 as a simple mutex: take() = acquire, offer() = release
-      const fifoOpenMutex = yield* Queue.bounded<void>(1)
-      yield* Queue.offer(fifoOpenMutex, undefined) // Initialize with one permit
 
       /**
        * Mark activity for a process
@@ -158,317 +140,6 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
         })
 
       /**
-       * Quote string for safe shell usage
-       */
-      const quoteForShell = (value: string): string =>
-        `'${value.replace(/'/g, `'\\''`)}'`
-
-      /**
-       * Execute tmux command (void result)
-       * Uses Effect.async for proper structured concurrency
-       */
-      const runTmuxCommandVoid = (
-        args: string[],
-        processId: string,
-        description: string
-      ): Effect.Effect<void, ProcessMonitorError> =>
-        Effect.async<void, ProcessMonitorError>((resume) => {
-          const child = spawn('tmux', args, {
-            stdio: ['ignore', 'ignore', 'pipe'],
-          })
-
-          let stderr = ''
-          child.stderr?.on('data', (chunk: Buffer) => {
-            stderr += chunk.toString()
-          })
-
-          child.on('error', (error: Error) => {
-            resume(
-              Effect.fail(
-                new ProcessMonitorError({
-                  message: `${description}: ${error.message}`,
-                  processId,
-                  cause: error,
-                })
-              )
-            )
-          })
-
-          child.on('exit', (code: number | null) => {
-            if (code === 0 || code === null) {
-              resume(Effect.void)
-            } else {
-              const details = stderr.trim()
-              resume(
-                Effect.fail(
-                  new ProcessMonitorError({
-                    message: `${description}: exited with code ${code}${details ? ` (${details})` : ''}`,
-                    processId,
-                  })
-                )
-              )
-            }
-          })
-
-          return Effect.sync(() => {
-            if (child.exitCode === null && !child.killed) {
-              child.kill('SIGKILL')
-            }
-          })
-        })
-
-      /**
-       * Execute tmux command and capture output
-       */
-      const runTmuxCommandCapture = (
-        args: string[],
-        processId: string,
-        description: string
-      ): Effect.Effect<string, ProcessMonitorError> =>
-        Effect.async<string, ProcessMonitorError>((resume) => {
-          const child = spawn('tmux', args, {
-            stdio: ['ignore', 'pipe', 'pipe'],
-          })
-
-          let stdout = ''
-          let stderr = ''
-          child.stdout?.on('data', (chunk: Buffer) => {
-            stdout += chunk.toString()
-          })
-          child.stderr?.on('data', (chunk: Buffer) => {
-            stderr += chunk.toString()
-          })
-
-          child.on('error', (error: Error) => {
-            resume(
-              Effect.fail(
-                new ProcessMonitorError({
-                  message: `${description}: ${error.message}`,
-                  processId,
-                  cause: error,
-                })
-              )
-            )
-          })
-
-          child.on('exit', (code: number | null) => {
-            if (code === 0 || code === null) {
-              resume(Effect.succeed(stdout))
-            } else {
-              const details = stderr.trim()
-              resume(
-                Effect.fail(
-                  new ProcessMonitorError({
-                    message: `${description}: exited with code ${code}${details ? ` (${details})` : ''}`,
-                    processId,
-                  })
-                )
-              )
-            }
-          })
-
-          return Effect.sync(() => {
-            if (child.exitCode === null && !child.killed) {
-              child.kill('SIGKILL')
-            }
-          })
-        })
-
-      /**
-       * Create a FIFO pipe stream
-       * Returns a Stream that emits chunks from the FIFO
-       */
-      const createFifoStream = (
-        fifoPath: string,
-        processId: string
-      ): Stream.Stream<string, ProcessMonitorError, Scope.Scope> =>
-        Stream.asyncScoped<string, ProcessMonitorError>((emit) =>
-          Effect.gen(function* () {
-            // Open FIFO in blocking mode
-            // This will block until a writer connects, which is fine because
-            // we call this AFTER the tmux writer has been started
-            const readStream = yield* Effect.try({
-              try: () =>
-                Fs.createReadStream(fifoPath, {
-                  encoding: 'utf8',
-                  flags: 'r',
-                }),
-              catch: (error) =>
-                new ProcessMonitorError({
-                  message: 'Failed to open FIFO for tmux pipe',
-                  processId,
-                  cause: error,
-                }),
-            })
-
-            // Register event handlers
-            readStream.on('data', (chunk: string | Buffer) => {
-              const data = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
-              emit.single(data)
-            })
-
-            readStream.on('error', (error: Error) => {
-              emit.fail(
-                new ProcessMonitorError({
-                  message: `FIFO read error: ${error.message}`,
-                  processId,
-                  cause: error,
-                })
-              )
-            })
-
-            readStream.on('end', () => {
-              emit.end()
-            })
-
-            // Return cleanup effect
-            return Effect.sync(() => {
-              readStream.removeAllListeners()
-              readStream.destroy()
-            })
-          })
-        )
-
-      /**
-       * Cleanup tmux pipe resources
-       */
-      const cleanupTmuxPipe = (
-        config: TmuxPipeConfig,
-        processId: string
-      ): Effect.Effect<void> =>
-        Effect.gen(function* () {
-          // Stop tmux pipe (best effort)
-          yield* runTmuxCommandVoid(
-            ['pipe-pane', '-t', config.targetPane],
-            processId,
-            `Failed to stop tmux pipe for ${config.targetPane}`
-          ).pipe(Effect.catchAll(() => Effect.void))
-
-          // Remove temp directory (best effort)
-          yield* Effect.tryPromise({
-            try: () =>
-              FsPromises.rm(config.tempDir, {
-                recursive: true,
-                force: true,
-              }),
-            catch: () => undefined,
-          }).pipe(Effect.catchAll(() => Effect.void))
-        })
-
-      /**
-       * Setup tmux pipe streaming in a scoped manner
-       * The stream fiber is tied to the current scope and will be cleaned up automatically
-       *
-       * CRITICAL: Uses mutex to serialize FIFO opening (prevents cross-contamination)
-       */
-      const setupTmuxPipeStream = (
-        handle: ProcessHandle,
-        config: TmuxPipeConfig
-      ): Effect.Effect<Fiber.RuntimeFiber<void, never>, never, Scope.Scope> =>
-        Effect.gen(function* () {
-          // Acquire mutex (blocks until permit available)
-          yield* Effect.logDebug(
-            `[${handle.id.slice(0, 8)}] Waiting to acquire FIFO mutex...`
-          )
-          yield* Queue.take(fifoOpenMutex)
-          yield* Effect.logDebug(
-            `[${handle.id.slice(0, 8)}] Acquired FIFO mutex, opening ${config.fifoPath}`
-          )
-
-          // Ensure mutex is released even on error
-          const result = yield* Effect.gen(function* () {
-            // Open the FIFO synchronously BEFORE releasing the mutex
-            // Stream.asyncScoped is lazy, so we need to force the open
-            const readStream = yield* Effect.try({
-              try: () => {
-                const stream = Fs.createReadStream(config.fifoPath, {
-                  encoding: 'utf8',
-                  flags: 'r',
-                  highWaterMark: 64, // Small buffer (64 bytes) for more responsive reads
-                })
-                console.log(`[${handle.id.slice(0, 8)}] FIFO opened: ${config.fifoPath}`)
-                return stream
-              },
-              catch: (error) =>
-                new ProcessMonitorError({
-                  message: 'Failed to open FIFO for tmux pipe',
-                  processId: handle.id,
-                  cause: error,
-                }),
-            })
-
-            // Now create the stream using the already-opened readStream
-            const fifoStream = Stream.asyncScoped<string, ProcessMonitorError>((emit) =>
-              Effect.sync(() => {
-                // Register event handlers
-                readStream.on('data', (chunk: string | Buffer) => {
-                  const data = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
-                  console.log(`[${handle.id.slice(0, 8)}] FIFO data received: ${data.length} bytes`)
-                  emit.single(data)
-                })
-
-                readStream.on('error', (error: Error) => {
-                  console.log(`[${handle.id.slice(0, 8)}] FIFO error: ${error.message}`)
-                  emit.fail(
-                    new ProcessMonitorError({
-                      message: `FIFO read error: ${error.message}`,
-                      processId: handle.id,
-                      cause: error,
-                    })
-                  )
-                })
-
-                readStream.on('end', () => {
-                  console.log(`[${handle.id.slice(0, 8)}] FIFO stream ended`)
-                  emit.end()
-                })
-
-                console.log(`[${handle.id.slice(0, 8)}] FIFO event handlers registered`)
-                // Return cleanup effect
-                return Effect.sync(() => {
-                  readStream.removeAllListeners()
-                  readStream.destroy()
-                })
-              })
-            )
-
-            // Fork scoped fiber to process the stream
-            const fiber = yield* Effect.forkScoped(
-              fifoStream.pipe(
-                Stream.tap((chunk: string) =>
-                  Effect.gen(function* () {
-                    yield* markActivity(handle.id)
-                    const event = new ProcessEvent({
-                      type: 'stdout',
-                      data: chunk,
-                      timestamp: new Date(),
-                      processId: handle.id,
-                    })
-                    yield* emitEvent(handle.id, event)
-                  })
-                ),
-                Stream.runDrain
-              )
-            )
-
-            yield* Effect.logDebug(
-              `[${handle.id.slice(0, 8)}] FIFO stream fiber forked, releasing mutex`
-            )
-            console.log(`[${handle.id.slice(0, 8)}] Releasing FIFO mutex`)
-
-            return fiber
-          }).pipe(
-            Effect.ensuring(
-              Effect.sync(() => {
-                console.log(`[${handle.id.slice(0, 8)}] FIFO mutex released`)
-              }).pipe(Effect.zipRight(Queue.offer(fifoOpenMutex, undefined)))
-            )
-          )
-
-          return result
-        })
-
-      /**
        * Cleanup process info
        */
       const cleanupProcess = (processId: string): Effect.Effect<void> =>
@@ -478,20 +149,13 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
             return yield* Effect.void
           }
 
-          // Close tmux pipe scope if active (this interrupts all scoped fibers)
-          const tmuxPipeScope = yield* Ref.get(info.tmuxPipeScopeRef)
-          if (tmuxPipeScope) {
-            yield* Scope.close(tmuxPipeScope, Exit.void).pipe(
+          // Close tmux control mode scope if active (this interrupts all scoped fibers)
+          const controlScope = yield* Ref.get(info.tmuxPipeScopeRef)
+          if (controlScope) {
+            yield* Scope.close(controlScope, Exit.void).pipe(
               Effect.catchAll(() => Effect.void)
             )
             yield* Ref.set(info.tmuxPipeScopeRef, null)
-          }
-
-          // Cleanup tmux pipe if active
-          const tmuxPipe = yield* Ref.get(info.tmuxPipeRef)
-          if (tmuxPipe) {
-            yield* cleanupTmuxPipe(tmuxPipe, processId)
-            yield* Ref.set(info.tmuxPipeRef, null)
           }
 
           yield* Queue.shutdown(info.queue)
@@ -534,9 +198,7 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
               // Create activity ref
               const lastActivityRef = yield* Ref.make(Date.now())
 
-              // Create tmux pipe refs
-              const tmuxPipeRef = yield* Ref.make<TmuxPipeConfig | null>(null)
-              const tmuxPipeFiberRef = yield* Ref.make<Fiber.RuntimeFiber<void, never> | null>(null)
+              // Create tmux control mode scope ref
               const tmuxPipeScopeRef = yield* Ref.make<Scope.CloseableScope | null>(null)
 
               // Store process info
@@ -546,8 +208,6 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
                 queue,
                 lastActivityRef,
                 isAttached: false,
-                tmuxPipeRef,
-                tmuxPipeFiberRef,
                 tmuxPipeScopeRef,
               }
               processes.set(processId, processInfo)
@@ -655,8 +315,6 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
             // Create queue for events (though it won't receive much)
             const queue = yield* Queue.unbounded<ProcessEvent>()
             const lastActivityRef = yield* Ref.make(Date.now())
-            const tmuxPipeRef = yield* Ref.make<TmuxPipeConfig | null>(null)
-            const tmuxPipeFiberRef = yield* Ref.make<Fiber.RuntimeFiber<void, never> | null>(null)
             const tmuxPipeScopeRef = yield* Ref.make<Scope.CloseableScope | null>(null)
 
             const processInfo: ProcessInfo = {
@@ -664,8 +322,6 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
               queue,
               lastActivityRef,
               isAttached: true,
-              tmuxPipeRef,
-              tmuxPipeFiberRef,
               tmuxPipeScopeRef,
             }
             processes.set(processId, processInfo)
@@ -804,27 +460,6 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
 
             console.log(`[NodeProcessMonitorAdapter] Found process ${handle.id} in registry, setting up control mode`)
 
-            // Check if already piping this pane
-            const currentPipe = yield* Ref.get(info.tmuxPipeRef)
-            if (currentPipe && currentPipe.targetPane === targetPane) {
-              return yield* Effect.void
-            }
-
-            // Interrupt existing fiber if any
-            const currentFiber = yield* Ref.get(info.tmuxPipeFiberRef)
-            if (currentFiber) {
-              yield* Fiber.interrupt(currentFiber).pipe(
-                Effect.catchAll(() => Effect.void)
-              )
-              yield* Ref.set(info.tmuxPipeFiberRef, null)
-            }
-
-            // Cleanup existing pipe if any
-            if (currentPipe) {
-              yield* cleanupTmuxPipe(currentPipe, handle.id)
-              yield* Ref.set(info.tmuxPipeRef, null)
-            }
-
             // Extract session name and pane ID from target
             // Format can be "session:paneId" or just "session" (legacy)
             const colonIndex = targetPane.indexOf(':')
@@ -917,7 +552,7 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
 
               return yield* Effect.void
             } else {
-              // Control mode failed - log error
+              // Control mode failed - log error and fail
               const error = controlModeResult.left
               console.error(
                 `[${handle.id.slice(0, 8)}] Control mode FAILED: ${error.message}`
@@ -925,133 +560,8 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
               yield* Effect.logError(
                 `[${handle.id.slice(0, 8)}] PTY-based control mode failed: ${error.message}`
               )
-              // For now, treat this as a fatal error rather than falling back
               return yield* Effect.fail(error)
             }
-
-            // FALLBACK: If control mode fails, use pipe-pane + FIFO (legacy method)
-            yield* Effect.logInfo(
-              `[${handle.id.slice(0, 8)}] Setting up tmux pipe-pane monitoring for ${targetPane}`
-            )
-
-            // Create temp directory for FIFO
-            const tempDir = yield* Effect.tryPromise({
-              try: () => FsPromises.mkdtemp(path.join(tmpdir(), 'tmux-pipe-')),
-              catch: (error) =>
-                new ProcessMonitorError({
-                  message: 'Failed to create temp directory for tmux pipe',
-                  processId: handle.id,
-                  cause: error,
-                }),
-            })
-
-            const fifoPath = path.join(tempDir, 'pane.fifo')
-
-            // Create FIFO using mkfifo command
-            const mkfifoCmd = Command.make('mkfifo', fifoPath)
-            yield* Command.start(mkfifoCmd).pipe(
-              Effect.flatMap((process) =>
-                Effect.all([
-                  process.exitCode,
-                  process.stderr.pipe(
-                    Stream.decodeText('utf8'),
-                    Stream.runFold('', (acc, chunk) => acc + chunk)
-                  ),
-                ])
-              ),
-              Effect.provide(NodeContext.layer),
-              Effect.flatMap(([exitCode, stderr]) => {
-                if (exitCode === 0) {
-                  return Effect.void
-                }
-                return Effect.fail(
-                  new ProcessMonitorError({
-                    message: `Failed to create FIFO (exit ${exitCode}): ${stderr}`,
-                    processId: handle.id,
-                    cause: new Error(stderr),
-                  })
-                )
-              }),
-              Effect.mapError((error) =>
-                new ProcessMonitorError({
-                  message: 'Failed to create FIFO for tmux pipe',
-                  processId: handle.id,
-                  cause: error,
-                })
-              )
-            )
-
-            // Create pipe config
-            const pipeConfig = new TmuxPipeConfig({
-              targetPane,
-              fifoPath,
-              tempDir,
-            })
-
-            // Clear existing pipe configuration (best effort)
-            yield* runTmuxCommandVoid(
-              ['pipe-pane', '-t', targetPane],
-              handle.id,
-              `Failed to reset tmux pipe for ${targetPane}`
-            ).pipe(Effect.catchAll(() => Effect.void))
-
-            // Capture existing pane output (best effort)
-            const captured = yield* runTmuxCommandCapture(
-              ['capture-pane', '-pt', targetPane, '-S', '-200'],
-              handle.id,
-              `Failed to capture tmux pane ${targetPane}`
-            ).pipe(Effect.catchAll(() => Effect.succeed('')))
-
-            // Start tmux pipe (writer) FIRST
-            // This must happen before we open the FIFO reader, otherwise the blocking open() will deadlock
-            console.log(`[${handle.id.slice(0, 8)}] Starting tmux pipe-pane writer for ${targetPane}`)
-            yield* runTmuxCommandVoid(
-              ['pipe-pane', '-t', targetPane, `dd bs=1 of=${quoteForShell(fifoPath)} 2>/dev/null`],
-              handle.id,
-              `Failed to start tmux pipe for ${targetPane}`
-            ).pipe(
-              Effect.catchAll((error) =>
-                cleanupTmuxPipe(pipeConfig, handle.id).pipe(
-                  Effect.zipRight(Effect.fail(error))
-                )
-              )
-            )
-            console.log(`[${handle.id.slice(0, 8)}] Tmux pipe-pane writer started`)
-
-            // Store pipe config
-            yield* Ref.set(info.tmuxPipeRef, pipeConfig)
-
-            // Emit captured output if any (for display only - doesn't mark activity)
-            // Captured output is historical data, not new activity
-            if (captured) {
-              console.log(
-                `[${handle.id.slice(0, 8)}] Emitting ${captured.split('\n').length} lines of captured output`
-              )
-              const lines = captured.replace(/\r/g, '').split('\n')
-              for (const line of lines) {
-                if (!line) continue
-                // Don't call markActivity() - captured output is not new activity
-                const event = new ProcessEvent({
-                  type: 'stdout',
-                  data: line + '\n',
-                  timestamp: new Date(),
-                  processId: handle.id,
-                })
-                yield* emitEvent(handle.id, event)
-              }
-            }
-
-            // Create a dedicated scope for the tmux pipe stream
-            const pipeScope = yield* Scope.make()
-            yield* Ref.set(info.tmuxPipeScopeRef, pipeScope)
-
-            // Setup the FIFO reader stream AFTER the writer is connected
-            console.log(`[${handle.id.slice(0, 8)}] Forking FIFO reader setup`)
-            yield* Effect.forkIn(
-              setupTmuxPipeStream(handle, pipeConfig),
-              pipeScope
-            )
-            console.log(`[${handle.id.slice(0, 8)}] FIFO reader setup forked, pipeTmuxSession returning`)
           }),
       }
 
