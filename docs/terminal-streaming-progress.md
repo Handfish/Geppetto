@@ -136,8 +136,8 @@ readonly subscribeToEvents: (
 **Duration**: ~10 minutes
 
 #### 2.1 Update TerminalServiceMethods Interface
-- [x] Change subscribeToWatcher signature to callback-based
-- [x] Change subscribeToWatcherEvents signature
+- [x] Change subscribeToRunner signature to callback-based
+- [x] Change subscribeToRunnerEvents signature
 - [x] Update return types to `Effect.Effect<() => void, TerminalError, never>`
 - [x] Remove Stream import
 
@@ -145,23 +145,23 @@ readonly subscribeToEvents: (
 
 **Before**:
 ```typescript
-subscribeToWatcher(processId: string): Stream.Stream<OutputChunk, TerminalError, never>
-subscribeToWatcherEvents(processId: string): Stream.Stream<ProcessEvent, TerminalError, never>
+subscribeToRunner(processId: string): Stream.Stream<OutputChunk, TerminalError, never>
+subscribeToRunnerEvents(processId: string): Stream.Stream<ProcessEvent, TerminalError, never>
 ```
 
 **After**:
 ```typescript
-subscribeToWatcher(
+subscribeToRunner(
   processId: string,
   onOutput: (chunk: OutputChunk) => void
 ): Effect.Effect<() => void, TerminalError, never>
-subscribeToWatcherEvents(
+subscribeToRunnerEvents(
   processId: string,
   onEvent: (event: ProcessEvent) => void
 ): Effect.Effect<() => void, TerminalError, never>
 ```
 
-#### 2.2 Rewrite subscribeToWatcher Implementation
+#### 2.2 Rewrite subscribeToRunner Implementation
 - [x] Remove Stream.flatMap pattern
 - [x] Change to simple Effect.gen that calls adapter.subscribe
 - [x] Pass callback through to adapter
@@ -171,7 +171,7 @@ subscribeToWatcherEvents(
 
 **Before**:
 ```typescript
-const subscribeToWatcher: TerminalServiceMethods['subscribeToWatcher'] = (processId) => {
+const subscribeToRunner: TerminalServiceMethods['subscribeToRunner'] = (processId) => {
   return Stream.flatMap(
     Stream.fromEffect(registry.getDefaultAdapter()),
     (adapter) => adapter.subscribe(processId)
@@ -181,7 +181,7 @@ const subscribeToWatcher: TerminalServiceMethods['subscribeToWatcher'] = (proces
 
 **After**:
 ```typescript
-const subscribeToWatcher: TerminalServiceMethods['subscribeToWatcher'] = (processId, onOutput) => {
+const subscribeToRunner: TerminalServiceMethods['subscribeToRunner'] = (processId, onOutput) => {
   return Effect.gen(function* () {
     const adapter = yield* registry.getDefaultAdapter()
     return yield* adapter.subscribe(processId, onOutput)
@@ -189,8 +189,8 @@ const subscribeToWatcher: TerminalServiceMethods['subscribeToWatcher'] = (proces
 }
 ```
 
-#### 2.3 Rewrite subscribeToWatcherEvents Implementation
-- [x] Same pattern as subscribeToWatcher
+#### 2.3 Rewrite subscribeToRunnerEvents Implementation
+- [x] Same pattern as subscribeToRunner
 - [x] Pass callback through to adapter
 - [x] Return cleanup function
 
@@ -238,14 +238,14 @@ interface Subscription {
 }
 ```
 
-#### 3.2 Rewrite subscribe-to-watcher Handler
+#### 3.2 Rewrite subscribe-to-runner Handler
 - [x] Remove Stream.merge pattern
 - [x] Remove Stream.runDrain
 - [x] Remove Effect.fork (no Fibers needed)
 - [x] Create `sendOutputViaIpc` callback function
 - [x] Create `sendEventViaIpc` callback function
-- [x] Call `terminalService.subscribeToWatcher(processId, sendOutputViaIpc)`
-- [x] Call `terminalService.subscribeToWatcherEvents(processId, sendEventViaIpc)`
+- [x] Call `terminalService.subscribeToRunner(processId, sendOutputViaIpc)`
+- [x] Call `terminalService.subscribeToRunnerEvents(processId, sendEventViaIpc)`
 - [x] Store cleanup functions in subscription Map
 
 **File**: `src/main/ipc/terminal-handlers.ts:88-178`
@@ -274,10 +274,10 @@ const sendOutputViaIpc = (chunk: OutputChunk) => {
   })
 }
 
-const cleanupOutput = yield* terminalService.subscribeToWatcher(processId, sendOutputViaIpc)
+const cleanupOutput = yield* terminalService.subscribeToRunner(processId, sendOutputViaIpc)
 ```
 
-#### 3.3 Rewrite unsubscribe-from-watcher Handler
+#### 3.3 Rewrite unsubscribe-from-runner Handler
 - [x] Remove Fiber.interrupt calls
 - [x] Call cleanup functions instead
 - [x] Delete subscription from Map
@@ -320,17 +320,17 @@ const cleanupOutput = yield* terminalService.subscribeToWatcher(processId, sendO
 - [ ] Navigate to repository view
 - [ ] Open Issues modal
 - [ ] Select an issue
-- [ ] Click "Launch Watchers"
+- [ ] Click "Launch Runners"
 - [ ] Click blue terminal button
 
 **Expected Console Output** (Main Process):
 ```
 [NodePtyAdapter] Spawning process: { command: '/bin/bash', args: [] }
 [NodePtyAdapter] Process spawned successfully, PID: 12345
-[TerminalHandlers] Subscribing to watcher: watcher-github:123-issue-456
+[TerminalHandlers] Subscribing to runner: runner-github:123-issue-456
 [TerminalHandlers] Registering callbacks with terminal service
 [TerminalHandlers] Callbacks registered
-[TerminalHandlers] SUBSCRIPTION CREATED: sub-watcher-github:123-issue-456-1234567890
+[TerminalHandlers] SUBSCRIPTION CREATED: sub-runner-github:123-issue-456-1234567890
 ```
 
 #### 4.3 Manual Testing - Data Flow
@@ -366,20 +366,20 @@ const cleanupOutput = yield* terminalService.subscribeToWatcher(processId, sendO
 - [ ] Verify full round-trip: input → PTY → bash → output → IPC → renderer → xterm
 
 #### 4.5 Manual Testing - Multiple Processes
-- [ ] Launch 2-3 watchers for different issues
+- [ ] Launch 2-3 runners for different issues
 - [ ] Switch between processes via LED buttons
 - [ ] Type in different terminals
 - [ ] Verify each process receives correct input
 - [ ] Verify output goes to correct terminal
 
 #### 4.6 Manual Testing - Cleanup
-- [ ] Kill a watcher process
+- [ ] Kill a runner process
 - [ ] Verify IPC events stop for that process
 - [ ] Check subscriptions Map (should be empty for killed process)
 - [ ] Verify no memory leaks (callbacks removed)
 
 #### 4.7 Performance Check
-- [ ] Spawn 5 watchers concurrently
+- [ ] Spawn 5 runners concurrently
 - [ ] Check CPU usage (should be low when idle)
 - [ ] Check memory usage (reasonable per process)
 - [ ] Type rapidly in terminal - no lag?
@@ -565,7 +565,7 @@ No new dependencies needed. Removing dependencies:
 1. **Manual Testing**: Run `pnpm dev` and test terminal streaming
 2. **Remove Debug Logs**: Clean up console.log statements
 3. **Performance Testing**: Verify <50ms latency
-4. **Load Testing**: Test with 5+ concurrent watchers
+4. **Load Testing**: Test with 5+ concurrent runners
 5. **Documentation**: Update CLAUDE.md with new callback pattern
 
 ---
@@ -573,10 +573,10 @@ No new dependencies needed. Removing dependencies:
 ## Next Steps After Fix
 
 1. **Remove tmux dependencies** (if not already done)
-2. **Integrate with Issues modal** (launch watchers from UI)
+2. **Integrate with Issues modal** (launch runners from UI)
 3. **Add process management UI** (kill, restart buttons)
 4. **Implement idle detection UI** (LED indicators)
 5. **Add terminal panel toggle** (show/hide)
 6. **Performance profiling** (ensure no regressions)
-7. **Load testing** (10+ concurrent watchers)
+7. **Load testing** (10+ concurrent runners)
 8. **Documentation** (architecture diagrams, user guide)

@@ -81,8 +81,8 @@ interface IpcContract<
  * @example
  * ```typescript
  * registerIpcHandler(
- *   AiWatcherIpcContracts.getWatcher,
- *   (input) => aiWatcherService.get(input.watcherId)
+ *   AiRunnerIpcContracts.getRunner,
+ *   (input) => aiRunnerService.get(input.runnerId)
  * )
  * ```
  */

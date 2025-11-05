@@ -1,7 +1,7 @@
 /**
  * Terminal IPC Handlers
  *
- * Handles IPC communication for terminal/watcher management using the generic
+ * Handles IPC communication for terminal/runner management using the generic
  * registerIpcHandler pattern for type-safe, boilerplate-free handler registration.
  */
 
@@ -40,64 +40,64 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
   const terminalService = yield* TerminalService
   console.log('[TerminalHandlers] Got terminal service')
 
-  // Spawn AI watcher
-  console.log('[TerminalHandlers] Registering spawn-watcher handler')
+  // Spawn AI runner
+  console.log('[TerminalHandlers] Registering spawn-runner handler')
   registerIpcHandler(
-    TerminalIpcContracts['terminal:spawn-watcher'],
-    (input) => terminalService.spawnAiWatcher(input)
+    TerminalIpcContracts['terminal:spawn-runner'],
+    (input) => terminalService.spawnAiRunner(input)
   )
 
-  // Kill watcher
+  // Kill runner
   registerIpcHandler(
-    TerminalIpcContracts['terminal:kill-watcher'],
-    ({ processId }) => terminalService.killWatcher(processId)
+    TerminalIpcContracts['terminal:kill-runner'],
+    ({ processId }) => terminalService.killRunner(processId)
   )
 
-  // Kill all watchers
+  // Kill all runners
   registerIpcHandler(
-    TerminalIpcContracts['terminal:kill-all-watchers'],
-    () => terminalService.killAllWatchers()
+    TerminalIpcContracts['terminal:kill-all-runners'],
+    () => terminalService.killAllRunners()
   )
 
-  // Restart watcher
+  // Restart runner
   registerIpcHandler(
-    TerminalIpcContracts['terminal:restart-watcher'],
-    ({ processId }) => terminalService.restartWatcher(processId)
+    TerminalIpcContracts['terminal:restart-runner'],
+    ({ processId }) => terminalService.restartRunner(processId)
   )
 
-  // Write to watcher
+  // Write to runner
   registerIpcHandler(
-    TerminalIpcContracts['terminal:write-to-watcher'],
-    ({ processId, data }) => terminalService.writeToWatcher(processId, data)
+    TerminalIpcContracts['terminal:write-to-runner'],
+    ({ processId, data }) => terminalService.writeToRunner(processId, data)
   )
 
-  // Resize watcher
+  // Resize runner
   registerIpcHandler(
-    TerminalIpcContracts['terminal:resize-watcher'],
-    ({ processId, rows, cols }) => terminalService.resizeWatcher(processId, rows, cols)
+    TerminalIpcContracts['terminal:resize-runner'],
+    ({ processId, rows, cols }) => terminalService.resizeRunner(processId, rows, cols)
   )
 
-  // Get watcher state
+  // Get runner state
   registerIpcHandler(
-    TerminalIpcContracts['terminal:get-watcher-state'],
-    ({ processId }) => terminalService.getWatcherState(processId)
+    TerminalIpcContracts['terminal:get-runner-state'],
+    ({ processId }) => terminalService.getRunnerState(processId)
   )
 
-  // List active watchers
+  // List active runners
   registerIpcHandler(
-    TerminalIpcContracts['terminal:list-active-watchers'],
-    () => terminalService.listActiveWatchers()
+    TerminalIpcContracts['terminal:list-active-runners'],
+    () => terminalService.listActiveRunners()
   )
 
-  // Subscribe to watcher output/events
+  // Subscribe to runner output/events
   // Custom handler (not using registerIpcHandler) to access event.sender
-  console.log('[TerminalHandlers] Registering subscribe-to-watcher handler')
-  ipcMain.handle('terminal:subscribe-to-watcher', async (event: IpcMainInvokeEvent, input: unknown) => {
+  console.log('[TerminalHandlers] Registering subscribe-to-runner handler')
+  ipcMain.handle('terminal:subscribe-to-runner', async (event: IpcMainInvokeEvent, input: unknown) => {
     console.log('[TerminalHandlers] ========== SUBSCRIPTION HANDLER CALLED ==========')
     console.log('[TerminalHandlers] Sender webContentsId:', event.sender.id)
 
     // Pre-decode input to get processId synchronously
-    const decoded = S.decodeUnknownSync(TerminalIpcContracts['terminal:subscribe-to-watcher'].input)(input)
+    const decoded = S.decodeUnknownSync(TerminalIpcContracts['terminal:subscribe-to-runner'].input)(input)
     const processId = decoded.processId
     const senderWebContentsId = event.sender.id
     const subscriptionKey = `${processId}-${senderWebContentsId}`
@@ -187,8 +187,8 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
 
       // Register callbacks with terminal service
       console.log('[TerminalHandlers] Registering callbacks with terminal service')
-      const cleanupOutput = yield* terminalService.subscribeToWatcher(processId, sendOutputViaIpc)
-      const cleanupEvents = yield* terminalService.subscribeToWatcherEvents(processId, sendEventViaIpc)
+      const cleanupOutput = yield* terminalService.subscribeToRunner(processId, sendOutputViaIpc)
+      const cleanupEvents = yield* terminalService.subscribeToRunnerEvents(processId, sendEventViaIpc)
       console.log('[TerminalHandlers] Callbacks registered')
 
       // Store subscription
@@ -203,7 +203,7 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
       console.log('[TerminalHandlers] ========== SUBSCRIPTION CREATED:', subscriptionId, '==========')
 
       // Encode output
-      return yield* S.encode(TerminalIpcContracts['terminal:subscribe-to-watcher'].output)({ subscriptionId })
+      return yield* S.encode(TerminalIpcContracts['terminal:subscribe-to-runner'].output)({ subscriptionId })
     })
 
     try {
@@ -215,12 +215,12 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
       throw error
     }
   })
-  console.log('[TerminalHandlers] subscribe-to-watcher handler registered')
+  console.log('[TerminalHandlers] subscribe-to-runner handler registered')
 
-  // Unsubscribe from watcher
-  console.log('[TerminalHandlers] Registering unsubscribe-from-watcher handler')
+  // Unsubscribe from runner
+  console.log('[TerminalHandlers] Registering unsubscribe-from-runner handler')
   registerIpcHandler(
-    TerminalIpcContracts['terminal:unsubscribe-from-watcher'],
+    TerminalIpcContracts['terminal:unsubscribe-from-runner'],
     ({ subscriptionId }) => Effect.gen(function* () {
       const subscription = subscriptions.get(subscriptionId)
       if (subscription) {
@@ -236,7 +236,7 @@ export const setupTerminalIpcHandlers = Effect.gen(function* () {
       }
     })
   )
-  console.log('[TerminalHandlers] unsubscribe-from-watcher handler registered')
+  console.log('[TerminalHandlers] unsubscribe-from-runner handler registered')
 
   console.log('========================================')
   console.log('[TerminalHandlers] ALL TERMINAL HANDLERS REGISTERED')

@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-**Decision: KEEP SEPARATE, RENAME ai-watchers → process-runners**
+**Decision: KEEP SEPARATE, RENAME ai-runners → process-runners**
 
 Two fundamentally different concerns should NOT be merged:
 - **Terminal** = interactive TTY driver (for UI)
@@ -19,7 +19,7 @@ Two fundamentally different concerns should NOT be merged:
 │ MAIN PROCESS                                                    │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  terminal/                    ai-watchers/ (→ process-runners/) │
+│  terminal/                    ai-runners/ (→ process-runners/) │
 │  ├── terminal-port.ts        ├── ports.ts (Process/Session)   │
 │  ├── terminal-service.ts     ├── adapters/                    │
 │  ├── terminal-registry.ts    │   ├── process-monitor/         │
@@ -349,10 +349,10 @@ Combining would:
 
 ## Implementation Plan
 
-**Step 1:** Rename ai-watchers → process-runners
-- Find/replace: `ai-watchers` → `process-runners`
-- Find/replace: `AiWatcher` → `ProcessRunner`
-- Find/replace: `ai-watcher-*` → `process-runner-*`
+**Step 1:** Rename ai-runners → process-runners
+- Find/replace: `ai-runners` → `process-runners`
+- Find/replace: `AiRunner` → `ProcessRunner`
+- Find/replace: `ai-runner-*` → `process-runner-*`
 - Update IPC contracts
 - Update renderer components
 
@@ -378,6 +378,6 @@ This maintains proper hexagonal architecture with:
 - Independent evolution paths
 - Proper abstraction layers
 
-Simply rename `ai-watchers` → `process-runners` to clarify intent.
+Simply rename `ai-runners` → `process-runners` to clarify intent.
 
 This is the correct architectural decision for a scalable, maintainable codebase.

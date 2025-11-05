@@ -201,7 +201,7 @@ Last completed:
 - Tests passing
 
 Next up:
-- Complete Phase 3.4: Update AI Watchers fs operations
+- Complete Phase 3.4: Update AI Runners fs operations
 - Then: Phase 3.5 - Testing
 
 Issues: None currently blocking
@@ -300,7 +300,7 @@ Migrates custom Node.js API wrappers to stable `@effect/platform` modules (Comma
 
 ### Phase 3: FileSystem Migration
 - Migrated NodeFileSystemAdapter to @effect/platform/FileSystem
-- Updated WorkspaceService and AI Watchers file operations
+- Updated WorkspaceService and AI Runners file operations
 - Preserved domain error types with error mapping
 
 ### Phase 4: Git Command Migration
@@ -337,7 +337,7 @@ Migrates custom Node.js API wrappers to stable `@effect/platform` modules (Comma
 - ✅ Manual testing on both tiers
 - ✅ Git operations verified
 - ✅ File operations verified
-- ✅ AI watchers verified
+- ✅ AI runners verified
 - ✅ Cross-platform compatibility maintained
 
 ## Documentation
@@ -447,7 +447,7 @@ Use this to verify the migration is truly complete:
 - [ ] Application runs without errors (`pnpm dev`)
 - [ ] Git operations work correctly
 - [ ] File operations work correctly
-- [ ] AI watchers work correctly (if applicable)
+- [ ] AI runners work correctly (if applicable)
 
 ### Documentation
 - [ ] `CLAUDE.md` updated with platform info

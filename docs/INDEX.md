@@ -2,10 +2,10 @@
 
 ## Architecture Analysis Documents
 
-### New Documents (Tmux AI Watchers Analysis)
+### New Documents (Tmux AI Runners Analysis)
 
 1. **ARCHITECTURE_ANALYSIS_SUMMARY.md** (START HERE)
-   - Complete overview of the tmux AI watchers architecture
+   - Complete overview of the tmux AI runners architecture
    - Synthesizes TmuxPrompts, error-refactor-plan, and Geppetto's current design
    - Design decisions and rationale
    - Implementation roadmap with 4-week phases
@@ -268,8 +268,8 @@
 - [ ] Understand EFFECT_ATOM_IPC_GUIDE.md
 
 ### Week 1: Implementation
-- [ ] Create src/main/ai-watchers/ structure
-- [ ] Define ProcessMonitorPort and AiWatcherPort
+- [ ] Create src/main/ai-runners/ structure
+- [ ] Define ProcessMonitorPort and AiRunnerPort
 - [ ] Implement TmuxSessionManagerService
 - [ ] Write unit tests
 

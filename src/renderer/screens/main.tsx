@@ -32,7 +32,7 @@ import {
   clearConsoleError,
 } from '../lib/console-error-channel'
 import { WorkspaceSelector } from '../components/WorkspaceSelector'
-import { ProcessRunnersPanel as WatchersPanel } from '../components/process-runners/ProcessRunnersPanel'
+import { ProcessRunnersPanel as RunnersPanel } from '../components/process-runners/ProcessRunnersPanel'
 import { toast } from 'sonner'
 import { useCrossWindowSync } from '../hooks/useCrossWindowSync'
 
@@ -178,8 +178,8 @@ export function MainScreen() {
         {/* Workspace Selector - positioned in top right */}
         <WorkspaceSelector />
 
-        {/* AI Watcher Status LEDs - positioned in top right below workspace selector */}
-        <WatchersPanel />
+        {/* AI Runner Status LEDs - positioned in top right below workspace selector */}
+        <RunnersPanel />
 
         {userName && activeAccountId && (
           <div

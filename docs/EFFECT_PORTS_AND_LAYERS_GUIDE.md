@@ -365,13 +365,13 @@ When implementing Effect services that orchestrate ports, use the interface cons
 ```typescript
 // terminal-service.ts
 interface TerminalServiceMethods {
-  spawnAiWatcher(config: WatcherConfig): Effect.Effect<
+  spawnAiRunner(config: RunnerConfig): Effect.Effect<
     { processId: string; state: ProcessState },
     TerminalError,
     never
   >
-  killWatcher(processId: string): Effect.Effect<void, TerminalError, never>
-  listActiveWatchers(): Effect.Effect<ReadonlyArray<WatcherInfo>, never, never>
+  killRunner(processId: string): Effect.Effect<void, TerminalError, never>
+  listActiveRunners(): Effect.Effect<ReadonlyArray<RunnerInfo>, never, never>
 }
 
 export class TerminalService extends Effect.Service<TerminalService>()(
@@ -379,28 +379,28 @@ export class TerminalService extends Effect.Service<TerminalService>()(
   {
     effect: Effect.gen(function* () {
       const registry = yield* TerminalRegistry
-      const activeWatchers = yield* Ref.make(HashMap.empty<string, WatcherConfig>())
+      const activeRunners = yield* Ref.make(HashMap.empty<string, RunnerConfig>())
 
       // USE INTERFACE CONSTRAINT - This preserves type inference!
-      const spawnAiWatcher: TerminalServiceMethods['spawnAiWatcher'] = (config) =>
+      const spawnAiRunner: TerminalServiceMethods['spawnAiRunner'] = (config) =>
         Effect.gen(function* () {
           const adapter = yield* registry.getDefaultAdapter()
           const state = yield* adapter.spawn(processConfig)
-          yield* Ref.update(activeWatchers, HashMap.set(processId, config))
+          yield* Ref.update(activeRunners, HashMap.set(processId, config))
           return { processId, state }
         })
 
-      const killWatcher: TerminalServiceMethods['killWatcher'] = (processId) =>
+      const killRunner: TerminalServiceMethods['killRunner'] = (processId) =>
         Effect.gen(function* () {
           const adapter = yield* registry.getDefaultAdapter()
           yield* adapter.kill(processId)
-          yield* Ref.update(activeWatchers, HashMap.remove(processId))
+          yield* Ref.update(activeRunners, HashMap.remove(processId))
         })
 
       return {
-        spawnAiWatcher,
-        killWatcher,
-        listActiveWatchers
+        spawnAiRunner,
+        killRunner,
+        listActiveRunners
       } satisfies TerminalServiceMethods
     })
   }
@@ -411,7 +411,7 @@ export class TerminalService extends Effect.Service<TerminalService>()(
 
 ```typescript
 // DON'T DO THIS - Breaks type inference!
-const spawnAiWatcher = (config: WatcherConfig): Effect.Effect<
+const spawnAiRunner = (config: RunnerConfig): Effect.Effect<
   { processId: string; state: ProcessState },
   TerminalError,
   never
@@ -421,7 +421,7 @@ const spawnAiWatcher = (config: WatcherConfig): Effect.Effect<
 })
 
 // Also DON'T DO THIS - Using 'any' to fix type errors
-const killWatcher = (processId: string) =>
+const killRunner = (processId: string) =>
   Effect.gen(function* (): Generator<any, void, any> {  // NO!
     // Using 'any' defeats type safety
   })
@@ -500,12 +500,12 @@ When using `Result.matchWithError`, the `onSuccess` callback receives a **Succes
 
 ```typescript
 // terminal/TerminalPanel.tsx
-import type { WatcherInfo } from '../../../shared/schemas/terminal'
+import type { RunnerInfo } from '../../../shared/schemas/terminal'
 
 useEffect(() => {
-  Result.matchWithError(watchersResult, {
+  Result.matchWithError(runnersResult, {
     onSuccess: (data) => {
-      // ✅ data is Success<readonly WatcherInfo[], NetworkError>
+      // ✅ data is Success<readonly RunnerInfo[], NetworkError>
       // Access actual data via data.value
       if (data && data.value.length > 0 && !activeProcessId) {
         setActiveProcessId(data.value[0].processId)  // Use .value
@@ -521,7 +521,7 @@ useEffect(() => {
       // Initial state
     }
   })
-}, [watchersResult, activeProcessId])
+}, [runnersResult, activeProcessId])
 ```
 
 **Key Points:**
@@ -561,16 +561,16 @@ When using `Result.builder`, the `.onSuccess()` callback receives the **unwrappe
 
 ```typescript
 // ❌ WRONG - Type annotation breaks inference
-Result.matchWithError(watchersResult, {
-  onSuccess: (data: readonly WatcherInfo[]) => {  // Type mismatch!
-    // TypeScript error: Type '(data: readonly WatcherInfo[]) => void' is not
-    // assignable to type '(_: Success<readonly WatcherInfo[], NetworkError>) => void'
+Result.matchWithError(runnersResult, {
+  onSuccess: (data: readonly RunnerInfo[]) => {  // Type mismatch!
+    // TypeScript error: Type '(data: readonly RunnerInfo[]) => void' is not
+    // assignable to type '(_: Success<readonly RunnerInfo[], NetworkError>) => void'
   }
 })
 
 // ✅ CORRECT - Let TypeScript infer the type
-Result.matchWithError(watchersResult, {
-  onSuccess: (data) => {  // TypeScript infers Success<readonly WatcherInfo[], NetworkError>
+Result.matchWithError(runnersResult, {
+  onSuccess: (data) => {  // TypeScript infers Success<readonly RunnerInfo[], NetworkError>
     if (data && data.value.length > 0) {  // Use .value
       // ...
     }
@@ -956,20 +956,20 @@ export class TerminalService extends Effect.Service<TerminalService>()(
     effect: Effect.gen(function* () {
       // ✅ Direct access to port - no registry needed
       const terminal = yield* TerminalPort
-      const activeWatchers = yield* Ref.make(HashMap.empty<string, WatcherConfig>())
+      const activeRunners = yield* Ref.make(HashMap.empty<string, RunnerConfig>())
 
       return {
-        spawnAiWatcher: (config) => Effect.gen(function* () {
+        spawnAiRunner: (config) => Effect.gen(function* () {
           // Use terminal directly
           const state = yield* terminal.spawn(processConfig)
-          yield* Ref.update(activeWatchers, HashMap.set(processId, config))
+          yield* Ref.update(activeRunners, HashMap.set(processId, config))
           return { processId, state }
         }),
 
-        killWatcher: (processId) => Effect.gen(function* () {
+        killRunner: (processId) => Effect.gen(function* () {
           // Use terminal directly
           yield* terminal.kill(processId)
-          yield* Ref.update(activeWatchers, HashMap.remove(processId))
+          yield* Ref.update(activeRunners, HashMap.remove(processId))
         })
       }
     }),
@@ -1135,7 +1135,7 @@ const TestLayer = Layer.provide(
 - [AI Adapters Hexagonal Architecture](./AI_ADAPTERS_HEXAGONAL_ARCHITECTURE.md) - Deep dive into hexagonal architecture
 - [AI Layers Hexagonal Agents Benefit](./AI_LAYERS_HEXAGONAL_AGENTS_BENEFIT.md) - **Multi-provider registry pattern with real-world AI agent examples**
 - [Effect Atom IPC Guide](./EFFECT_ATOM_IPC_GUIDE.md) - IPC communication patterns
-- [AI Watcher XTerm Progress](./ai-watcher-xterm-progress.md) - Real implementation timeline with issues encountered
+- [AI Runner XTerm Progress](./ai-runner-xterm-progress.md) - Real implementation timeline with issues encountered
 
 ## Debugging History
 

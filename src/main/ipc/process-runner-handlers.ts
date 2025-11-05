@@ -105,4 +105,4 @@ export const setupProcessRunnerIpcHandlers = Effect.gen(function* () {
 })
 
 // Backwards compatibility alias
-export const setupAiWatcherIpcHandlers = setupProcessRunnerIpcHandlers
+export const setupAiRunnerIpcHandlers = setupProcessRunnerIpcHandlers

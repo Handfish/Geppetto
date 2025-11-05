@@ -1,8 +1,8 @@
-# AI Watcher Tmux Integration Plan
+# AI Runner Tmux Integration Plan
 
 ## Executive Summary
 
-This plan outlines the integration of AI agent watchers with tmux sessions in Geppetto, enabling process monitoring, logging, and interactive control of Claude Code, Codex, and other AI agents. The implementation follows hexagonal architecture principles with Effect-TS best practices.
+This plan outlines the integration of AI agent runners with tmux sessions in Geppetto, enabling process monitoring, logging, and interactive control of Claude Code, Codex, and other AI agents. The implementation follows hexagonal architecture principles with Effect-TS best practices.
 
 ## Phase 1: Foundation Architecture (Days 1-2)
 
@@ -10,7 +10,7 @@ This plan outlines the integration of AI agent watchers with tmux sessions in Ge
 
 **Files to create:**
 ```
-src/main/ai-watchers/
+src/main/ai-runners/
 ├── ports.ts              # Port interfaces
 ├── errors.ts             # Domain errors
 └── schemas.ts            # Domain schemas
@@ -26,13 +26,13 @@ export interface ProcessMonitorPort {
   kill(handle: ProcessHandle): Effect.Effect<void, ProcessKillError>
 }
 
-// AI watcher port - orchestrates AI agent lifecycle
-export interface AiWatcherPort {
-  create(config: AiWatcherConfig): Effect.Effect<AiWatcher, AiWatcherCreateError>
-  start(watcher: AiWatcher): Effect.Effect<void, AiWatcherStartError>
-  stop(watcher: AiWatcher): Effect.Effect<void, AiWatcherStopError>
-  getStatus(watcher: AiWatcher): Effect.Effect<AiWatcherStatus, never>
-  streamLogs(watcher: AiWatcher): Stream.Stream<LogEntry, never>
+// AI runner port - orchestrates AI agent lifecycle
+export interface AiRunnerPort {
+  create(config: AiRunnerConfig): Effect.Effect<AiRunner, AiRunnerCreateError>
+  start(runner: AiRunner): Effect.Effect<void, AiRunnerStartError>
+  stop(runner: AiRunner): Effect.Effect<void, AiRunnerStopError>
+  getStatus(runner: AiRunner): Effect.Effect<AiRunnerStatus, never>
+  streamLogs(runner: AiRunner): Stream.Stream<LogEntry, never>
 }
 ```
 
@@ -47,13 +47,13 @@ export class ProcessHandle extends S.Class<ProcessHandle>('ProcessHandle')({
   startedAt: S.Date,
 }) {}
 
-export class AiWatcher extends S.Class<AiWatcher>('AiWatcher')({
+export class AiRunner extends S.Class<AiRunner>('AiRunner')({
   id: S.String,
   name: S.String,
   type: S.Literal('claude-code', 'codex', 'cursor', 'custom'),
   processHandle: ProcessHandle,
   status: S.Literal('starting', 'running', 'idle', 'stopped', 'errored'),
-  config: AiWatcherConfig,
+  config: AiRunnerConfig,
   createdAt: S.Date,
   lastActivityAt: S.Date,
 }) {}
@@ -67,7 +67,7 @@ export class ProcessEvent extends S.Class<ProcessEvent>('ProcessEvent')({
 
 ### 1.2 Implement Tmux Session Manager
 
-**File: src/main/ai-watchers/tmux-session-manager.ts**
+**File: src/main/ai-runners/tmux-session-manager.ts**
 
 ```typescript
 export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()('TmuxSessionManager', {
@@ -115,7 +115,7 @@ export class TmuxSessionManager extends Effect.Service<TmuxSessionManager>()('Tm
 
 ### 2.1 Process Monitor Service
 
-**File: src/main/ai-watchers/process-monitor-service.ts**
+**File: src/main/ai-runners/process-monitor-service.ts**
 
 ```typescript
 export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>()('ProcessMonitorService', {
@@ -194,18 +194,18 @@ export class ProcessMonitorService extends Effect.Service<ProcessMonitorService>
 }) {}
 ```
 
-### 2.2 AI Watcher Service
+### 2.2 AI Runner Service
 
-**File: src/main/ai-watchers/ai-watcher-service.ts**
+**File: src/main/ai-runners/ai-runner-service.ts**
 
 ```typescript
-export class AiWatcherService extends Effect.Service<AiWatcherService>()('AiWatcherService', {
+export class AiRunnerService extends Effect.Service<AiRunnerService>()('AiRunnerService', {
   effect: Effect.gen(function* () {
     const tmuxManager = yield* TmuxSessionManager
     const processMonitor = yield* ProcessMonitorPort
-    const watchers = new Map<string, WatcherState>()
+    const runners = new Map<string, RunnerState>()
 
-    const implementation: AiWatcherPort = {
+    const implementation: AiRunnerPort = {
       create: (config) =>
         Effect.gen(function* () {
           // Create tmux session with AI agent
@@ -214,7 +214,7 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()('AiWatc
 
           const handle = yield* tmuxManager.createSession(sessionName, command)
 
-          const watcher = new AiWatcher({
+          const runner = new AiRunner({
             id: ulid(),
             name: config.name || sessionName,
             type: config.type,
@@ -228,18 +228,18 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()('AiWatc
           // Start monitoring in background
           const fiber = yield* pipe(
             processMonitor.monitor(handle),
-            Stream.tap(event => updateWatcherState(watcher.id, event)),
+            Stream.tap(event => updateRunnerState(runner.id, event)),
             Stream.runDrain,
             Effect.forkScoped,
           )
 
-          watchers.set(watcher.id, { watcher, fiber, logs: [] })
-          return watcher
+          runners.set(runner.id, { runner, fiber, logs: [] })
+          return runner
         }),
 
-      streamLogs: (watcher) =>
+      streamLogs: (runner) =>
         Stream.async<LogEntry>((emit) => {
-          const state = watchers.get(watcher.id)
+          const state = runners.get(runner.id)
           if (!state) {
             emit.end()
             return
@@ -249,7 +249,7 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()('AiWatc
           state.logs.forEach(log => emit.single(log))
 
           // Set up live streaming
-          const unsubscribe = subscribeToLogs(watcher.id, (log) => {
+          const unsubscribe = subscribeToLogs(runner.id, (log) => {
             emit.single(log)
           })
 
@@ -270,65 +270,65 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()('AiWatc
 **Update: src/shared/ipc-contracts.ts**
 
 ```typescript
-export const AiWatcherIpcContracts = {
-  createWatcher: {
-    channel: 'ai-watcher:create' as const,
+export const AiRunnerIpcContracts = {
+  createRunner: {
+    channel: 'ai-runner:create' as const,
     input: S.Struct({
       type: S.Literal('claude-code', 'codex', 'cursor', 'custom'),
       name: S.optional(S.String),
       workingDirectory: S.String,
       env: S.optional(S.Record(S.String, S.String)),
     }),
-    output: AiWatcher,
-    errors: S.Union(AiWatcherCreateError, ProcessSpawnError),
+    output: AiRunner,
+    errors: S.Union(AiRunnerCreateError, ProcessSpawnError),
   },
 
   attachToTmuxSession: {
-    channel: 'ai-watcher:attach-tmux' as const,
+    channel: 'ai-runner:attach-tmux' as const,
     input: S.Struct({ sessionName: S.String }),
-    output: AiWatcher,
+    output: AiRunner,
     errors: S.Union(TmuxSessionNotFoundError, ProcessAttachError),
   },
 
-  listWatchers: {
-    channel: 'ai-watcher:list' as const,
+  listRunners: {
+    channel: 'ai-runner:list' as const,
     input: S.Void,
-    output: S.Array(AiWatcher),
+    output: S.Array(AiRunner),
     errors: S.Never,
   },
 
-  streamWatcherLogs: {
-    channel: 'ai-watcher:stream-logs' as const,
-    input: S.Struct({ watcherId: S.String }),
+  streamRunnerLogs: {
+    channel: 'ai-runner:stream-logs' as const,
+    input: S.Struct({ runnerId: S.String }),
     output: S.Array(LogEntry), // Returns batches
-    errors: S.Union(WatcherNotFoundError),
+    errors: S.Union(RunnerNotFoundError),
   },
 
-  stopWatcher: {
-    channel: 'ai-watcher:stop' as const,
-    input: S.Struct({ watcherId: S.String }),
+  stopRunner: {
+    channel: 'ai-runner:stop' as const,
+    input: S.Struct({ runnerId: S.String }),
     output: S.Void,
-    errors: S.Union(WatcherNotFoundError, ProcessKillError),
+    errors: S.Union(RunnerNotFoundError, ProcessKillError),
   },
 } as const
 ```
 
 ### 3.2 IPC Handlers
 
-**File: src/main/ipc/ai-watcher-handlers.ts**
+**File: src/main/ipc/ai-runner-handlers.ts**
 
 ```typescript
 import { registerIpcHandler } from './ipc-handler-setup'
-import { AiWatcherIpcContracts } from '../../shared/ipc-contracts'
+import { AiRunnerIpcContracts } from '../../shared/ipc-contracts'
 
-export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
-  const aiWatcherService = yield* AiWatcherService
+export const setupAiRunnerIpcHandlers = Effect.gen(function* () {
+  const aiRunnerService = yield* AiRunnerService
   const tmuxManager = yield* TmuxSessionManager
 
   // Use the centralized registerIpcHandler utility
   registerIpcHandler(
-    AiWatcherIpcContracts.createWatcher,
-    (input) => aiWatcherService.create({
+    AiRunnerIpcContracts.createRunner,
+    (input) => aiRunnerService.create({
       type: input.type,
       name: input.name,
       workingDirectory: input.workingDirectory,
@@ -337,11 +337,11 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   )
 
   registerIpcHandler(
-    AiWatcherIpcContracts.attachToTmuxSession,
+    AiRunnerIpcContracts.attachToTmuxSession,
     (input) => Effect.gen(function* () {
       const handle = yield* tmuxManager.attachToSession(input.sessionName)
 
-      return yield* aiWatcherService.create({
+      return yield* aiRunnerService.create({
         type: 'custom',
         name: `tmux:${input.sessionName}`,
         processHandle: handle,
@@ -350,22 +350,22 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   )
 
   registerIpcHandler(
-    AiWatcherIpcContracts.listWatchers,
-    () => aiWatcherService.listAll()
+    AiRunnerIpcContracts.listRunners,
+    () => aiRunnerService.listAll()
   )
 
   // Stream handler needs special treatment for continuous updates
-  ipcMain.handle(AiWatcherIpcContracts.streamWatcherLogs.channel, async (event, input: unknown) => {
+  ipcMain.handle(AiRunnerIpcContracts.streamRunnerLogs.channel, async (event, input: unknown) => {
     // Set up SSE-like streaming over IPC
     const program = Effect.gen(function* () {
-      const validatedInput = yield* S.decodeUnknown(AiWatcherIpcContracts.streamWatcherLogs.input)(input)
+      const validatedInput = yield* S.decodeUnknown(AiRunnerIpcContracts.streamRunnerLogs.input)(input)
 
       yield* pipe(
-        aiWatcherService.streamLogs({ id: validatedInput.watcherId }),
+        aiRunnerService.streamLogs({ id: validatedInput.runnerId }),
         Stream.grouped(10), // Batch logs
         Stream.tap(logs =>
           Effect.sync(() => {
-            event.sender.send(`ai-watcher:logs:${validatedInput.watcherId}`, logs)
+            event.sender.send(`ai-runner:logs:${validatedInput.runnerId}`, logs)
           })),
         Stream.runDrain,
       )
@@ -380,45 +380,45 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
 
 ### 4.1 Create Atoms
 
-**File: src/renderer/atoms/ai-watcher-atoms.ts**
+**File: src/renderer/atoms/ai-runner-atoms.ts**
 
 ```typescript
 import { Atom } from '@effect-atom/atom-react'
 import * as Effect from 'effect/Effect'
 import * as Duration from 'effect/Duration'
 
-// List of all watchers
-export const aiWatchersAtom = Atom.make(
+// List of all runners
+export const aiRunnersAtom = Atom.make(
   Effect.gen(function* () {
     const client = yield* ElectronIpcClient
-    return yield* client.listWatchers()
+    return yield* client.listRunners()
   })
 )
   .pipe(Atom.setIdleTTL(Duration.seconds(5)))
-  .pipe(Atom.withReactivityKeys([['ai-watchers:list']]))
+  .pipe(Atom.withReactivityKeys([['ai-runners:list']]))
 
-// Individual watcher status
-export const aiWatcherAtom = Atom.family((watcherId: string) =>
+// Individual runner status
+export const aiRunnerAtom = Atom.family((runnerId: string) =>
   Atom.make(
     Effect.gen(function* () {
       const client = yield* ElectronIpcClient
-      const watchers = yield* client.listWatchers()
-      return watchers.find(w => w.id === watcherId)
+      const runners = yield* client.listRunners()
+      return runners.find(w => w.id === runnerId)
     })
   )
     .pipe(Atom.setIdleTTL(Duration.seconds(2)))
-    .pipe(Atom.withReactivityKeys([['ai-watchers:watcher', watcherId]]))
+    .pipe(Atom.withReactivityKeys([['ai-runners:runner', runnerId]]))
 )
 
-// Watcher logs stream
-export const aiWatcherLogsAtom = Atom.family((watcherId: string) =>
+// Runner logs stream
+export const aiRunnerLogsAtom = Atom.family((runnerId: string) =>
   Atom.make(
     Effect.gen(function* () {
       const client = yield* ElectronIpcClient
 
       // Set up log streaming subscription
       const logs = yield* Effect.async<LogEntry[]>((resume) => {
-        const channel = `ai-watcher:logs:${watcherId}`
+        const channel = `ai-runner:logs:${runnerId}`
 
         const handler = (_event: unknown, logs: LogEntry[]) => {
           resume(Effect.succeed(logs))
@@ -427,7 +427,7 @@ export const aiWatcherLogsAtom = Atom.family((watcherId: string) =>
         ipcRenderer.on(channel, handler)
 
         // Start streaming
-        client.streamWatcherLogs({ watcherId })
+        client.streamRunnerLogs({ runnerId })
 
         return Effect.sync(() => {
           ipcRenderer.removeListener(channel, handler)
@@ -437,19 +437,19 @@ export const aiWatcherLogsAtom = Atom.family((watcherId: string) =>
       return logs
     })
   )
-    .pipe(Atom.withReactivityKeys([['ai-watchers:logs', watcherId]]))
+    .pipe(Atom.withReactivityKeys([['ai-runners:logs', runnerId]]))
 )
 ```
 
 ### 4.2 Create UI Components
 
-**File: src/renderer/components/AiWatcherMonitor.tsx**
+**File: src/renderer/components/AiRunnerMonitor.tsx**
 
 ```typescript
-export function AiWatcherMonitor() {
-  const { watchersResult } = useAiWatchers()
+export function AiRunnerMonitor() {
+  const { runnersResult } = useAiRunners()
 
-  return Result.builder(watchersResult)
+  return Result.builder(runnersResult)
     .onInitial(() => <LoadingSpinner />)
     .onErrorTag('ProcessSpawnError', (error) => (
       <ErrorAlert title="Failed to spawn process" message={error.message} />
@@ -458,19 +458,19 @@ export function AiWatcherMonitor() {
       <ErrorAlert title="Tmux session not found" message={error.message} />
     ))
     .onDefect((defect) => <UnexpectedError defect={defect} />)
-    .onSuccess((watchers) => (
-      <div className="ai-watcher-grid">
-        {watchers.map(watcher => (
-          <AiWatcherCard key={watcher.id} watcher={watcher} />
+    .onSuccess((runners) => (
+      <div className="ai-runner-grid">
+        {runners.map(runner => (
+          <AiRunnerCard key={runner.id} runner={runner} />
         ))}
-        <AddWatcherCard />
+        <AddRunnerCard />
       </div>
     ))
     .render()
 }
 
-function AiWatcherCard({ watcher }: { watcher: AiWatcher }) {
-  const { logsResult } = useWatcherLogs(watcher.id)
+function AiRunnerCard({ runner }: { runner: AiRunner }) {
+  const { logsResult } = useRunnerLogs(runner.id)
   const [expanded, setExpanded] = useState(false)
 
   const statusColor = {
@@ -479,21 +479,21 @@ function AiWatcherCard({ watcher }: { watcher: AiWatcher }) {
     stopped: 'gray',
     errored: 'red',
     starting: 'blue',
-  }[watcher.status]
+  }[runner.status]
 
   return (
     <Card>
       <CardHeader>
         <div className="flex justify-between">
-          <h3>{watcher.name}</h3>
-          <Badge color={statusColor}>{watcher.status}</Badge>
+          <h3>{runner.name}</h3>
+          <Badge color={statusColor}>{runner.status}</Badge>
         </div>
       </CardHeader>
       <CardContent>
         <div className="text-sm text-gray-500">
-          Type: {watcher.type}
-          PID: {watcher.processHandle.pid}
-          Last Activity: {formatRelativeTime(watcher.lastActivityAt)}
+          Type: {runner.type}
+          PID: {runner.processHandle.pid}
+          Last Activity: {formatRelativeTime(runner.lastActivityAt)}
         </div>
 
         {expanded && Result.builder(logsResult)
@@ -507,7 +507,7 @@ function AiWatcherCard({ watcher }: { watcher: AiWatcher }) {
         <Button onClick={() => setExpanded(!expanded)}>
           {expanded ? 'Hide Logs' : 'Show Logs'}
         </Button>
-        <Button variant="destructive" onClick={() => stopWatcher(watcher.id)}>
+        <Button variant="destructive" onClick={() => stopRunner(runner.id)}>
           Stop
         </Button>
       </CardFooter>
@@ -525,7 +525,7 @@ function AiWatcherCard({ watcher }: { watcher: AiWatcher }) {
 ```typescript
 export class CliServer extends Effect.Service<CliServer>()('CliServer', {
   effect: Effect.gen(function* () {
-    const aiWatcherService = yield* AiWatcherService
+    const aiRunnerService = yield* AiRunnerService
 
     // Create named pipe for IPC
     const pipePath = process.platform === 'win32'
@@ -540,13 +540,13 @@ export class CliServer extends Effect.Service<CliServer>()('CliServer', {
           Effect.gen(function* () {
             switch (command.type) {
               case 'attach-tmux': {
-                const watcher = yield* aiWatcherService.attachToTmuxSession(command.sessionName)
-                socket.write(JSON.stringify({ success: true, watcher }))
+                const runner = yield* aiRunnerService.attachToTmuxSession(command.sessionName)
+                socket.write(JSON.stringify({ success: true, runner }))
                 break
               }
-              case 'list-watchers': {
-                const watchers = yield* aiWatcherService.listAll()
-                socket.write(JSON.stringify({ success: true, watchers }))
+              case 'list-runners': {
+                const runners = yield* aiRunnerService.listAll()
+                socket.write(JSON.stringify({ success: true, runners }))
                 break
               }
               default:
@@ -567,7 +567,7 @@ export class CliServer extends Effect.Service<CliServer>()('CliServer', {
       stop: () => Effect.sync(() => server.close()),
     }
   }),
-  dependencies: [AiWatcherService],
+  dependencies: [AiRunnerService],
 }) {}
 ```
 
@@ -578,7 +578,7 @@ export class CliServer extends Effect.Service<CliServer>()('CliServer', {
 ```bash
 #!/bin/bash
 
-# Geppetto CLI - Add current tmux session to Geppetto watcher pool
+# Geppetto CLI - Add current tmux session to Geppetto runner pool
 
 PIPE_PATH="/tmp/geppetto.sock"
 
@@ -597,8 +597,8 @@ attach_current_tmux() {
     echo "{\"type\":\"attach-tmux\",\"sessionName\":\"$SESSION_NAME\"}" | nc -U "$PIPE_PATH"
 }
 
-list_watchers() {
-    echo "{\"type\":\"list-watchers\"}" | nc -U "$PIPE_PATH"
+list_runners() {
+    echo "{\"type\":\"list-runners\"}" | nc -U "$PIPE_PATH"
 }
 
 case "$1" in
@@ -606,7 +606,7 @@ case "$1" in
         attach_current_tmux
         ;;
     list)
-        list_watchers
+        list_runners
         ;;
     *)
         echo "Usage: geppetto-cli {attach|list}"
@@ -734,11 +734,11 @@ const MainLayer = Layer.mergeAll(
   BitbucketAdapter.Default,
   GiteaAdapter.Default,
 
-  // AI Watcher services
+  // AI Runner services
   ProcessMonitorService.Default,
   TmuxSessionManager.Default,
-  AiWatcherService.Default,
-  AiWatcherRegistry.Default,
+  AiRunnerService.Default,
+  AiRunnerRegistry.Default,
 
   // CLI server
   CliServer.Default,
@@ -802,7 +802,7 @@ describe('TmuxSessionManager', () => {
 ## Implementation Checklist
 
 ### Week 1: Foundation
-- [ ] Create `src/main/ai-watchers/` directory structure
+- [ ] Create `src/main/ai-runners/` directory structure
 - [ ] Define ports and domain types
 - [ ] Implement TmuxSessionManager
 - [ ] Set up basic error types
@@ -810,16 +810,16 @@ describe('TmuxSessionManager', () => {
 
 ### Week 2: Services
 - [ ] Implement ProcessMonitorService with silence detection
-- [ ] Implement AiWatcherService with proper scoping
-- [ ] Create AiWatcherRegistry for provider management
+- [ ] Implement AiRunnerService with proper scoping
+- [ ] Create AiRunnerRegistry for provider management
 - [ ] Update error mapper
 - [ ] Add services to MainLayer
 
 ### Week 3: IPC & Frontend
-- [ ] Define IPC contracts for ai-watchers
+- [ ] Define IPC contracts for ai-runners
 - [ ] Implement IPC handlers with type-safe pattern
 - [ ] Create renderer atoms
-- [ ] Build AiWatcherMonitor component
+- [ ] Build AiRunnerMonitor component
 - [ ] Implement log streaming
 
 ### Week 4: Integration & Polish
@@ -861,7 +861,7 @@ describe('TmuxSessionManager', () => {
 - Batch log updates in groups of 10-50
 - Use rolling logs with 100MB limit
 - Implement virtual scrolling for log viewer
-- Cache watcher status for 2 seconds
+- Cache runner status for 2 seconds
 
 ## References
 
@@ -873,7 +873,7 @@ describe('TmuxSessionManager', () => {
 ## Next Steps After Implementation
 
 1. **Add AI Provider Plugins**: OpenAI, Anthropic, Cohere adapters
-2. **Enhanced Monitoring**: CPU/Memory usage per watcher
-3. **Collaborative Features**: Share watcher sessions with team
-4. **Automation**: Trigger watchers based on git events
+2. **Enhanced Monitoring**: CPU/Memory usage per runner
+3. **Collaborative Features**: Share runner sessions with team
+4. **Automation**: Trigger runners based on git events
 5. **Analytics**: Track AI usage and costs across providers

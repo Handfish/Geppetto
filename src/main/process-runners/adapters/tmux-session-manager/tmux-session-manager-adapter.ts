@@ -343,11 +343,11 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
                 const exitCode = yield* monitorProcess.exitCode
 
                 yield* Effect.logWarning(
-                  `Tmux session "${name}" has died (monitor exit code ${exitCode}). Killing process handle to trigger watcher shutdown.`
+                  `Tmux session "${name}" has died (monitor exit code ${exitCode}). Killing process handle to trigger runner shutdown.`
                 )
 
                 // Kill the process handle to trigger the normal exit event flow
-                // This will cause the watcher to detect the exit and update status
+                // This will cause the runner to detect the exit and update status
                 yield* processMonitor.kill(handle).pipe(
                   Effect.catchAll((error) => {
                     // Ignore errors if process already dead

@@ -1,7 +1,7 @@
-# AI Watcher Tmux Integration - Progress Tracker
+# AI Runner Tmux Integration - Progress Tracker
 
 ## Overview
-This document tracks the implementation progress of the AI Watcher Tmux Integration feature for Geppetto. The full plan is available in [ai-watcher-tmux-plan.md](./ai-watcher-tmux-plan.md).
+This document tracks the implementation progress of the AI Runner Tmux Integration feature for Geppetto. The full plan is available in [ai-runner-tmux-plan.md](./ai-runner-tmux-plan.md).
 
 ---
 
@@ -12,29 +12,29 @@ This document tracks the implementation progress of the AI Watcher Tmux Integrat
 **Date Completed:** 2025-10-25
 
 **Files Created:**
-- ✅ `src/main/ai-watchers/ports.ts` - Port interfaces (ProcessMonitorPort, AiWatcherPort)
-- ✅ `src/main/ai-watchers/errors.ts` - Domain error classes
-- ✅ `src/main/ai-watchers/schemas.ts` - Domain schemas (ProcessHandle, AiWatcher, ProcessEvent, etc.)
+- ✅ `src/main/ai-runners/ports.ts` - Port interfaces (ProcessMonitorPort, AiRunnerPort)
+- ✅ `src/main/ai-runners/errors.ts` - Domain error classes
+- ✅ `src/main/ai-runners/schemas.ts` - Domain schemas (ProcessHandle, AiRunner, ProcessEvent, etc.)
 
 **Implementation Details:**
 - Defined ProcessMonitorPort for low-level process lifecycle management
-- Defined AiWatcherPort for high-level AI agent orchestration
-- Created comprehensive error types for process, watcher, tmux, and provider operations
+- Defined AiRunnerPort for high-level AI agent orchestration
+- Created comprehensive error types for process, runner, tmux, and provider operations
 - Implemented schema classes using Effect Schema:
   - ProcessHandle - represents monitored processes
   - ProcessEvent - event types from process monitoring
-  - AiWatcher - represents AI agent instances
-  - AiWatcherConfig - configuration for AI watchers
+  - AiRunner - represents AI agent instances
+  - AiRunnerConfig - configuration for AI runners
   - TmuxSession - tmux session metadata
   - LogEntry - structured log entries
-  - WatcherStats - watcher statistics
+  - RunnerStats - runner statistics
 
 ### 1.2 Tmux Session Manager ✅
 **Status:** Completed
 **Date Completed:** 2025-10-25
 
 **Files Created:**
-- ✅ `src/main/ai-watchers/tmux-session-manager.ts` - TmuxSessionManager service
+- ✅ `src/main/ai-runners/tmux-session-manager.ts` - TmuxSessionManager service
 
 **Implementation Details:**
 - Implements Effect.Service pattern with ProcessMonitorPort dependency
@@ -60,7 +60,7 @@ This document tracks the implementation progress of the AI Watcher Tmux Integrat
 
 **UPDATED:** Refactored to use proper structured concurrency (2025-10-25)
 - Replaced all `forkDaemon` with `forkScoped` and `forkIn`
-- Each watcher has dedicated `Scope.CloseableScope` for lifecycle management
+- Each runner has dedicated `Scope.CloseableScope` for lifecycle management
 - Silence detection properly scoped to monitoring stream
 - Automatic cleanup via `Scope.close()` - no resource leaks
 - **ID Generation:** Migrated to Node's `crypto.randomUUID()` for build compatibility (Effect's `Random.nextString` doesn't exist in current version)
@@ -71,7 +71,7 @@ This document tracks the implementation progress of the AI Watcher Tmux Integrat
 **Refactored:** Structured concurrency (2025-10-25)
 
 **Files Created:**
-- ✅ `src/main/ai-watchers/process-monitor-service.ts`
+- ✅ `src/main/ai-runners/process-monitor-service.ts`
 
 **Implementation Details:**
 - Implements ProcessMonitorPort interface with full type safety
@@ -104,21 +104,21 @@ This document tracks the implementation progress of the AI Watcher Tmux Integrat
 - Support for both spawned and attached processes
 - Type-safe error handling (no thrown exceptions)
 
-### 2.2 AI Watcher Service ✅
+### 2.2 AI Runner Service ✅
 **Status:** Completed
 **Date Completed:** 2025-10-25
 
 **Files Created:**
-- ✅ `src/main/ai-watchers/ai-watcher-service.ts`
-- ✅ `src/main/ai-watchers/index.ts` (module exports)
+- ✅ `src/main/ai-runners/ai-runner-service.ts`
+- ✅ `src/main/ai-runners/index.ts` (module exports)
 
 **Implementation Details:**
-- Implements AiWatcherPort interface
-- Full watcher lifecycle management:
-  - `create` - Creates watchers with tmux sessions or existing process handles
-  - `start` - Starts/restarts monitoring for a watcher
+- Implements AiRunnerPort interface
+- Full runner lifecycle management:
+  - `create` - Creates runners with tmux sessions or existing process handles
+  - `start` - Starts/restarts monitoring for a runner
   - `stop` - Stops monitoring and kills the process
-  - `getStatus` - Retrieves current watcher status
+  - `getStatus` - Retrieves current runner status
   - `streamLogs` - Streams logs with existing + live entries
 - Status tracking with Ref:
   - starting → running (automatic transition after 1s)
@@ -127,39 +127,39 @@ This document tracks the implementation progress of the AI Watcher Tmux Integrat
   - → errored (on process error)
 - Process event handling:
   - Converts ProcessEvents to LogEntries
-  - Updates watcher status based on event type
+  - Updates runner status based on event type
   - Tracks last activity time
 - Log streaming and batching:
-  - In-memory log buffer (max 1000 entries per watcher)
+  - In-memory log buffer (max 1000 entries per runner)
   - Queue-based live streaming to consumers
   - Concatenated stream (existing logs + new logs)
 - Integration with TmuxSessionManager and ProcessMonitorService
 - AI agent command resolution:
   - Built-in commands for claude-code, codex, cursor
   - Support for custom commands and args
-- WatcherState tracking:
-  - Watcher metadata
+- RunnerState tracking:
+  - Runner metadata
   - Monitoring fiber reference
   - Log buffer and queue
   - Status and activity refs
 
 **Key Patterns Used:**
-- **Structured Concurrency:** Each watcher has its own Scope.CloseableScope
+- **Structured Concurrency:** Each runner has its own Scope.CloseableScope
 - **Effect.forkScoped** for silence detection (scoped to monitoring stream)
-- **Effect.forkIn(scope)** for monitoring fibers (scoped to watcher lifetime)
+- **Effect.forkIn(scope)** for monitoring fibers (scoped to runner lifetime)
 - **Stream.unwrapScoped** for scoped stream creation
-- **Scope.close()** for automatic cleanup of all watcher resources
+- **Scope.close()** for automatic cleanup of all runner resources
 - Stream.concat for combining existing + live logs
-- Map-based watcher registry
+- Map-based runner registry
 
 **Structured Concurrency Architecture:**
 ```
-Watcher Scope (managed per-watcher)
+Runner Scope (managed per-runner)
   ├─ Monitoring Fiber (process events → logs)
   │   └─ Silence Detection Fiber (30s idle checks)
   └─ Status Transition Fiber (starting → running)
 ```
-When a watcher stops, `Scope.close()` automatically interrupts all fibers and cleans up resources.
+When a runner stops, `Scope.close()` automatically interrupts all fibers and cleans up resources.
 
 ---
 
@@ -170,32 +170,32 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
 **Date Completed:** 2025-10-25
 
 **Files Created:**
-- ✅ `src/shared/schemas/ai-watchers/index.ts` - Shared AI watcher schemas
-- ✅ `src/shared/schemas/ai-watchers/errors.ts` - IPC-safe error schemas
+- ✅ `src/shared/schemas/ai-runners/index.ts` - Shared AI runner schemas
+- ✅ `src/shared/schemas/ai-runners/errors.ts` - IPC-safe error schemas
 
 **Files Updated:**
-- ✅ `src/shared/ipc-contracts.ts` - Added AiWatcherIpcContracts
+- ✅ `src/shared/ipc-contracts.ts` - Added AiRunnerIpcContracts
 
 **Implementation Details:**
 - Created shared schema directory for IPC-compatible types:
-  - `AiWatcher` - Main watcher entity (without internal config)
-  - `AiWatcherConfig` - Configuration for creating watchers
+  - `AiRunner` - Main runner entity (without internal config)
+  - `AiRunnerConfig` - Configuration for creating runners
   - `ProcessHandle` - Process metadata
   - `LogEntry` - Log entry structure
   - `TmuxSession` - Tmux session info
 - Created IPC-safe error schemas:
   - `ProcessError` - General process errors
-  - `WatcherNotFoundError` - Watcher lookup failures
-  - `WatcherOperationError` - Watcher lifecycle errors
+  - `RunnerNotFoundError` - Runner lookup failures
+  - `RunnerOperationError` - Runner lifecycle errors
   - `TmuxError` - Tmux-related errors
 - Defined 8 IPC contracts:
-  - `createWatcher` - Create new AI watcher
+  - `createRunner` - Create new AI runner
   - `attachToTmuxSession` - Attach to existing tmux session
-  - `listWatchers` - List all watchers
-  - `getWatcher` - Get specific watcher by ID
-  - `stopWatcher` - Stop a running watcher
-  - `startWatcher` - Start/restart a watcher
-  - `getWatcherLogs` - Retrieve logs (existing only)
+  - `listRunners` - List all runners
+  - `getRunner` - Get specific runner by ID
+  - `stopRunner` - Stop a running runner
+  - `startRunner` - Start/restart a runner
+  - `getRunnerLogs` - Retrieve logs (existing only)
   - `listTmuxSessions` - List tmux sessions
 - All contracts use proper Effect Schema validation
 - Integrated into combined IpcContracts export
@@ -205,13 +205,13 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
 **Date Completed:** 2025-10-25
 
 **Files Created:**
-- ✅ `src/main/ipc/ai-watcher-handlers.ts` - Type-safe IPC handlers
+- ✅ `src/main/ipc/ai-runner-handlers.ts` - Type-safe IPC handlers
 
 **Files Updated:**
-- ✅ `src/main/ipc/error-mapper.ts` - AI watcher error mapping
-- ✅ `src/main/index.ts` - Registered AI watcher handlers
-- ✅ `src/main/ai-watchers/ports.ts` - Added new port methods
-- ✅ `src/main/ai-watchers/ai-watcher-service.ts` - Implemented new methods
+- ✅ `src/main/ipc/error-mapper.ts` - AI runner error mapping
+- ✅ `src/main/index.ts` - Registered AI runner handlers
+- ✅ `src/main/ai-runners/ports.ts` - Added new port methods
+- ✅ `src/main/ai-runners/ai-runner-service.ts` - Implemented new methods
 
 **Implementation Details:**
 - **Type-Safe Handler Pattern (from CLAUDE.md):**
@@ -220,20 +220,20 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
   - No `unknown` or `any` escape hatches
   - Full end-to-end type safety
 - **Error Mapping:**
-  - Added `isAiWatcherDomainError` type guard
-  - Maps all AI watcher domain errors to IPC errors:
+  - Added `isAiRunnerDomainError` type guard
+  - Maps all AI runner domain errors to IPC errors:
     - Process errors → `ProcessError`
-    - Watcher not found → `WatcherNotFoundError`
-    - Operation errors → `WatcherOperationError`
+    - Runner not found → `RunnerNotFoundError`
+    - Operation errors → `RunnerOperationError`
     - Tmux errors → `TmuxError`
   - Updated `IpcErrorResult` type union
 - **New Service Methods:**
-  - `get(watcherId)` - Get watcher by ID
-  - `listAll()` - List all watchers
-  - `getLogs(watcherId, limit?)` - Get existing logs
+  - `get(runnerId)` - Get runner by ID
+  - `listAll()` - List all runners
+  - `getLogs(runnerId, limit?)` - Get existing logs
 - **Handler Registration:**
-  - Added `AiWatchersLayer` to `MainLayer`
-  - Registered `setupAiWatcherIpcHandlers` in app setup
+  - Added `AiRunnersLayer` to `MainLayer`
+  - Registered `setupAiRunnerIpcHandlers` in app setup
   - Handlers run before window creation (proper initialization)
 
 ---
@@ -245,45 +245,45 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
 **Date Completed:** 2025-10-25
 
 **Files Created:**
-- ✅ `src/renderer/lib/ipc-client.ts` - Added `AiWatcherClient` service
-- ✅ `src/renderer/atoms/ai-watcher-atoms.ts` - AI watcher reactive atoms
-- ✅ `src/renderer/hooks/useAiWatchers.ts` - Custom React hooks
+- ✅ `src/renderer/lib/ipc-client.ts` - Added `AiRunnerClient` service
+- ✅ `src/renderer/atoms/ai-runner-atoms.ts` - AI runner reactive atoms
+- ✅ `src/renderer/hooks/useAiRunners.ts` - Custom React hooks
 
 **Implementation Details:**
 
-**AiWatcherClient Service:**
+**AiRunnerClient Service:**
 - Extends Effect.Service pattern following existing ProviderClient/AiProviderClient
 - Depends on ElectronIpcClient for IPC communication
-- Type-safe wrapper for all AI watcher IPC operations:
-  - `createWatcher` - Create new AI watchers
+- Type-safe wrapper for all AI runner IPC operations:
+  - `createRunner` - Create new AI runners
   - `attachToTmuxSession` - Attach to existing tmux sessions
-  - `listWatchers` - List all watchers
-  - `getWatcher` - Get specific watcher details
-  - `stopWatcher` / `startWatcher` - Control watcher lifecycle
-  - `getWatcherLogs` - Fetch watcher logs
+  - `listRunners` - List all runners
+  - `getRunner` - Get specific runner details
+  - `stopRunner` / `startRunner` - Control runner lifecycle
+  - `getRunnerLogs` - Fetch runner logs
   - `listTmuxSessions` - List available tmux sessions
 
 **Atoms Created:**
 - **Data Atoms:**
-  - `aiWatchersAtom` - List of all watchers (5s TTL)
-  - `aiWatcherAtom` - Individual watcher by ID (2s TTL, family)
-  - `aiWatcherLogsAtom` - Watcher logs with optional limit (3s TTL, family)
+  - `aiRunnersAtom` - List of all runners (5s TTL)
+  - `aiRunnerAtom` - Individual runner by ID (2s TTL, family)
+  - `aiRunnerLogsAtom` - Runner logs with optional limit (3s TTL, family)
   - `tmuxSessionsAtom` - List of tmux sessions (10s TTL)
 - **Action Atoms:**
-  - `createWatcherAtom` - Create watcher mutation
+  - `createRunnerAtom` - Create runner mutation
   - `attachToTmuxSessionAtom` - Attach to tmux mutation
-  - `stopWatcherAtom` - Stop watcher mutation
-  - `startWatcherAtom` - Start watcher mutation
+  - `stopRunnerAtom` - Stop runner mutation
+  - `startRunnerAtom` - Start runner mutation
 - **Features:**
   - Proper reactivity keys for cache invalidation
   - TTL-based cache expiration
   - Atom families for parameterized queries
-  - Runtime with AiWatcherClient.Default layer
+  - Runtime with AiRunnerClient.Default layer
 
 **Custom Hooks:**
-- `useAiWatchers()` - Watcher list management with create/stop/start actions
-- `useWatcher(id)` - Individual watcher details
-- `useWatcherLogs(id, limit?)` - Watcher logs with refresh
+- `useAiRunners()` - Runner list management with create/stop/start actions
+- `useRunner(id)` - Individual runner details
+- `useRunnerLogs(id, limit?)` - Runner logs with refresh
 - `useTmuxSessions()` - Tmux session list with attach action
 - All hooks return full Results for exhaustive error handling
 - Computed convenience properties (isLoading, etc.)
@@ -302,21 +302,21 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
 **Date Completed:** 2025-10-25
 
 **Files Created:**
-- ✅ `src/renderer/components/dev/AiWatcherDevPanel.tsx` - Development panel for testing
+- ✅ `src/renderer/components/dev/AiRunnerDevPanel.tsx` - Development panel for testing
 - ✅ `src/renderer/App.tsx` - Integrated dev panel in development mode
-- ✅ `docs/ai-watcher-dev-panel-usage.md` - Complete usage documentation
+- ✅ `docs/ai-runner-dev-panel-usage.md` - Complete usage documentation
 
 **Implementation Details:**
 
-**AiWatcherDevPanel Component:**
+**AiRunnerDevPanel Component:**
 - Development-only component (only loads when `NODE_ENV=development`)
 - Provides both visual UI and console API for testing
 - **Visual Panel Features:**
   - Toggleable floating panel in bottom-right corner
   - "List Tmux Sessions" button with real-time display
-  - "List Watchers" button with status indicators
+  - "List Runners" button with status indicators
   - Attach buttons for tmux sessions
-  - Color-coded watcher status (green=running, yellow=idle, gray=stopped, red=errored)
+  - Color-coded runner status (green=running, yellow=idle, gray=stopped, red=errored)
   - Proper error handling with Result.builder pattern
 - **Console API Features:**
   - Exposed via `window.__DEV_AI_WATCHERS__`
@@ -332,16 +332,16 @@ When a watcher stops, `Scope.close()` automatically interrupts all fibers and cl
 **Console API:**
 ```javascript
 // List operations
-window.__DEV_AI_WATCHERS__.listWatchers()
+window.__DEV_AI_WATCHERS__.listRunners()
 window.__DEV_AI_WATCHERS__.listTmuxSessions()
 
 // Create operations
-window.__DEV_AI_WATCHERS__.createWatcher({ type, name, ... })
+window.__DEV_AI_WATCHERS__.createRunner({ type, name, ... })
 window.__DEV_AI_WATCHERS__.attachToTmux(sessionName)
 
 // Control operations
-window.__DEV_AI_WATCHERS__.stopWatcher(id)
-window.__DEV_AI_WATCHERS__.startWatcher(id)
+window.__DEV_AI_WATCHERS__.stopRunner(id)
+window.__DEV_AI_WATCHERS__.startRunner(id)
 
 // UI control
 window.__DEV_AI_WATCHERS__.showPanel()
@@ -354,7 +354,7 @@ window.__DEV_AI_WATCHERS__.getResults()
 **Patterns Applied:**
 - ✅ Result.builder for exhaustive error handling
 - ✅ useEffect for console API setup/cleanup
-- ✅ Custom hooks (useAiWatchers, useTmuxSessions)
+- ✅ Custom hooks (useAiRunners, useTmuxSessions)
 - ✅ Conditional rendering based on Result states
 - ✅ Tailwind CSS for styling (matches app design)
 - ✅ Development-only code (no production bloat)
@@ -364,7 +364,7 @@ window.__DEV_AI_WATCHERS__.getResults()
 - Open browser DevTools console
 - Execute `window.__DEV_AI_WATCHERS__.listTmuxSessions()` as hello world
 - Visual panel provides UI buttons for easy testing
-- Full documentation in `docs/ai-watcher-dev-panel-usage.md`
+- Full documentation in `docs/ai-runner-dev-panel-usage.md`
 
 ---
 
@@ -421,7 +421,7 @@ window.__DEV_AI_WATCHERS__.getResults()
 - ✅ Phase 1.1: Core Ports and Domain Types
 - ✅ Phase 1.2: Tmux Session Manager
 - ✅ Phase 2.1: Process Monitor Service
-- ✅ Phase 2.2: AI Watcher Service
+- ✅ Phase 2.2: AI Runner Service
 - ✅ Phase 3.1: IPC Contracts
 - ✅ Phase 3.2: IPC Handlers
 - ✅ Phase 4.1: Atoms and Hooks
@@ -441,12 +441,12 @@ window.__DEV_AI_WATCHERS__.getResults()
 - Type safety maintained throughout - no `any` types used
 - All services use proper Effect patterns (Service, forkScoped, forkIn, Ref, Queue, Stream, Scope)
 - **Build Status:** ✅ Compiles successfully (`pnpm compile:app` passes)
-- **TypeScript Status:** ✅ Zero errors in AI watcher files
+- **TypeScript Status:** ✅ Zero errors in AI runner files
 - **Renderer Integration:** ✅ Complete with atoms, hooks, and dev panel
 - **Testing:** ✅ Dev panel ready for manual testing via console API and visual UI
 - **Critical Fixes Applied (2025-10-25):**
   - Fixed `Random.nextString` → `crypto.randomUUID()` in both services
-  - Added missing imports: `ProcessHandle`, `Scope`, `Exit`, `WatcherNotFoundError`, `LogEntry`
+  - Added missing imports: `ProcessHandle`, `Scope`, `Exit`, `RunnerNotFoundError`, `LogEntry`
   - Fixed `Scope.close()` API: uses `Exit.void` instead of `Effect.void`
   - Resolved duplicate `LogEntry` export (removed from ports.ts, kept in schemas.ts)
   - Fixed error type mappings for proper IPC error propagation
@@ -462,16 +462,16 @@ window.__DEV_AI_WATCHERS__.getResults()
 
 1. **Immediate:** IPC Integration (Phase 3.1)
    - Define IPC contracts in shared/ipc-contracts.ts
-   - Add AiWatcherIpcContracts with all operations
+   - Add AiRunnerIpcContracts with all operations
    - Update shared schemas for IPC compatibility
 
 2. **Following:** IPC Handlers (Phase 3.2)
-   - Create ai-watcher-handlers.ts with type-safe pattern
-   - Update error-mapper.ts with AI watcher error mapping
+   - Create ai-runner-handlers.ts with type-safe pattern
+   - Update error-mapper.ts with AI runner error mapping
    - Register handlers in main/index.ts
 
 3. **Then:** Renderer Integration (Phase 4)
-   - Create atoms for AI watchers
+   - Create atoms for AI runners
    - Implement UI components
    - Add custom hooks
 
@@ -494,6 +494,6 @@ window.__DEV_AI_WATCHERS__.getResults()
 - **No forkDaemon:** ✅ All background fibers properly scoped for automatic cleanup
 - Error Handling: ✅ All errors typed with Data.TaggedError
 - Silence Detection: ✅ 30-second threshold with 5-second check interval
-- Log Buffering: ✅ 1000 entry max per watcher
+- Log Buffering: ✅ 1000 entry max per runner
 - Process Management: ✅ Spawn, attach, monitor, kill all implemented
 - Resource Cleanup: ✅ Automatic via Scope.close() - interrupts all fibers, closes queues

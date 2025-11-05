@@ -103,7 +103,7 @@
 - [ ] Run `pnpm dev`
 - [ ] Test arrow key navigation
 - [ ] Test Spacebar toggles selection
-- [ ] Test Enter launches watchers
+- [ ] Test Enter launches runners
 - [ ] Test Escape closes modal
 - [ ] Test visual focus indicator
 - [ ] Test smooth scrolling
@@ -111,7 +111,7 @@
 **Success Criteria**:
 - [ ] Arrow keys navigate issues
 - [ ] Spacebar toggles selection
-- [ ] Enter launches watchers
+- [ ] Enter launches runners
 - [ ] Escape closes modal
 - [ ] Visual focus indicator clear
 - [ ] Smooth scrolling to focused item
@@ -153,9 +153,9 @@
 - [ ] Launch each issue with its specific agent
 - [ ] Verify agent selection preserved
 
-### 3.6 Update useAiWatcherLauncher Hook ⏳
-- [ ] Remove batch `launchWatchersForIssues` method
-- [ ] Keep single `launchWatcherForIssue` method
+### 3.6 Update useAiRunnerLauncher Hook ⏳
+- [ ] Remove batch `launchRunnersForIssues` method
+- [ ] Keep single `launchRunnerForIssue` method
 - [ ] Ensure sequential launching works from modal
 
 ### 3.7 Testing ⏳

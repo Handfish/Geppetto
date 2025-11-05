@@ -66,10 +66,10 @@ export class RunnerNotFoundError extends Data.TaggedError('RunnerNotFoundError')
 }> {}
 
 // Backwards compatibility aliases (for IPC error mapper during Phase A)
-export const AiWatcherCreateError = ProcessRunnerCreateError
-export const AiWatcherStartError = ProcessRunnerStartError
-export const AiWatcherStopError = ProcessRunnerStopError
-export const WatcherNotFoundError = RunnerNotFoundError
+export const AiRunnerCreateError = ProcessRunnerCreateError
+export const AiRunnerStartError = ProcessRunnerStartError
+export const AiRunnerStopError = ProcessRunnerStopError
+export const AiRunnerNotFoundError = RunnerNotFoundError
 
 /**
  * Tmux-related errors
@@ -113,11 +113,11 @@ export type ProcessRunnerError =
   | RunnerNotFoundError
 
 // Backwards compatibility alias
-export type AiWatcherError = ProcessRunnerError
+export type AiRunnerError = ProcessRunnerError
 
 export type TmuxError = TmuxSessionNotFoundError | TmuxCommandError
 
 export type AllProcessRunnerDomainErrors = ProcessError | ProcessRunnerError | TmuxError | ProviderNotRegisteredError
 
 // Backwards compatibility alias
-export type AllAiWatcherDomainErrors = AllProcessRunnerDomainErrors
+export type AllAiRunnerDomainErrors = AllProcessRunnerDomainErrors

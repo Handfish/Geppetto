@@ -7,7 +7,7 @@ import { useEffect, useCallback } from 'react'
  * - Up/Down: Navigate between issues
  * - Spacebar: Toggle selection
  * - Left/Right: Cycle AI agent (for selected issues only)
- * - Enter: Launch watchers
+ * - Enter: Launch runners
  * - Escape: Close modal
  */
 
@@ -33,7 +33,7 @@ export interface IssueModalKeyboardNavigationOptions {
   /** Callback when right arrow is pressed on selected issue */
   onCycleAgentRight?: () => void
 
-  /** Callback when Enter is pressed (launch watchers) */
+  /** Callback when Enter is pressed (launch runners) */
   onLaunch: () => void
 
   /** Callback when Escape is pressed (close modal) */

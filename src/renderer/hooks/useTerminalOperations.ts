@@ -1,11 +1,11 @@
 import { useAtom } from '@effect-atom/atom-react'
 import {
-  spawnWatcherAtom,
-  killWatcherAtom,
-  killAllWatchersAtom,
-  restartWatcherAtom,
-  writeToWatcherAtom,
-  resizeWatcherAtom,
+  spawnRunnerAtom,
+  killRunnerAtom,
+  killAllRunnersAtom,
+  restartRunnerAtom,
+  writeToRunnerAtom,
+  resizeRunnerAtom,
 } from '../atoms/terminal-atoms'
 
 /**
@@ -13,20 +13,20 @@ import {
  * Uses useAtom pattern for reactive updates
  */
 export function useTerminalOperations() {
-  const [spawnResult, spawnWatcher] = useAtom(spawnWatcherAtom)
-  const [killResult, killWatcher] = useAtom(killWatcherAtom)
-  const [killAllResult, killAllWatchers] = useAtom(killAllWatchersAtom)
-  const [restartResult, restartWatcher] = useAtom(restartWatcherAtom)
-  const [writeResult, writeToWatcher] = useAtom(writeToWatcherAtom)
-  const [resizeResult, resizeWatcher] = useAtom(resizeWatcherAtom)
+  const [spawnResult, spawnRunner] = useAtom(spawnRunnerAtom)
+  const [killResult, killRunner] = useAtom(killRunnerAtom)
+  const [killAllResult, killAllRunners] = useAtom(killAllRunnersAtom)
+  const [restartResult, restartRunner] = useAtom(restartRunnerAtom)
+  const [writeResult, writeToRunner] = useAtom(writeToRunnerAtom)
+  const [resizeResult, resizeRunner] = useAtom(resizeRunnerAtom)
 
   return {
-    spawnWatcher,
-    killWatcher,
-    killAllWatchers,
-    restartWatcher,
-    writeToWatcher,
-    resizeWatcher,
+    spawnRunner,
+    killRunner,
+    killAllRunners,
+    restartRunner,
+    writeToRunner,
+    resizeRunner,
     // Also expose results for loading states
     spawnResult,
     killResult,

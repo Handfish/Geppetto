@@ -38,7 +38,7 @@ export class ProcessEvent extends S.Class<ProcessEvent>('ProcessEvent')({
 }) {}
 
 /**
- * Issue context for AI watcher processes
+ * Issue context for AI runner processes
  */
 export class IssueContext extends S.Class<IssueContext>('IssueContext')({
   owner: S.String,
@@ -50,9 +50,9 @@ export class IssueContext extends S.Class<IssueContext>('IssueContext')({
 }) {}
 
 /**
- * Spawn watcher input - configuration for spawning a new AI watcher
+ * Spawn runner input - configuration for spawning a new AI runner
  */
-export class SpawnWatcherInput extends S.Class<SpawnWatcherInput>('SpawnWatcherInput')({
+export class SpawnRunnerInput extends S.Class<SpawnRunnerInput>('SpawnRunnerInput')({
   accountId: S.String,
   agentType: S.String,
   prompt: S.String,
@@ -60,9 +60,9 @@ export class SpawnWatcherInput extends S.Class<SpawnWatcherInput>('SpawnWatcherI
 }) {}
 
 /**
- * Watcher info - complete information about an active watcher
+ * Runner info - complete information about an active runner
  */
-export class WatcherInfo extends S.Class<WatcherInfo>('WatcherInfo')({
+export class RunnerInfo extends S.Class<RunnerInfo>('RunnerInfo')({
   processId: S.String,
   accountId: S.String,
   agentType: S.String,
@@ -72,9 +72,9 @@ export class WatcherInfo extends S.Class<WatcherInfo>('WatcherInfo')({
 }) {}
 
 /**
- * Spawn watcher result
+ * Spawn runner result
  */
-export class SpawnWatcherResult extends S.Class<SpawnWatcherResult>('SpawnWatcherResult')({
+export class SpawnRunnerResult extends S.Class<SpawnRunnerResult>('SpawnRunnerResult')({
   processId: S.String,
   state: ProcessState,
 }) {}

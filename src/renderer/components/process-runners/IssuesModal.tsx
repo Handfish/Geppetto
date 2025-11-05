@@ -32,7 +32,7 @@ interface IssuesModalProps {
   provider: string
   defaultBranch: string
   anchorPosition: DOMRect | null
-  onLaunchWatchers?: (issueNumbers: number[]) => void
+  onLaunchRunners?: (issueNumbers: number[]) => void
 }
 
 export function IssuesModal({
@@ -45,7 +45,7 @@ export function IssuesModal({
   provider,
   defaultBranch,
   anchorPosition,
-  onLaunchWatchers,
+  onLaunchRunners,
 }: IssuesModalProps) {
   // Don't render anything (and don't subscribe to atoms) if modal is closed
   // This prevents IPC spam when modal is not visible
@@ -59,7 +59,7 @@ export function IssuesModal({
       anchorPosition={anchorPosition}
       isOpen={isOpen}
       onClose={onClose}
-      onLaunchWatchers={onLaunchWatchers}
+      onLaunchRunners={onLaunchRunners}
       owner={owner}
       repo={repo}
       repositoryId={repositoryId}
@@ -79,7 +79,7 @@ function IssuesModalContent({
   provider,
   defaultBranch,
   anchorPosition,
-  onLaunchWatchers,
+  onLaunchRunners,
 }: IssuesModalProps) {
   const shouldReduceMotion = useReducedMotion()
   const [shortlist, setShortlist] = useState<Set<number>>(new Set())
@@ -236,7 +236,7 @@ function IssuesModalContent({
     if (shortlistedIssues.length === 0) return
 
     try {
-      // Launch watchers sequentially to avoid git conflicts
+      // Launch runners sequentially to avoid git conflicts
       // Each issue uses its individually selected agent (or defaults to global provider)
       for (const issue of shortlistedIssues) {
         const agent = getIssueAgent(issue.number)
@@ -253,15 +253,15 @@ function IssuesModalContent({
       }
 
       // Call optional callback with issue numbers
-      if (onLaunchWatchers) {
-        onLaunchWatchers(Array.from(shortlist))
+      if (onLaunchRunners) {
+        onLaunchRunners(Array.from(shortlist))
       }
 
       // Close modal after successful launch
       onClose()
     } catch (error) {
       // Error already handled in hook with toast
-      console.error('[IssuesModal] Failed to launch watchers:', error)
+      console.error('[IssuesModal] Failed to launch runners:', error)
     }
   }
 
@@ -447,7 +447,7 @@ function IssuesModalContent({
                   ) : (
                     <>
                       <Zap className="size-4" />
-                      Launch AI Watchers
+                      Launch AI Runners
                     </>
                   )}
                 </button>

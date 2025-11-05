@@ -1,13 +1,13 @@
-# AI Watchers Lifecycle & Hexagonal Architecture
+# AI Runners Lifecycle & Hexagonal Architecture
 
 **Date:** 2025-10-26
-**Purpose:** Document the AI Watchers hexagonal architecture and explain how it differs from AI/VCS providers
+**Purpose:** Document the AI Runners hexagonal architecture and explain how it differs from AI/VCS providers
 
 ---
 
 ## Overview
 
-AI Watchers implements hexagonal (ports & adapters) architecture for process monitoring and AI agent lifecycle management. Unlike AI/VCS providers which have **multiple implementations per port**, AI Watchers has **single implementations per port**, simplifying the architecture.
+AI Runners implements hexagonal (ports & adapters) architecture for process monitoring and AI agent lifecycle management. Unlike AI/VCS providers which have **multiple implementations per port**, AI Runners has **single implementations per port**, simplifying the architecture.
 
 ---
 
@@ -29,14 +29,14 @@ VcsProviderPort       ←──   GitHubBrowserProviderAdapter
 
 **Needs Registry:** Yes - to dynamically select which implementation to use at runtime.
 
-### AI Watchers Pattern (Single Implementation)
+### AI Runners Pattern (Single Implementation)
 
 ```
 Port (Contract)              Adapter (Single Implementation)
 ───────────────             ────────────────────────────────
 ProcessMonitorPort    ←──   NodeProcessMonitorAdapter
 SessionManagerPort    ←──   TmuxSessionManagerAdapter
-AiWatcherPort         ←──   AiWatcherService
+AiRunnerPort         ←──   AiRunnerService
 ```
 
 **Needs Registry:** No - only one implementation exists, injected directly via dependencies.
@@ -47,7 +47,7 @@ AiWatcherPort         ←──   AiWatcherService
 
 ### Step 1: Port Definitions - The Contracts
 
-**File:** `src/main/ai-watchers/ports.ts`
+**File:** `src/main/ai-runners/ports.ts`
 
 ```typescript
 /**
@@ -75,17 +75,17 @@ export interface SessionManagerPort {
 }
 
 /**
- * AI watcher port - orchestrates AI agent lifecycle
+ * AI runner port - orchestrates AI agent lifecycle
  */
-export interface AiWatcherPort {
-  create(config: AiWatcherConfig): Effect.Effect<AiWatcher, AiWatcherCreateError>
-  start(watcher: AiWatcher): Effect.Effect<void, AiWatcherStartError>
-  stop(watcher: AiWatcher): Effect.Effect<void, AiWatcherStopError>
-  getStatus(watcher: AiWatcher): Effect.Effect<AiWatcherStatus, never>
-  get(watcherId: string): Effect.Effect<AiWatcher, WatcherNotFoundError>
-  listAll(): Effect.Effect<AiWatcher[], never>
-  getLogs(watcherId: string, limit?: number): Effect.Effect<LogEntry[], WatcherNotFoundError>
-  streamLogs(watcher: AiWatcher): Stream.Stream<LogEntry, never>
+export interface AiRunnerPort {
+  create(config: AiRunnerConfig): Effect.Effect<AiRunner, AiRunnerCreateError>
+  start(runner: AiRunner): Effect.Effect<void, AiRunnerStartError>
+  stop(runner: AiRunner): Effect.Effect<void, AiRunnerStopError>
+  getStatus(runner: AiRunner): Effect.Effect<AiRunnerStatus, never>
+  get(runnerId: string): Effect.Effect<AiRunner, RunnerNotFoundError>
+  listAll(): Effect.Effect<AiRunner[], never>
+  getLogs(runnerId: string, limit?: number): Effect.Effect<LogEntry[], RunnerNotFoundError>
+  streamLogs(runner: AiRunner): Stream.Stream<LogEntry, never>
 }
 ```
 
@@ -98,7 +98,7 @@ export interface AiWatcherPort {
 
 ### Step 2: Adapter Implementations
 
-**File:** `src/main/ai-watchers/adapters/node-process-monitor-adapter.ts`
+**File:** `src/main/ai-runners/adapters/node-process-monitor-adapter.ts`
 
 ```typescript
 /**
@@ -131,7 +131,7 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
 ) {}
 ```
 
-**File:** `src/main/ai-watchers/adapters/tmux-session-manager-adapter.ts`
+**File:** `src/main/ai-runners/adapters/tmux-session-manager-adapter.ts`
 
 ```typescript
 /**
@@ -175,7 +175,7 @@ export class TmuxSessionManagerAdapter extends Effect.Service<TmuxSessionManager
 
 ### Step 3: Adapters Layer Composition
 
-**File:** `src/main/ai-watchers/adapters-layer.ts`
+**File:** `src/main/ai-runners/adapters-layer.ts`
 
 ```typescript
 import { Layer } from 'effect'
@@ -183,7 +183,7 @@ import { NodeProcessMonitorAdapter } from './adapters/node-process-monitor-adapt
 import { TmuxSessionManagerAdapter } from './adapters/tmux-session-manager-adapter'
 
 /**
- * AI Watchers Adapters Layer
+ * AI Runners Adapters Layer
  *
  * Unlike AI/VCS providers, we don't need a registry because there's only
  * ONE implementation per port. Adapters are directly injected via dependencies.
@@ -193,7 +193,7 @@ import { TmuxSessionManagerAdapter } from './adapters/tmux-session-manager-adapt
  * - Platform-agnostic (swap Node.js with Docker/SSH)
  * - Multiplexer-agnostic (swap Tmux with Screen/K8s)
  */
-export const WatcherAdaptersLayer = Layer.mergeAll(
+export const RunnerAdaptersLayer = Layer.mergeAll(
   NodeProcessMonitorAdapter.Default,
   TmuxSessionManagerAdapter.Default
 )
@@ -208,17 +208,17 @@ export const WatcherAdaptersLayer = Layer.mergeAll(
 
 ### Step 4: Application Service
 
-**File:** `src/main/ai-watchers/ai-watcher-service.ts`
+**File:** `src/main/ai-runners/ai-runner-service.ts`
 
 ```typescript
 /**
- * AiWatcherService - Application service orchestrating adapters
+ * AiRunnerService - Application service orchestrating adapters
  *
  * This service consumes the adapters via the dependencies array,
  * no registry needed.
  */
-export class AiWatcherService extends Effect.Service<AiWatcherService>()(
-  'AiWatcherService',
+export class AiRunnerService extends Effect.Service<AiRunnerService>()(
+  'AiRunnerService',
   {
     dependencies: [
       TmuxSessionManagerAdapter.Default,    // Direct dependency
@@ -228,17 +228,17 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
       const tmuxManager = yield* TmuxSessionManagerAdapter
       const processMonitor = yield* NodeProcessMonitorAdapter
 
-      const watchers = new Map<string, WatcherState>()
+      const runners = new Map<string, RunnerState>()
 
       return {
-        create: (config) => { /* Create watcher */ },
-        start: (watcher) => { /* Start monitoring */ },
-        stop: (watcher) => { /* Stop and cleanup */ },
-        getStatus: (watcher) => { /* Get current status */ },
-        get: (watcherId) => { /* Retrieve by ID */ },
-        listAll: () => { /* List all watchers */ },
-        getLogs: (watcherId, limit) => { /* Get logs */ },
-        streamLogs: (watcher) => { /* Stream live logs */ },
+        create: (config) => { /* Create runner */ },
+        start: (runner) => { /* Start monitoring */ },
+        stop: (runner) => { /* Stop and cleanup */ },
+        getStatus: (runner) => { /* Get current status */ },
+        get: (runnerId) => { /* Retrieve by ID */ },
+        listAll: () => { /* List all runners */ },
+        getLogs: (runnerId, limit) => { /* Get logs */ },
+        streamLogs: (runner) => { /* Stream live logs */ },
       }
     })
   }
@@ -248,30 +248,30 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
 **What happens:**
 1. Service declares adapter dependencies in array
 2. Accesses adapters via `yield*` (not via registry)
-3. Orchestrates adapter operations for watcher lifecycle
+3. Orchestrates adapter operations for runner lifecycle
 
 ---
 
 ### Step 5: MainLayer Composition
 
-**File:** `src/main/ai-watchers/index.ts`
+**File:** `src/main/ai-runners/index.ts`
 
 ```typescript
 import { Layer } from 'effect'
-import { WatcherAdaptersLayer } from './adapters-layer'
-import { AiWatcherService } from './ai-watcher-service'
+import { RunnerAdaptersLayer } from './adapters-layer'
+import { AiRunnerService } from './ai-runner-service'
 
 /**
- * Complete AI Watchers layer
+ * Complete AI Runners layer
  *
  * LAYER COMPOSITION: Merges adapters and service at top level.
  * This makes adapters available to:
- * 1. AiWatcherService (via dependencies array)
+ * 1. AiRunnerService (via dependencies array)
  * 2. IPC handlers (for adapter-specific operations)
  */
-export const AiWatchersLayer = Layer.mergeAll(
-  WatcherAdaptersLayer,
-  AiWatcherService.Default
+export const AiRunnersLayer = Layer.mergeAll(
+  RunnerAdaptersLayer,
+  AiRunnerService.Default
 )
 ```
 
@@ -281,15 +281,15 @@ export const AiWatchersLayer = Layer.mergeAll(
 const MainLayer = Layer.mergeAll(
   // ... other services
 
-  // AI Watchers domain - merged at top level, no Layer.provide needed
-  AiWatchersLayer,  // Expands to: WatcherAdaptersLayer + AiWatcherService
+  // AI Runners domain - merged at top level, no Layer.provide needed
+  AiRunnersLayer,  // Expands to: RunnerAdaptersLayer + AiRunnerService
 
   // ... more services
 )
 ```
 
 **What happens:**
-1. `AiWatchersLayer` expands to adapters + service
+1. `AiRunnersLayer` expands to adapters + service
 2. **No `Layer.provide` needed** (adapters auto-injected via dependencies)
 3. All services memoized by reference
 
@@ -303,7 +303,7 @@ const MainLayer = Layer.mergeAll(
 ├─────────────────────────────────────────────────────────────┤
 │ • ProcessMonitorPort interface                               │
 │ • SessionManagerPort interface                               │
-│ • AiWatcherPort interface                                    │
+│ • AiRunnerPort interface                                    │
 │ • NO tag registry (unlike AI/VCS providers)                  │
 └─────────────────────────────────────────────────────────────┘
                            ↓
@@ -319,16 +319,16 @@ const MainLayer = Layer.mergeAll(
 ┌─────────────────────────────────────────────────────────────┐
 │ 3. Adapters Layer (adapters-layer.ts)                       │
 ├─────────────────────────────────────────────────────────────┤
-│ WatcherAdaptersLayer = Layer.mergeAll(                       │
+│ RunnerAdaptersLayer = Layer.mergeAll(                       │
 │   NodeProcessMonitorAdapter.Default,                         │
 │   TmuxSessionManagerAdapter.Default                          │
 │ )                                                            │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 4. Application Service (ai-watcher-service.ts)              │
+│ 4. Application Service (ai-runner-service.ts)              │
 ├─────────────────────────────────────────────────────────────┤
-│ AiWatcherService:                                            │
+│ AiRunnerService:                                            │
 │   dependencies: [                                            │
 │     TmuxSessionManagerAdapter.Default,                       │
 │     NodeProcessMonitorAdapter.Default                        │
@@ -341,16 +341,16 @@ const MainLayer = Layer.mergeAll(
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 5. MainLayer (index.ts, ai-watchers/index.ts)               │
+│ 5. MainLayer (index.ts, ai-runners/index.ts)               │
 ├─────────────────────────────────────────────────────────────┤
-│ AiWatchersLayer = Layer.mergeAll(                            │
-│   WatcherAdaptersLayer,    // Adapters at top level          │
-│   AiWatcherService.Default // Service uses via dependencies  │
+│ AiRunnersLayer = Layer.mergeAll(                            │
+│   RunnerAdaptersLayer,    // Adapters at top level          │
+│   AiRunnerService.Default // Service uses via dependencies  │
 │ )                                                            │
 │                                                              │
 │ MainLayer = Layer.mergeAll(                                  │
 │   ...,                                                       │
-│   AiWatchersLayer,  // NO Layer.provide needed               │
+│   AiRunnersLayer,  // NO Layer.provide needed               │
 │   ...                                                        │
 │ )                                                            │
 └─────────────────────────────────────────────────────────────┘
@@ -358,30 +358,30 @@ const MainLayer = Layer.mergeAll(
 ┌─────────────────────────────────────────────────────────────┐
 │ 6. Runtime Usage                                             │
 ├─────────────────────────────────────────────────────────────┤
-│ IPC Call: ai-watcher:create                                  │
+│ IPC Call: ai-runner:create                                  │
 │   ↓                                                          │
-│ AiWatcherService.create(config)                              │
+│ AiRunnerService.create(config)                              │
 │   ↓                                                          │
 │ Uses TmuxSessionManagerAdapter.createSession()               │
 │   ↓                                                          │
 │ Uses NodeProcessMonitorAdapter.monitor()                     │
 │   ↓                                                          │
-│ Returns AiWatcher instance                                   │
+│ Returns AiRunner instance                                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Comparison: AI Watchers vs AI/VCS Providers
+## Comparison: AI Runners vs AI/VCS Providers
 
-| Aspect | AI/VCS Providers | AI Watchers |
+| Aspect | AI/VCS Providers | AI Runners |
 |--------|------------------|-------------|
 | **Port Implementations** | Multiple (OpenAI, Claude, Cursor) | Single (NodeProcessMonitor, TmuxSessionManager) |
 | **Tag Registry** | ✅ `AiProviderTags`, `VcsProviderTags` | ❌ No registry needed |
 | **Registry Service** | ✅ Construction-time capture | ❌ No registry service |
 | **Layer Composition** | `Layer.provide(services, adapters)` | `Layer.mergeAll(adapters, service)` |
 | **Adapter Lookup** | Dynamic via registry | Static via dependencies |
-| **File Organization** | `ai/{provider}/adapter.ts` | `ai-watchers/adapters/{type}-adapter.ts` |
+| **File Organization** | `ai/{provider}/adapter.ts` | `ai-runners/adapters/{type}-adapter.ts` |
 | **Adapters Layer File** | ✅ `adapters-layer.ts` | ✅ `adapters-layer.ts` |
 | **Hexagonal Architecture** | ✅ Full hexagonal | ✅ Full hexagonal |
 | **Hot-Swappable** | ✅ Yes (for testing/mocking) | ✅ Yes (for testing/mocking) |
@@ -395,12 +395,12 @@ const MainLayer = Layer.mergeAll(
 ## File Structure
 
 ```
-src/main/ai-watchers/
+src/main/ai-runners/
 ├── adapters/                          # Adapter implementations
 │   ├── node-process-monitor-adapter.ts # Node.js process adapter
 │   └── tmux-session-manager-adapter.ts # Tmux session adapter
 ├── adapters-layer.ts                  # Adapters composition
-├── ai-watcher-service.ts              # Application service
+├── ai-runner-service.ts              # Application service
 ├── ports.ts                           # Port definitions (contracts)
 ├── schemas.ts                         # Domain schemas
 ├── errors.ts                          # Domain errors
@@ -439,19 +439,19 @@ const MockTmuxManager = Layer.succeed(
 )
 
 // Test layer with mocked adapters
-const TestWatchersLayer = Layer.mergeAll(
+const TestRunnersLayer = Layer.mergeAll(
   MockProcessMonitor,
   MockTmuxManager,
-  AiWatcherService.Default
+  AiRunnerService.Default
 )
 
 // Run tests with mocked layer
 Effect.runPromise(
   Effect.gen(function* () {
-    const service = yield* AiWatcherService
-    const watcher = yield* service.create(testConfig)
+    const service = yield* AiRunnerService
+    const runner = yield* service.create(testConfig)
     // ... test with mocked adapters
-  }).pipe(Effect.provide(TestWatchersLayer))
+  }).pipe(Effect.provide(TestRunnersLayer))
 )
 ```
 
@@ -472,4 +472,4 @@ Effect.runPromise(
 
 **Author:** AI Assistant
 **Date:** 2025-10-26
-**Purpose:** Developer reference for understanding AI Watchers hexagonal architecture
+**Purpose:** Developer reference for understanding AI Runners hexagonal architecture

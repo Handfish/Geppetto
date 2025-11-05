@@ -1,16 +1,16 @@
-# AI Watcher UI Enhancement Plan
+# AI Runner UI Enhancement Plan
 
 ## Overview
 
-Add comprehensive AI watcher management features to the repository interface:
+Add comprehensive AI runner management features to the repository interface:
 1. **Issues Integration**: Fetch and display repository issues from GitHub
 2. **Issue Shortlisting**: Keyboard-driven modal for selecting focus issues
-3. **AI Watcher Launching**: Launch AI agents (claude-code/codex) from shortlisted issues
-4. **Status Indicators**: Beautiful LED-style indicators showing active watcher states
+3. **AI Runner Launching**: Launch AI agents (claude-code/codex) from shortlisted issues
+4. **Status Indicators**: Beautiful LED-style indicators showing active runner states
 
 **Status**: Not Started
 **Target Completion**: 1-2 days
-**Primary Goal**: Enhance repository workflow with AI-powered issue tracking and visual watcher monitoring
+**Primary Goal**: Enhance repository workflow with AI-powered issue tracking and visual runner monitoring
 
 ---
 
@@ -86,7 +86,7 @@ Result.builder(issuesResult)
 ```typescript
 useKeyboardShortcuts({
   onToggleShortlist: () => toggleIssue(issue.id),
-  onLaunchWatcher: () => launchWatcher(),
+  onLaunchRunner: () => launchRunner(),
   onClose: () => onClose(),
 })
 ```
@@ -539,7 +539,7 @@ import { ListTodo } from 'lucide-react'
 
 ### 2.2 Create Issues Modal Component
 
-**File**: `src/renderer/components/ai-watchers/IssuesModal.tsx`
+**File**: `src/renderer/components/ai-runners/IssuesModal.tsx`
 ```typescript
 import { useState, useEffect } from 'react'
 import { useAtomValue } from '@effect-atom/atom-react'
@@ -553,7 +553,7 @@ interface IssuesModalProps {
   onClose: () => void
   owner: string
   repo: string
-  onLaunchWatchers: (issueIds: number[]) => void
+  onLaunchRunners: (issueIds: number[]) => void
 }
 
 export function IssuesModal({
@@ -561,7 +561,7 @@ export function IssuesModal({
   onClose,
   owner,
   repo,
-  onLaunchWatchers,
+  onLaunchRunners,
 }: IssuesModalProps) {
   const [shortlist, setShortlist] = useState<Set<number>>(new Set())
   const issuesResult = useAtomValue(repositoryIssuesAtom({ owner, repo, state: 'open' }))
@@ -583,7 +583,7 @@ export function IssuesModal({
     },
     onLaunch: () => {
       if (shortlist.size > 0) {
-        onLaunchWatchers(Array.from(shortlist))
+        onLaunchRunners(Array.from(shortlist))
         onClose()
       }
     },
@@ -617,7 +617,7 @@ export function IssuesModal({
                     Issues: {owner}/{repo}
                   </h2>
                   <p className="text-xs text-gray-400 mt-1">
-                    Press Space to add to shortlist • Enter to launch watchers
+                    Press Space to add to shortlist • Enter to launch runners
                   </p>
                 </div>
                 <button
@@ -672,13 +672,13 @@ export function IssuesModal({
                   className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   disabled={shortlist.size === 0}
                   onClick={() => {
-                    onLaunchWatchers(Array.from(shortlist))
+                    onLaunchRunners(Array.from(shortlist))
                     onClose()
                   }}
                   type="button"
                 >
                   <Zap className="size-4" />
-                  Launch AI Watchers
+                  Launch AI Runners
                 </button>
               </div>
             </div>
@@ -828,17 +828,17 @@ pnpm dev
 
 ---
 
-## Phase 3: AI Watcher Integration with Git Worktrees
+## Phase 3: AI Runner Integration with Git Worktrees
 
 **Duration**: 2-3 hours
 **Risk**: Medium (git operations)
-**Impact**: Launch watchers from shortlisted issues in isolated worktrees
+**Impact**: Launch runners from shortlisted issues in isolated worktrees
 
-**Key Workflow**: Each AI watcher runs in a dedicated git worktree with a branch named `issue#<number>`. If the branch doesn't exist, it's created from the default branch. This ensures complete isolation between issues.
+**Key Workflow**: Each AI runner runs in a dedicated git worktree with a branch named `issue#<number>`. If the branch doesn't exist, it's created from the default branch. This ensures complete isolation between issues.
 
 ### 3.1 Fix Command Bug
 
-**File**: `src/main/ai-watchers/ai-watcher-service.ts`
+**File**: `src/main/ai-runners/ai-runner-service.ts`
 
 **Current Bug**: Line 56-57
 ```typescript
@@ -1028,11 +1028,11 @@ export class GitCommandService extends Effect.Service<GitCommandService>() {
 }
 ```
 
-### 3.3 Add Issue Context to Watcher Config
+### 3.3 Add Issue Context to Runner Config
 
-**File**: `src/shared/schemas/ai-watchers.ts` (update AiWatcherConfig)
+**File**: `src/shared/schemas/ai-runners.ts` (update AiRunnerConfig)
 ```typescript
-export class AiWatcherConfig extends Schema.Class<AiWatcherConfig>('AiWatcherConfig')({
+export class AiRunnerConfig extends Schema.Class<AiRunnerConfig>('AiRunnerConfig')({
   // ... existing fields
   issueContext: Schema.optional(Schema.Struct({
     owner: Schema.String,
@@ -1046,25 +1046,25 @@ export class AiWatcherConfig extends Schema.Class<AiWatcherConfig>('AiWatcherCon
 }) {}
 ```
 
-### 3.4 Create Watcher Launcher Hook with Worktree Support
+### 3.4 Create Runner Launcher Hook with Worktree Support
 
-**File**: `src/renderer/hooks/useAiWatcherLauncher.ts`
+**File**: `src/renderer/hooks/useAiRunnerLauncher.ts`
 ```typescript
 import { useState } from 'react'
 import { useAtom } from '@effect-atom/atom-react'
-import { createWatcherAtom } from '../atoms/ai-watcher-atoms'
+import { createRunnerAtom } from '../atoms/ai-runner-atoms'
 import type { GitHubIssue } from '../../shared/schemas/github/issue'
-import type { AiWatcherConfig } from '../../shared/schemas/ai-watchers'
+import type { AiRunnerConfig } from '../../shared/schemas/ai-runners'
 import type { RepositoryId } from '../../shared/schemas/source-control/repository'
 import { SourceControlClient } from '../lib/ipc-client'
 import { Effect } from 'effect'
 import { toast } from 'sonner'
 
-export function useAiWatcherLauncher() {
-  const [createResult, createWatcher] = useAtom(createWatcherAtom)
+export function useAiRunnerLauncher() {
+  const [createResult, createRunner] = useAtom(createRunnerAtom)
   const [isCreatingWorktree, setIsCreatingWorktree] = useState(false)
 
-  const launchWatcherForIssue = async (
+  const launchRunnerForIssue = async (
     issue: GitHubIssue,
     provider: 'claude-code' | 'codex',
     repositoryId: RepositoryId,
@@ -1075,7 +1075,7 @@ export function useAiWatcherLauncher() {
 
     try {
       // Step 1: Create worktree for the issue
-      console.log(`[useAiWatcherLauncher] Creating worktree for issue #${issue.number}`)
+      console.log(`[useAiRunnerLauncher] Creating worktree for issue #${issue.number}`)
 
       const worktreeResult = await Effect.runPromise(
         Effect.gen(function* () {
@@ -1088,7 +1088,7 @@ export function useAiWatcherLauncher() {
       )
 
       console.log(
-        `[useAiWatcherLauncher] Worktree created: ${worktreeResult.worktreePath}`
+        `[useAiRunnerLauncher] Worktree created: ${worktreeResult.worktreePath}`
       )
 
       // Show toast notification
@@ -1102,8 +1102,8 @@ export function useAiWatcherLauncher() {
         )
       }
 
-      // Step 2: Create AI watcher config with worktree path
-      const config: AiWatcherConfig = {
+      // Step 2: Create AI runner config with worktree path
+      const config: AiRunnerConfig = {
         type: provider,
         name: `${provider}: #${issue.number} ${issue.title}`,
         workingDirectory: worktreeResult.worktreePath,
@@ -1118,11 +1118,11 @@ export function useAiWatcherLauncher() {
         },
       }
 
-      // Step 3: Launch the watcher
-      console.log(`[useAiWatcherLauncher] Launching ${provider} watcher`)
-      createWatcher(config)
+      // Step 3: Launch the runner
+      console.log(`[useAiRunnerLauncher] Launching ${provider} runner`)
+      createRunner(config)
     } catch (error) {
-      console.error('[useAiWatcherLauncher] Failed to launch watcher:', error)
+      console.error('[useAiRunnerLauncher] Failed to launch runner:', error)
       toast.error(
         `Failed to create worktree: ${error instanceof Error ? error.message : String(error)}`
       )
@@ -1132,7 +1132,7 @@ export function useAiWatcherLauncher() {
   }
 
   return {
-    launchWatcherForIssue,
+    launchRunnerForIssue,
     isLaunching: createResult.waiting || isCreatingWorktree,
     createResult,
   }
@@ -1141,9 +1141,9 @@ export function useAiWatcherLauncher() {
 
 ### 3.5 Integrate Launcher in Modal
 
-**File**: `src/renderer/components/ai-watchers/IssuesModal.tsx` (update)
+**File**: `src/renderer/components/ai-runners/IssuesModal.tsx` (update)
 ```typescript
-import { useAiWatcherLauncher } from '../../hooks/useAiWatcherLauncher'
+import { useAiRunnerLauncher } from '../../hooks/useAiRunnerLauncher'
 
 interface IssuesModalProps {
   isOpen: boolean
@@ -1151,7 +1151,7 @@ interface IssuesModalProps {
   owner: string
   repo: string
   repositoryId: RepositoryId // Add repository ID
-  onLaunchWatchers?: (issueNumbers: number[]) => void
+  onLaunchRunners?: (issueNumbers: number[]) => void
 }
 
 export function IssuesModal({
@@ -1160,17 +1160,17 @@ export function IssuesModal({
   owner,
   repo,
   repositoryId,
-  onLaunchWatchers,
+  onLaunchRunners,
 }: IssuesModalProps) {
-  const { launchWatcherForIssue, isLaunching } = useAiWatcherLauncher()
+  const { launchRunnerForIssue, isLaunching } = useAiRunnerLauncher()
   const [selectedProvider, setSelectedProvider] = useState<'claude-code' | 'codex'>('claude-code')
 
-  const handleLaunchWatchers = async () => {
+  const handleLaunchRunners = async () => {
     const shortlistedIssues = issues.filter(issue => shortlist.has(issue.number))
 
-    // Launch watchers sequentially to avoid git conflicts
+    // Launch runners sequentially to avoid git conflicts
     for (const issue of shortlistedIssues) {
-      await launchWatcherForIssue(
+      await launchRunnerForIssue(
         issue,
         selectedProvider,
         repositoryId,
@@ -1204,13 +1204,13 @@ export function IssuesModal({
       </div>
 
       <button
-        onClick={handleLaunchWatchers}
+        onClick={handleLaunchRunners}
         disabled={shortlist.size === 0 || isLaunching}
         className="px-4 py-2 bg-teal-500 hover:bg-teal-600 disabled:bg-gray-600 text-white rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         type="button"
       >
         <Zap className="size-4" />
-        {isLaunching ? 'Creating Worktrees...' : 'Launch AI Watchers'}
+        {isLaunching ? 'Creating Worktrees...' : 'Launch AI Runners'}
       </button>
     </div>
   )
@@ -1251,7 +1251,7 @@ pnpm dev
 # - Open issues modal
 # - Shortlist multiple issues (e.g., #101, #202, #303)
 # - Select Claude Code provider
-# - Click "Launch AI Watchers"
+# - Click "Launch AI Runners"
 
 # Verify git worktrees:
 cd /path/to/repo
@@ -1261,23 +1261,23 @@ git worktree list
 # /path/to/worktree-issue#202  def5678 [issue#202]
 # /path/to/worktree-issue#303  ghi9012 [issue#303]
 
-# Verify watchers:
-# - Check watcher names include issue context
-# - Verify watchers are running in worktree directories
+# Verify runners:
+# - Check runner names include issue context
+# - Verify runners are running in worktree directories
 # - Verify command is 'claude' not 'claude-code'
 # - Test that existing branches are reused (create issue#101 manually first)
 ```
 
 **Success Criteria**:
 - ✅ Command bug fixed (`claude` not `claude-code`)
-- ✅ Watchers launch with correct command
-- ✅ Issue context preserved in watcher config
+- ✅ Runners launch with correct command
+- ✅ Issue context preserved in runner config
 - ✅ Git worktrees created for each issue
 - ✅ Branch naming follows `issue#<number>` pattern
 - ✅ New branches created from default branch (main/master)
 - ✅ Existing branches are reused (not recreated)
-- ✅ Watchers run in isolated worktree directories
-- ✅ Multiple watchers can launch sequentially
+- ✅ Runners run in isolated worktree directories
+- ✅ Multiple runners can launch sequentially
 - ✅ Toast notifications show worktree creation status
 
 ---
@@ -1286,14 +1286,14 @@ git worktree list
 
 **Duration**: 2-3 hours
 **Risk**: Low
-**Impact**: Beautiful visual watcher status monitoring
+**Impact**: Beautiful visual runner status monitoring
 
-### 4.1 Create WatcherStatusLED Component
+### 4.1 Create RunnerStatusLED Component
 
-**File**: `src/renderer/components/ai-watchers/WatcherStatusLED.tsx`
+**File**: `src/renderer/components/ai-runners/RunnerStatusLED.tsx`
 ```typescript
 import { motion } from 'framer-motion'
-import type { AiWatcher } from '../../../shared/schemas/ai-watchers'
+import type { AiRunner } from '../../../shared/schemas/ai-runners'
 import { X } from 'lucide-react'
 
 const getProviderFavicon = (type: string) => {
@@ -1310,7 +1310,7 @@ const getProviderFavicon = (type: string) => {
   }
 }
 
-const getStatusColor = (status: AiWatcher['status']) => {
+const getStatusColor = (status: AiRunner['status']) => {
   switch (status) {
     case 'running':
       return {
@@ -1344,16 +1344,16 @@ const getStatusColor = (status: AiWatcher['status']) => {
   }
 }
 
-interface WatcherLEDProps {
-  watcher: AiWatcher
-  onClear?: (watcherId: string) => void
+interface RunnerLEDProps {
+  runner: AiRunner
+  onClear?: (runnerId: string) => void
 }
 
-export function WatcherStatusLED({ watcher, onClear }: WatcherLEDProps) {
-  const colors = getStatusColor(watcher.status)
-  const favicon = getProviderFavicon(watcher.type)
-  const isActive = watcher.status === 'running' || watcher.status === 'idle'
-  const isDead = watcher.status === 'stopped' || watcher.status === 'errored'
+export function RunnerStatusLED({ runner, onClear }: RunnerLEDProps) {
+  const colors = getStatusColor(runner.status)
+  const favicon = getProviderFavicon(runner.type)
+  const isActive = runner.status === 'running' || runner.status === 'idle'
+  const isDead = runner.status === 'stopped' || runner.status === 'errored'
 
   return (
     <motion.div
@@ -1399,7 +1399,7 @@ export function WatcherStatusLED({ watcher, onClear }: WatcherLEDProps) {
         {isDead && onClear && (
           <button
             className="absolute -top-1 -right-1 size-4 bg-gray-700 hover:bg-red-500 rounded-full flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
-            onClick={() => onClear(watcher.id)}
+            onClick={() => onClear(runner.id)}
             type="button"
           >
             <X className="size-3 text-white" />
@@ -1410,8 +1410,8 @@ export function WatcherStatusLED({ watcher, onClear }: WatcherLEDProps) {
       {/* Tooltip on hover */}
       <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
         <div className="bg-gray-900/95 border border-gray-700/50 rounded px-2 py-1 text-xs text-white backdrop-blur-xl">
-          <div className="font-medium">{watcher.name}</div>
-          <div className="text-gray-400 capitalize">{watcher.status}</div>
+          <div className="font-medium">{runner.name}</div>
+          <div className="text-gray-400 capitalize">{runner.status}</div>
         </div>
       </div>
     </motion.div>
@@ -1419,39 +1419,39 @@ export function WatcherStatusLED({ watcher, onClear }: WatcherLEDProps) {
 }
 ```
 
-### 4.2 Create Watchers Panel Component
+### 4.2 Create Runners Panel Component
 
-**File**: `src/renderer/components/ai-watchers/WatchersPanel.tsx`
+**File**: `src/renderer/components/ai-runners/RunnersPanel.tsx`
 ```typescript
 import { useAtomValue, useAtom } from '@effect-atom/atom-react'
 import { AnimatePresence } from 'framer-motion'
-import { aiWatchersAtom, stopWatcherAtom } from '../../atoms/ai-watcher-atoms'
-import { WatcherStatusLED } from './WatcherStatusLED'
+import { aiRunnersAtom, stopRunnerAtom } from '../../atoms/ai-runner-atoms'
+import { RunnerStatusLED } from './RunnerStatusLED'
 import { Result } from '@effect-atom/atom-react'
 
-export function WatchersPanel() {
-  const watchersResult = useAtomValue(aiWatchersAtom)
-  const [, stopWatcher] = useAtom(stopWatcherAtom)
+export function RunnersPanel() {
+  const runnersResult = useAtomValue(aiRunnersAtom)
+  const [, stopRunner] = useAtom(stopRunnerAtom)
 
-  const handleClearWatcher = (watcherId: string) => {
-    stopWatcher(watcherId)
+  const handleClearRunner = (runnerId: string) => {
+    stopRunner(runnerId)
   }
 
-  return Result.builder(watchersResult)
+  return Result.builder(runnersResult)
     .onInitial(() => null)
-    .onErrorTag('AiWatcherError', () => null)
-    .onSuccess((watchers) => {
-      if (watchers.length === 0) return null
+    .onErrorTag('AiRunnerError', () => null)
+    .onSuccess((runners) => {
+      if (runners.length === 0) return null
 
       return (
         <div className="fixed top-48 right-8 z-10">
           <div className="flex flex-col gap-2">
             <AnimatePresence mode="popLayout">
-              {watchers.map((watcher) => (
-                <WatcherStatusLED
-                  key={watcher.id}
-                  onClear={handleClearWatcher}
-                  watcher={watcher}
+              {runners.map((runner) => (
+                <RunnerStatusLED
+                  key={runner.id}
+                  onClear={handleClearRunner}
+                  runner={runner}
                 />
               ))}
             </AnimatePresence>
@@ -1463,11 +1463,11 @@ export function WatchersPanel() {
 }
 ```
 
-### 4.3 Integrate Watchers Panel in Main Layout
+### 4.3 Integrate Runners Panel in Main Layout
 
 **File**: `src/renderer/components/MainScreen.tsx` (or similar)
 ```typescript
-import { WatchersPanel } from './ai-watchers/WatchersPanel'
+import { RunnersPanel } from './ai-runners/RunnersPanel'
 
 export function MainScreen() {
   return (
@@ -1477,8 +1477,8 @@ export function MainScreen() {
       {/* AI Usage Bars (top-left) */}
       <AiUsageBars />
 
-      {/* Watcher Status Panel (top-right, below workflow button) */}
-      <WatchersPanel />
+      {/* Runner Status Panel (top-right, below workflow button) */}
+      <RunnersPanel />
 
       {/* Rest of layout */}
     </div>
@@ -1493,23 +1493,23 @@ export function MainScreen() {
 pnpm dev
 
 # Manual verification:
-# - Launch AI watchers from issues
+# - Launch AI runners from issues
 # - Verify LED indicators appear in top-right
 # - Verify green when running
 # - Verify yellow when idle (30s silence)
 # - Verify unlit when stopped
 # - Hover over LED to see tooltip
-# - Click X on dead watcher to clear
+# - Click X on dead runner to clear
 ```
 
 **Success Criteria**:
 - ✅ LEDs appear in top-right quadrant
-- ✅ Colors match watcher states
+- ✅ Colors match runner states
 - ✅ Glassy aesthetic like AIUsageBars
 - ✅ Favicons display correctly
-- ✅ Pulsing animation on active watchers
-- ✅ Clear button works on dead watchers
-- ✅ Tooltips show watcher info
+- ✅ Pulsing animation on active runners
+- ✅ Clear button works on dead runners
+- ✅ Tooltips show runner info
 
 ---
 
@@ -1521,7 +1521,7 @@ pnpm dev
 |-----------|----------|-----------|
 | GitHub Issues Integration | Hexagonal architecture | ? |
 | Issues Modal | Keyboard-driven shortlist | ? |
-| AI Watcher Launching | Multi-issue launch | ? |
+| AI Runner Launching | Multi-issue launch | ? |
 | Command Bug Fix | 'claude' process | ? |
 | LED Indicators | Glassy, color-coded | ? |
 
@@ -1548,11 +1548,11 @@ pnpm dev
 
 ```bash
 # Create backup branch
-git checkout -b backup/pre-ai-watcher-ui
+git checkout -b backup/pre-ai-runner-ui
 
 # If issues found, revert to backup
 git checkout main
-git reset --hard backup/pre-ai-watcher-ui
+git reset --hard backup/pre-ai-runner-ui
 ```
 
 ---
@@ -1561,7 +1561,7 @@ git reset --hard backup/pre-ai-watcher-ui
 
 - [ ] Update CLAUDE.md with new features
 - [ ] Add screenshots to documentation
-- [ ] Consider additional watcher controls (pause/resume)
-- [ ] Add watcher logs viewer
+- [ ] Consider additional runner controls (pause/resume)
+- [ ] Add runner logs viewer
 - [ ] Add issue comment integration
 - [ ] Consider GitLab/Bitbucket issue providers

@@ -33,7 +33,7 @@ interface RunnerState {
 }
 
 /**
- * Maximum log entries to keep in memory per watcher
+ * Maximum log entries to keep in memory per runner
  */
 const MAX_LOG_ENTRIES = 1000
 
@@ -346,13 +346,13 @@ export class ProcessRunnerService extends Effect.Service<ProcessRunnerService>()
             }
             runners.set(runnerId, state)
 
-            // Transition to running after a short delay (using forkIn to scope to runner)
+            // Transition to idle after a short delay (using forkIn to scope to runner)
             yield* Effect.forkIn(
               Effect.gen(function* () {
                 yield* Effect.sleep(1000) // 1 second
                 const currentStatus = yield* Ref.get(statusRef)
                 if (currentStatus === 'starting') {
-                  yield* updateRunnerStatus(runnerId, 'running')
+                  yield* updateRunnerStatus(runnerId, 'idle')
                 }
               }),
               runnerScope

@@ -277,7 +277,7 @@ function RepositoryCarousel() {
 ### Renderer Process
 
 - `src/renderer/hooks/useKeyboardLayer.ts` - React hook for components
-- `src/renderer/components/ai-watchers/IssuesModal.tsx` - Modal example
+- `src/renderer/components/ai-runners/IssuesModal.tsx` - Modal example
 - `src/renderer/components/ui/RepositoryDropdown.tsx` - Dropdown example
 
 ### Shared

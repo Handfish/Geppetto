@@ -409,7 +409,7 @@ ptyProcess.onData((data: string) => {
 
 **Service**:
 ```typescript
-const subscribeToWatcher = (
+const subscribeToRunner = (
   processId: string,
   onOutput: (chunk: OutputChunk) => void
 ): Effect.Effect<() => void, TerminalError, never> => {
@@ -423,7 +423,7 @@ const subscribeToWatcher = (
 **IPC Handler**:
 ```typescript
 registerIpcHandler(
-  TerminalIpcContracts['terminal:subscribe-to-watcher'],
+  TerminalIpcContracts['terminal:subscribe-to-runner'],
   ({ processId }) => Effect.gen(function* () {
     const subscriptionId = `sub-${processId}-${Date.now()}`
 
@@ -441,7 +441,7 @@ registerIpcHandler(
     }
 
     // Register callback
-    const cleanupOutput = yield* terminalService.subscribeToWatcher(processId, sendOutputViaIpc)
+    const cleanupOutput = yield* terminalService.subscribeToRunner(processId, sendOutputViaIpc)
 
     // Store cleanup function
     subscriptions.set(subscriptionId, {
@@ -461,7 +461,7 @@ class TerminalSubscriptionManager {
   subscribe(processId: string, onData: (data: OutputChunk | ProcessEvent) => void) {
     return Effect.gen(function* () {
       const ipc = yield* ElectronIpcClient
-      const { subscriptionId } = yield* ipc.invoke('terminal:subscribe-to-watcher', { processId })
+      const { subscriptionId } = yield* ipc.invoke('terminal:subscribe-to-runner', { processId })
 
       const listener = (_event: any, message: { type: 'output' | 'event', data: any }) => {
         if (message.type === 'output') {

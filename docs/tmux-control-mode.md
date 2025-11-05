@@ -305,7 +305,7 @@ yield* TmuxControlClient.sendKeys(stdin, '1', 'echo hello')
 Enable features like:
 - Remote command execution
 - Interactive debugging
-- Automated input for watchers
+- Automated input for runners
 
 ### 4. No File System Overhead
 
@@ -317,7 +317,7 @@ Enable features like:
 
 ### Phase 1: Implement TmuxControlClientAdapter
 
-- Create `src/main/ai-watchers/adapters/tmux-control-client-adapter.ts`
+- Create `src/main/ai-runners/adapters/tmux-control-client-adapter.ts`
 - Implement event parsing for `%output`, `%window-pane-changed`, `%exit`
 - Wire into `ProcessMonitorPort` as alternative implementation
 

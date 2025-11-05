@@ -1,8 +1,8 @@
-# AI Watcher Dev Panel - Usage Guide
+# AI Runner Dev Panel - Usage Guide
 
 ## Overview
 
-The AI Watcher Dev Panel provides a development-only interface for testing and interacting with AI watchers. It includes both a visual panel and a console API.
+The AI Runner Dev Panel provides a development-only interface for testing and interacting with AI runners. It includes both a visual panel and a console API.
 
 ## Access
 
@@ -20,7 +20,7 @@ The visual panel appears in the bottom-right corner of the app (in development m
 
 ### Features:
 - **List Tmux Sessions** - Display all active tmux sessions with attach buttons
-- **List Watchers** - Display all AI watchers with their status
+- **List Runners** - Display all AI runners with their status
 - **Real-time Updates** - Uses Result.builder pattern for exhaustive error handling
 
 ### Toggling the Panel:
@@ -43,19 +43,19 @@ window.__DEV_AI_WATCHERS__.listTmuxSessions()
 // Returns array of tmux sessions and logs them to console
 ```
 
-**List all AI watchers:**
+**List all AI runners:**
 ```javascript
-window.__DEV_AI_WATCHERS__.listWatchers()
-// Returns array of watchers and logs them to console
+window.__DEV_AI_WATCHERS__.listRunners()
+// Returns array of runners and logs them to console
 ```
 
 ### Creation Operations
 
-**Create a new AI watcher:**
+**Create a new AI runner:**
 ```javascript
-window.__DEV_AI_WATCHERS__.createWatcher({
+window.__DEV_AI_WATCHERS__.createRunner({
   type: 'claude-code',  // or 'codex', 'cursor', 'custom'
-  name: 'My Test Watcher',
+  name: 'My Test Runner',
   workingDirectory: '/path/to/project',
   command: 'custom-command',  // optional, for custom type
   args: ['--arg1', 'value'],  // optional
@@ -69,14 +69,14 @@ window.__DEV_AI_WATCHERS__.attachToTmux('session-name')
 
 ### Control Operations
 
-**Stop a running watcher:**
+**Stop a running runner:**
 ```javascript
-window.__DEV_AI_WATCHERS__.stopWatcher('watcher-id')
+window.__DEV_AI_WATCHERS__.stopRunner('runner-id')
 ```
 
-**Start a stopped watcher:**
+**Start a stopped runner:**
 ```javascript
-window.__DEV_AI_WATCHERS__.startWatcher('watcher-id')
+window.__DEV_AI_WATCHERS__.startRunner('runner-id')
 ```
 
 ### Inspection
@@ -84,9 +84,9 @@ window.__DEV_AI_WATCHERS__.startWatcher('watcher-id')
 **Get current Results:**
 ```javascript
 const results = window.__DEV_AI_WATCHERS__.getResults()
-console.log(results.watchers)     // Full Result<AiWatcher[], E>
+console.log(results.runners)     // Full Result<AiRunner[], E>
 console.log(results.sessions)     // Full Result<TmuxSession[], E>
-console.log(results.createResult) // Full Result<AiWatcher, E>
+console.log(results.createResult) // Full Result<AiRunner, E>
 ```
 
 ## Testing Workflow
@@ -103,37 +103,37 @@ This will:
 - Call `TmuxSessionManager.listSessions()`
 - Display results in the console and visual panel
 
-### 2. Create a Test Watcher
+### 2. Create a Test Runner
 
 ```javascript
-// Create a simple watcher for testing
-window.__DEV_AI_WATCHERS__.createWatcher({
+// Create a simple runner for testing
+window.__DEV_AI_WATCHERS__.createRunner({
   type: 'custom',
-  name: 'Test Watcher',
+  name: 'Test Runner',
   workingDirectory: process.cwd(),
   command: 'sleep',
   args: ['60']
 })
 
 // Check status
-window.__DEV_AI_WATCHERS__.listWatchers()
+window.__DEV_AI_WATCHERS__.listRunners()
 ```
 
-### 3. Test Watcher Lifecycle
+### 3. Test Runner Lifecycle
 
 ```javascript
-// Get watchers
-const watchers = window.__DEV_AI_WATCHERS__.listWatchers()
-const watcherId = watchers[0]?.id
+// Get runners
+const runners = window.__DEV_AI_WATCHERS__.listRunners()
+const runnerId = runners[0]?.id
 
-// Stop the watcher
-window.__DEV_AI_WATCHERS__.stopWatcher(watcherId)
+// Stop the runner
+window.__DEV_AI_WATCHERS__.stopRunner(runnerId)
 
 // Check status
-window.__DEV_AI_WATCHERS__.listWatchers()
+window.__DEV_AI_WATCHERS__.listRunners()
 
 // Restart it
-window.__DEV_AI_WATCHERS__.startWatcher(watcherId)
+window.__DEV_AI_WATCHERS__.startRunner(runnerId)
 ```
 
 ### 4. Attach to Existing Tmux Session
@@ -147,7 +147,7 @@ tmux new-session -d -s test-session 'sleep 120'
 // In browser console:
 window.__DEV_AI_WATCHERS__.listTmuxSessions()
 window.__DEV_AI_WATCHERS__.attachToTmux('test-session')
-window.__DEV_AI_WATCHERS__.listWatchers()
+window.__DEV_AI_WATCHERS__.listRunners()
 ```
 
 ## Error Handling
@@ -162,8 +162,8 @@ if (results.sessions._tag === 'Failure') {
   console.error('Session error:', results.sessions.error)
 }
 
-if (results.watchers._tag === 'Success') {
-  console.log('Watchers loaded:', results.watchers.value)
+if (results.runners._tag === 'Success') {
+  console.log('Runners loaded:', results.runners.value)
 }
 ```
 
@@ -175,9 +175,9 @@ Browser Console
   ↓
 window.__DEV_AI_WATCHERS__.listTmuxSessions()
   ↓
-AiWatcherClient.listTmuxSessions()
+AiRunnerClient.listTmuxSessions()
   ↓
-ElectronIpcClient.invoke('ai-watcher:list-tmux')
+ElectronIpcClient.invoke('ai-runner:list-tmux')
   ↓
 IPC Main Process Handler
   ↓
@@ -193,7 +193,7 @@ Visual panel re-renders
 ```
 
 ### Reactivity:
-- All atoms have reactivity keys (e.g., `['ai-watchers:list']`)
+- All atoms have reactivity keys (e.g., `['ai-runners:list']`)
 - Mutations automatically invalidate related atoms
 - Visual panel updates automatically when data changes
 - TTL-based caching prevents excessive IPC calls
@@ -222,6 +222,6 @@ Visual panel re-renders
 - Create test session: `tmux new-session -d -s test 'sleep 60'`
 
 **IPC errors:**
-- Check that AI watcher handlers are registered in main process
-- Verify `AiWatchersLayer` is in `MainLayer`
+- Check that AI runner handlers are registered in main process
+- Verify `AiRunnersLayer` is in `MainLayer`
 - Check main process console for errors

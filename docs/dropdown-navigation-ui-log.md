@@ -68,7 +68,7 @@ This document tracks the detailed implementation progress, decisions, and learni
 - [ ] `src/renderer/hooks/useIssueModalKeyboardNavigation.ts`
 
 **Files Modified**:
-- [ ] `src/renderer/components/ai-watchers/IssuesModal.tsx`
+- [ ] `src/renderer/components/ai-runners/IssuesModal.tsx`
 
 **Challenges Encountered**:
 - [To be filled during implementation]
@@ -87,7 +87,7 @@ This document tracks the detailed implementation progress, decisions, and learni
 
 **Files Modified**:
 - [ ] `src/renderer/hooks/useIssueModalKeyboardNavigation.ts` (add left/right handlers)
-- [ ] `src/renderer/components/ai-watchers/IssuesModal.tsx` (add issueAgents state)
+- [ ] `src/renderer/components/ai-runners/IssuesModal.tsx` (add issueAgents state)
 
 **Challenges Encountered**:
 - [To be filled during implementation]
@@ -110,7 +110,7 @@ This document tracks the detailed implementation progress, decisions, and learni
 - [To be filled during implementation]
 
 **Files Modified**:
-- [ ] `src/renderer/components/ai-watchers/IssuesModal.tsx` (help text)
+- [ ] `src/renderer/components/ai-runners/IssuesModal.tsx` (help text)
 - [ ] `docs/CLAUDE.md` (keyboard navigation section)
 
 **Challenges Encountered**:
@@ -222,7 +222,7 @@ This document tracks the detailed implementation progress, decisions, and learni
 2. **Issue Navigation**
    - [ ] Arrow keys navigate issues
    - [ ] Spacebar toggles selection
-   - [ ] Enter launches watchers
+   - [ ] Enter launches runners
    - [ ] Escape closes modal
    - [ ] Smooth scrolling
 
@@ -266,7 +266,7 @@ This document tracks the detailed implementation progress, decisions, and learni
 ## Dependencies and Related Work
 
 ### Related Features
-- AI Watcher UI Enhancement (provides IssuesModal foundation)
+- AI Runner UI Enhancement (provides IssuesModal foundation)
 - Git Tree UI (provides keyboard navigation pattern)
 
 ### Dependencies Added

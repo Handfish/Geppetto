@@ -130,7 +130,7 @@ Successfully migrated all path operations from `node:path` to `@effect/platform/
 **Key Achievements**:
 - ✅ Migrated NodeFileSystemAdapter path methods (resolvePath, dirname, basename, joinPath)
 - ✅ Migrated WorkspaceService path operations
-- ✅ Migrated AI Watchers ProcessMonitorAdapter path operations
+- ✅ Migrated AI Runners ProcessMonitorAdapter path operations
 - ✅ All Effect.gen contexts now using @effect/platform/Path
 - ✅ Zero breaking changes - all tests pass, app runs correctly
 - ✅ Discovered and fixed incorrect dependency declaration (Path.Path.Default → Path.layer)
@@ -172,7 +172,7 @@ Successfully migrated all path operations from `node:path` to `@effect/platform/
 
 ### 2.3 ProcessMonitorAdapter Migration
 
-**File**: `src/main/ai-watchers/adapters/node-process-monitor-adapter.ts`
+**File**: `src/main/ai-runners/adapters/node-process-monitor-adapter.ts`
 
 **Changes Made**:
 1. Replaced `import * as Path from 'node:path'` with `import { Path } from '@effect/platform'`
@@ -320,7 +320,7 @@ export const PlatformLayer = Layer.mergeAll(
 **Files Modified**:
 - `src/main/source-control/adapters/file-system/node-file-system-adapter.ts`
 - `src/main/workspace/workspace-service.ts`
-- `src/main/ai-watchers/adapters/node-process-monitor-adapter.ts`
+- `src/main/ai-runners/adapters/node-process-monitor-adapter.ts`
 
 **Change**: Removed explicit `dependencies: [Path.layer]` and `dependencies: [FileSystem.layer]` declarations.
 

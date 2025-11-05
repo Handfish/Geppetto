@@ -10,7 +10,7 @@ interface TerminalTypeSwitcherProps {
 /**
  * Terminal Type Switcher Component
  *
- * Controls which terminal backend is used when launching AI watchers:
+ * Controls which terminal backend is used when launching AI runners:
  * - Tmux: Traditional tmux sessions (stable, legacy)
  * - XTerm: New xterm.js + node-pty terminal (testing)
  *

@@ -6,7 +6,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { useAtomValue, useAtomRefresh } from '@effect-atom/atom-react'
 import { Result } from '@effect-atom/atom-react'
-import { watcherOutputAtom, terminalSubscriptionManager } from '../../atoms/terminal-atoms'
+import { runnerOutputAtom, terminalSubscriptionManager } from '../../atoms/terminal-atoms'
 import type { OutputChunk, ProcessEvent } from '../../../shared/schemas/terminal'
 import { cn } from '../../lib/utils'
 import { Effect } from 'effect'
@@ -34,7 +34,7 @@ export function XTerminal({
   const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null)
   const resizeThrottleRef = useRef<NodeJS.Timeout | null>(null)
 
-  const outputResult = useAtomValue(watcherOutputAtom(processId))
+  const outputResult = useAtomValue(runnerOutputAtom(processId))
   // Note: refreshOutput is NOT needed - buffer updated by appendToOutputBuffer automatically
 
   // Initialize terminal

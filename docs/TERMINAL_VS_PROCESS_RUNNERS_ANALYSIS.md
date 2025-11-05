@@ -12,12 +12,12 @@ src/main/
 │   ├── terminal-registry.ts    (TerminalRegistry)
 │   └── node-pty/adapter.ts     (NodePtyTerminalAdapter)
 │
-└── ai-watchers/                (renamed concept: process-runners)
+└── ai-runners/                (renamed concept: process-runners)
     ├── adapters/
     │   ├── process-monitor/    (ProcessMonitorAdapter)
     │   └── tmux-session-manager/
     ├── services/
-    │   └── ai-watcher-service.ts (ProcessRunnerService concept)
+    │   └── ai-runner-service.ts (ProcessRunnerService concept)
     ├── ports.ts                (ProcessMonitorPort, SessionManagerPort)
     ├── schemas.ts
     └── errors.ts
@@ -46,7 +46,7 @@ interface TerminalPort {
 
 **Better Name:** `terminal` is actually good (it's a UI terminal emulator driver)
 
-### What is "AI-Watchers" → "Process-Runners"?
+### What is "AI-Runners" → "Process-Runners"?
 
 **Current Port Definitions (ports.ts):**
 ```typescript
@@ -153,11 +153,11 @@ The naming problem isn't about combining—it's about **clarifying intent**:
 
 ```
 "terminal" domain     → Actually: PTY-based interactive sessions
-"ai-watchers" domain  → Actually: Background process runners
+"ai-runners" domain  → Actually: Background process runners
 
 Confusion:
 - Terminal sounds like it watches terminals
-- AI-Watchers sounds like it only watches AI operations
+- AI-Runners sounds like it only watches AI operations
 ```
 
 ### After Renaming (Clear)
@@ -238,12 +238,12 @@ src/main/
 
 ## Next Step: Just Rename
 
-Instead of combining, simply rename `ai-watchers` → `process-runners`:
+Instead of combining, simply rename `ai-runners` → `process-runners`:
 
 **Files to rename:**
-- `ai-watchers/` → `process-runners/`
-- `AiWatcher*` → `ProcessRunner*`
-- `ai-watcher-*` → `process-runner-*`
+- `ai-runners/` → `process-runners/`
+- `AiRunner*` → `ProcessRunner*`
+- `ai-runner-*` → `process-runner-*`
 
 **Impact:**
 - IPC contracts update
@@ -263,6 +263,6 @@ They are fundamentally different concerns:
 - **Terminal** = interactive UI component (with PTY backend)
 - **Process-Runners** = background task executor (with Tmux backend)
 
-Renaming Process-Runners (from ai-watchers) will clarify intent without architectural change.
+Renaming Process-Runners (from ai-runners) will clarify intent without architectural change.
 
 This maintains clean hexagonal architecture with clear domain boundaries.

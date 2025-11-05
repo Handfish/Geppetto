@@ -2,14 +2,14 @@ import { Atom } from '@effect-atom/atom-react'
 import { Effect, Duration } from 'effect'
 import { Reactivity } from '@effect/experimental'
 import { ElectronIpcClient } from '../lib/ipc-client'
-import type { WatcherInfo, ProcessState, OutputChunk, ProcessEvent } from '../../shared/schemas/terminal'
+import type { RunnerInfo, ProcessState, OutputChunk, ProcessEvent } from '../../shared/schemas/terminal'
 
 /**
- * Terminal Atoms - Reactive state management for terminal/watcher processes
+ * Terminal Atoms - Reactive state management for terminal/runner processes
  *
  * Provides atoms for:
- * - Listing all active watchers
- * - Getting individual watcher states
+ * - Listing all active runners
+ * - Getting individual runner states
  * - Managing terminal output buffers
  * - Terminal subscription management
  */
@@ -18,37 +18,37 @@ import type { WatcherInfo, ProcessState, OutputChunk, ProcessEvent } from '../..
 const terminalRuntime = Atom.runtime(ElectronIpcClient.Default)
 
 /**
- * List all active watchers
+ * List all active runners
  * Refreshes every 30 seconds
  * Components can manually refresh via useAtomRefresh for real-time updates
  */
-export const activeWatchersAtom = terminalRuntime
+export const activeRunnersAtom = terminalRuntime
   .atom(
     Effect.gen(function* () {
       const client = yield* ElectronIpcClient
-      return yield* client.invoke('terminal:list-active-watchers', undefined)
+      return yield* client.invoke('terminal:list-active-runners', undefined)
     })
   )
   .pipe(
-    Atom.withReactivity(['terminal:watchers']),
+    Atom.withReactivity(['terminal:runners']),
     Atom.setIdleTTL(Duration.seconds(30))
   )
 
 /**
- * Get individual watcher state by process ID
+ * Get individual runner state by process ID
  * Refreshes every 10 seconds (for real-time status updates)
- * Use activeWatchersAtom when possible to reduce IPC calls
+ * Use activeRunnersAtom when possible to reduce IPC calls
  */
-export const watcherStateAtom = Atom.family((processId: string) =>
+export const runnerStateAtom = Atom.family((processId: string) =>
   terminalRuntime
     .atom(
       Effect.gen(function* () {
         const client = yield* ElectronIpcClient
-        return yield* client.invoke('terminal:get-watcher-state', { processId })
+        return yield* client.invoke('terminal:get-runner-state', { processId })
       })
     )
     .pipe(
-      Atom.withReactivity(['terminal:watcher:state', processId]),
+      Atom.withReactivity(['terminal:runner:state', processId]),
       Atom.setIdleTTL(Duration.seconds(10))
     )
 )
@@ -72,7 +72,7 @@ const outputBuffers = new Map<string, OutputBuffer>()
 // This prevents duplicate restoration when switching between terminals
 const bufferRestoredSet = new Set<string>()
 
-export const watcherOutputAtom = Atom.family((processId: string) =>
+export const runnerOutputAtom = Atom.family((processId: string) =>
   terminalRuntime.atom(
     Effect.gen(function* () {
       // Initialize buffer if needed
@@ -183,7 +183,7 @@ class TerminalSubscriptionManager {
       // This is critical for StrictMode: both mounts need to call backend so second can cleanup first
       console.log('[TerminalSubscriptionManager] Creating backend subscription for:', processId)
       const client = yield* ElectronIpcClient
-      const result = yield* client.invoke('terminal:subscribe-to-watcher', { processId })
+      const result = yield* client.invoke('terminal:subscribe-to-runner', { processId })
       const subscriptionId = result.subscriptionId
       console.log('[TerminalSubscriptionManager] Got subscription ID:', subscriptionId)
       this.subscriptions.set(processId, subscriptionId)
@@ -256,7 +256,7 @@ class TerminalSubscriptionManager {
 
   /**
    * Unsubscribe (no-op - keep everything alive for fast switching)
-   * Use destroy() to fully tear down a subscription when killing a watcher
+   * Use destroy() to fully tear down a subscription when killing a runner
    */
   unsubscribe(processId: string) {
     console.log('[TerminalSubscriptionManager] Unsubscribe called for:', processId)
@@ -265,7 +265,7 @@ class TerminalSubscriptionManager {
   }
 
   /**
-   * Destroy a subscription completely (for when watcher is killed)
+   * Destroy a subscription completely (for when runner is killed)
    */
   destroy(processId: string) {
     console.log('[TerminalSubscriptionManager] Destroying subscription for:', processId)
@@ -277,7 +277,7 @@ class TerminalSubscriptionManager {
       // Call IPC to unsubscribe
       Effect.gen(function* () {
         const client = yield* ElectronIpcClient
-        yield* client.invoke('terminal:unsubscribe-from-watcher', { subscriptionId })
+        yield* client.invoke('terminal:unsubscribe-from-runner', { subscriptionId })
       }).pipe(
         Effect.provide(ElectronIpcClient.Default),
         Effect.runPromise
@@ -307,10 +307,10 @@ class TerminalSubscriptionManager {
 export const terminalSubscriptionManager = new TerminalSubscriptionManager()
 
 /**
- * Spawn a new AI watcher
- * Invalidates watcher list on success
+ * Spawn a new AI runner
+ * Invalidates runner list on success
  */
-export const spawnWatcherAtom = terminalRuntime.fn(
+export const spawnRunnerAtom = terminalRuntime.fn(
   (input: {
     accountId: string
     agentType: string
@@ -326,22 +326,22 @@ export const spawnWatcherAtom = terminalRuntime.fn(
   }) =>
     Effect.gen(function* () {
       const client = yield* ElectronIpcClient
-      return yield* client.invoke('terminal:spawn-watcher', input)
+      return yield* client.invoke('terminal:spawn-runner', input)
     }),
   {
-    reactivityKeys: ['terminal:watchers'],
+    reactivityKeys: ['terminal:runners'],
   }
 )
 
 /**
- * Kill a watcher
- * Invalidates watcher list and specific watcher state
+ * Kill a runner
+ * Invalidates runner list and specific runner state
  */
-export const killWatcherAtom = terminalRuntime.fn(
+export const killRunnerAtom = terminalRuntime.fn(
   (processId: string) =>
     Effect.gen(function* () {
       const client = yield* ElectronIpcClient
-      yield* client.invoke('terminal:kill-watcher', { processId })
+      yield* client.invoke('terminal:kill-runner', { processId })
 
       // Destroy subscription completely
       terminalSubscriptionManager.destroy(processId)
@@ -350,19 +350,19 @@ export const killWatcherAtom = terminalRuntime.fn(
       clearOutputBuffer(processId)
     }),
   {
-    reactivityKeys: ['terminal:watchers', 'terminal:watcher:state'],
+    reactivityKeys: ['terminal:runners', 'terminal:runner:state'],
   }
 )
 
 /**
- * Kill all watchers
- * Invalidates watcher list
+ * Kill all runners
+ * Invalidates runner list
  */
-export const killAllWatchersAtom = terminalRuntime.fn(
+export const killAllRunnersAtom = terminalRuntime.fn(
   () =>
     Effect.gen(function* () {
       const client = yield* ElectronIpcClient
-      yield* client.invoke('terminal:kill-all-watchers', undefined)
+      yield* client.invoke('terminal:kill-all-runners', undefined)
 
       // Destroy all subscriptions
       terminalSubscriptionManager.destroyAll()
@@ -371,34 +371,34 @@ export const killAllWatchersAtom = terminalRuntime.fn(
       outputBuffers.clear()
     }),
   {
-    reactivityKeys: ['terminal:watchers'],
+    reactivityKeys: ['terminal:runners'],
   }
 )
 
 /**
- * Restart a watcher
- * Invalidates watcher list and specific watcher state
+ * Restart a runner
+ * Invalidates runner list and specific runner state
  */
-export const restartWatcherAtom = terminalRuntime.fn(
+export const restartRunnerAtom = terminalRuntime.fn(
   (processId: string) =>
     Effect.gen(function* () {
       const client = yield* ElectronIpcClient
-      return yield* client.invoke('terminal:restart-watcher', { processId })
+      return yield* client.invoke('terminal:restart-runner', { processId })
     }),
   {
-    reactivityKeys: ['terminal:watchers', 'terminal:watcher:state'],
+    reactivityKeys: ['terminal:runners', 'terminal:runner:state'],
   }
 )
 
 /**
- * Write data to a watcher's terminal
+ * Write data to a runner's terminal
  * No reactivity keys - this is a terminal input action
  */
-export const writeToWatcherAtom = terminalRuntime.fn(
+export const writeToRunnerAtom = terminalRuntime.fn(
   (params: { processId: string; data: string }) =>
     Effect.gen(function* () {
       const client = yield* ElectronIpcClient
-      yield* client.invoke('terminal:write-to-watcher', params)
+      yield* client.invoke('terminal:write-to-runner', params)
     }),
   {
     reactivityKeys: [], // No data changes, just sends input
@@ -406,14 +406,14 @@ export const writeToWatcherAtom = terminalRuntime.fn(
 )
 
 /**
- * Resize a watcher's terminal
+ * Resize a runner's terminal
  * No reactivity keys - this is a terminal resize action
  */
-export const resizeWatcherAtom = terminalRuntime.fn(
+export const resizeRunnerAtom = terminalRuntime.fn(
   (params: { processId: string; rows: number; cols: number }) =>
     Effect.gen(function* () {
       const client = yield* ElectronIpcClient
-      yield* client.invoke('terminal:resize-watcher', params)
+      yield* client.invoke('terminal:resize-runner', params)
     }),
   {
     reactivityKeys: [], // No data changes, just resizes terminal

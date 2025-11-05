@@ -1,8 +1,8 @@
-# Geppetto: Tmux AI Watchers & Process Monitoring Architecture
+# Geppetto: Tmux AI Runners & Process Monitoring Architecture
 
 ## Executive Summary
 
-This document provides a comprehensive architectural analysis for integrating tmux-based session management with AI agent watchers, process monitoring, and multi-provider support into Geppetto using hexagonal architecture principles.
+This document provides a comprehensive architectural analysis for integrating tmux-based session management with AI agent runners, process monitoring, and multi-provider support into Geppetto using hexagonal architecture principles.
 
 The integration leverages:
 1. **TmuxPrompts Design**: Structured concurrency, scoped fibers, rolling logs, activity tracking
@@ -64,7 +64,7 @@ src/main/
 ├── source-control/      # Git execution domain
 ├── ipc/                 # IPC handlers (cross-process)
 ├── workspace/           # Workspace management
-└── ai-watchers/         # NEW: AI agent watchers
+└── ai-runners/         # NEW: AI agent runners
 ```
 
 ### 1.3 Error Handling Strategy (From error-refactor-plan)
@@ -107,7 +107,7 @@ Key patterns:
 
 ### 3.1 New Port: ProcessMonitorPort
 
-**File:** `src/main/ai-watchers/ports.ts`
+**File:** `src/main/ai-runners/ports.ts`
 
 Port for monitoring long-running processes (builds, tests, AI executions):
 
@@ -140,15 +140,15 @@ export interface ProcessMonitorPort {
 }
 ```
 
-### 3.2 New Port: AiWatcherPort
+### 3.2 New Port: AiRunnerPort
 
-**File:** `src/main/ai-watchers/ports.ts`
+**File:** `src/main/ai-runners/ports.ts`
 
 ```typescript
-export type AiWatcherStatus = "idle" | "running" | "paused" | "completed" | "failed"
+export type AiRunnerStatus = "idle" | "running" | "paused" | "completed" | "failed"
 
-export interface AiWatcherConfig {
-  readonly watcherId: string
+export interface AiRunnerConfig {
+  readonly runnerId: string
   readonly provider: AiProviderType
   readonly operation: string
   readonly sessionName: string
@@ -157,31 +157,31 @@ export interface AiWatcherConfig {
   readonly outputDir?: string
 }
 
-export interface AiWatcherHandle {
-  readonly watcherId: string
-  readonly status: Effect.Effect<AiWatcherStatus>
-  readonly events: Stream.Stream<AiWatcherEvent, never, never>
-  readonly metrics: Effect.Effect<AiWatcherMetrics>
+export interface AiRunnerHandle {
+  readonly runnerId: string
+  readonly status: Effect.Effect<AiRunnerStatus>
+  readonly events: Stream.Stream<AiRunnerEvent, never, never>
+  readonly metrics: Effect.Effect<AiRunnerMetrics>
   readonly attachToSession: Effect.Effect<void>
-  readonly pauseWatcher: Effect.Effect<void>
-  readonly resumeWatcher: Effect.Effect<void>
-  readonly terminateWatcher: Effect.Effect<void>
-  readonly waitForCompletion: Effect.Effect<AiWatcherResult>
+  readonly pauseRunner: Effect.Effect<void>
+  readonly resumeRunner: Effect.Effect<void>
+  readonly terminateRunner: Effect.Effect<void>
+  readonly waitForCompletion: Effect.Effect<AiRunnerResult>
 }
 
-export interface AiWatcherPort {
-  startWatcher(config: AiWatcherConfig): 
-    Effect.Effect<AiWatcherHandle, AiWatcherError, Scope.Scope>
-  getWatcher(watcherId: string): 
-    Effect.Effect<AiWatcherHandle, AiWatcherError>
-  listWatchers(): 
-    Effect.Effect<ReadonlyArray<{ watcherId: string; status: AiWatcherStatus }>>
+export interface AiRunnerPort {
+  startRunner(config: AiRunnerConfig): 
+    Effect.Effect<AiRunnerHandle, AiRunnerError, Scope.Scope>
+  getRunner(runnerId: string): 
+    Effect.Effect<AiRunnerHandle, AiRunnerError>
+  listRunners(): 
+    Effect.Effect<ReadonlyArray<{ runnerId: string; status: AiRunnerStatus }>>
 }
 ```
 
 ### 3.3 Domain Errors
 
-**File:** `src/main/ai-watchers/errors.ts`
+**File:** `src/main/ai-runners/errors.ts`
 
 ```typescript
 export class ProcessMonitorError extends S.TaggedError<ProcessMonitorError>(
@@ -192,10 +192,10 @@ export class ProcessMonitorError extends S.TaggedError<ProcessMonitorError>(
   cause: S.optional(S.String),
 }) {}
 
-export class AiWatcherError extends S.TaggedError<AiWatcherError>(
-  'AiWatcherError'
-)('AiWatcherError', {
-  watcherId: S.String,
+export class AiRunnerError extends S.TaggedError<AiRunnerError>(
+  'AiRunnerError'
+)('AiRunnerError', {
+  runnerId: S.String,
   provider: S.String,
   operation: S.optional(S.String),
   message: S.String,
@@ -209,15 +209,15 @@ export class TmuxSessionError extends S.TaggedError<TmuxSessionError>(
   cause: S.optional(S.String),
 }) {}
 
-export type AiWatcherDomainError =
+export type AiRunnerDomainError =
   | ProcessMonitorError
-  | AiWatcherError
+  | AiRunnerError
   | TmuxSessionError
 ```
 
 ### 3.4 Service Layer
 
-**File:** `src/main/ai-watchers/tmux-session-manager.ts`
+**File:** `src/main/ai-runners/tmux-session-manager.ts`
 
 ```typescript
 export const TmuxSessionManagerService = Effect.Service.make<TmuxSessionManagerPort>(
@@ -252,9 +252,9 @@ export const TmuxSessionManagerService = Effect.Service.make<TmuxSessionManagerP
 **Update:** `src/main/index.ts`
 
 ```typescript
-import { TmuxSessionManagerService } from './ai-watchers/tmux-session-manager'
-import { ProcessMonitorService } from './ai-watchers/process-monitor'
-import { AiWatcherRegistry } from './ai-watchers/ai-watcher-registry'
+import { TmuxSessionManagerService } from './ai-runners/tmux-session-manager'
+import { ProcessMonitorService } from './ai-runners/process-monitor'
+import { AiRunnerRegistry } from './ai-runners/ai-runner-registry'
 
 const MainLayer = Layer.mergeAll(
   // Existing services
@@ -262,10 +262,10 @@ const MainLayer = Layer.mergeAll(
   AiProviderService.Default,
   GitCommandService.Default,
 
-  // New AI Watchers
+  // New AI Runners
   TmuxSessionManagerService.Default,
   ProcessMonitorService.Default,
-  AiWatcherRegistry.Default,
+  AiRunnerRegistry.Default,
 )
 ```
 
@@ -280,9 +280,9 @@ const MainLayer = Layer.mergeAll(
 ```typescript
 import {
   ProcessMonitorError,
-  AiWatcherError,
+  AiRunnerError,
   TmuxSessionError,
-} from '../ai-watchers/errors'
+} from '../ai-runners/errors'
 
 export const mapDomainErrorToIpcError = (error: unknown) => {
   if (error instanceof ProcessMonitorError) {
@@ -295,7 +295,7 @@ export const mapDomainErrorToIpcError = (error: unknown) => {
     })
   }
 
-  if (error instanceof AiWatcherError) {
+  if (error instanceof AiRunnerError) {
     return Effect.succeed({
       _tag: 'Error' as const,
       error: new AiProviderOperationError({
@@ -351,64 +351,64 @@ export type IpcError =
 **File:** `src/shared/ipc-contracts.ts`
 
 ```typescript
-export const AiWatcherIpcContracts = {
-  startWatcher: {
-    channel: 'ai-watcher:start' as const,
+export const AiRunnerIpcContracts = {
+  startRunner: {
+    channel: 'ai-runner:start' as const,
     input: S.Struct({
-      watcherId: S.String,
+      runnerId: S.String,
       provider: AiProviderType,
       operation: S.String,
       sessionName: S.String,
     }),
     output: S.Struct({
-      watcherId: S.String,
+      runnerId: S.String,
       sessionName: S.String,
       attachCommand: S.String,
     }),
     errors: S.Union(
-      AiWatcherError,
+      AiRunnerError,
       ProcessMonitorError,
       TierLimitError,
       AuthenticationError
     ),
   },
 
-  stopWatcher: {
-    channel: 'ai-watcher:stop' as const,
-    input: S.Struct({ watcherId: S.String }),
+  stopRunner: {
+    channel: 'ai-runner:stop' as const,
+    input: S.Struct({ runnerId: S.String }),
     output: S.Struct({ success: S.Boolean }),
-    errors: S.Union(AiWatcherError, ProcessMonitorError),
+    errors: S.Union(AiRunnerError, ProcessMonitorError),
   },
 
-  listWatchers: {
-    channel: 'ai-watcher:list' as const,
+  listRunners: {
+    channel: 'ai-runner:list' as const,
     input: S.Void,
     output: S.Array(S.Struct({
-      watcherId: S.String,
+      runnerId: S.String,
       provider: AiProviderType,
-      status: AiWatcherStatus,
+      status: AiRunnerStatus,
     })),
-    errors: S.Union(AiWatcherError),
+    errors: S.Union(AiRunnerError),
   },
 } as const
 ```
 
 ### 5.2 IPC Handlers
 
-**File:** `src/main/ipc/ai-watcher-handlers.ts`
+**File:** `src/main/ipc/ai-runner-handlers.ts`
 
 ```typescript
 import { registerIpcHandler } from './ipc-handler-setup'
-import { AiWatcherIpcContracts } from '../../shared/ipc-contracts'
+import { AiRunnerIpcContracts } from '../../shared/ipc-contracts'
 
-export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
-  const watcherRegistry = yield* AiWatcherRegistry
+export const setupAiRunnerIpcHandlers = Effect.gen(function* () {
+  const runnerRegistry = yield* AiRunnerRegistry
 
   // Use the centralized registerIpcHandler utility
   registerIpcHandler(
-    AiWatcherIpcContracts.startWatcher,
-    (input) => watcherRegistry.startWatcher({
-      watcherId: input.watcherId,
+    AiRunnerIpcContracts.startRunner,
+    (input) => runnerRegistry.startRunner({
+      runnerId: input.runnerId,
       provider: input.provider,
       operation: input.operation,
       sessionName: input.sessionName,
@@ -417,15 +417,15 @@ export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
   )
 
   registerIpcHandler(
-    AiWatcherIpcContracts.stopWatcher,
-    (input) => watcherRegistry.getWatcher(input.watcherId).pipe(
-      Effect.flatMap(watcher => watcher.terminateWatcher)
+    AiRunnerIpcContracts.stopRunner,
+    (input) => runnerRegistry.getRunner(input.runnerId).pipe(
+      Effect.flatMap(runner => runner.terminateRunner)
     )
   )
 
   registerIpcHandler(
-    AiWatcherIpcContracts.listWatchers,
-    () => watcherRegistry.listWatchers()
+    AiRunnerIpcContracts.listRunners,
+    () => runnerRegistry.listRunners()
   )
 })
 ```
@@ -440,7 +440,7 @@ app.whenReady().then(async () => {
       yield* setupProviderIpcHandlers
       yield* setupAiProviderIpcHandlers
       yield* setupWorkspaceIpcHandlers
-      yield* setupAiWatcherIpcHandlers  // NEW
+      yield* setupAiRunnerIpcHandlers  // NEW
     }).pipe(Effect.provide(MainLayer))
   )
   // ...
@@ -453,27 +453,27 @@ app.whenReady().then(async () => {
 
 ### 6.1 Atoms
 
-**File:** `src/renderer/atoms/ai-watcher-atoms.ts`
+**File:** `src/renderer/atoms/ai-runner-atoms.ts`
 
 ```typescript
-export const aiWatchersAtom = Atom.make(
+export const aiRunnersAtom = Atom.make(
   Effect.gen(function* () {
-    const client = yield* AiWatcherClient
-    return yield* client.listWatchers()
+    const client = yield* AiRunnerClient
+    return yield* client.listRunners()
   }).pipe(
-    Atom.withReactivityKeys(['ai-watcher:list']),
+    Atom.withReactivityKeys(['ai-runner:list']),
     Atom.setIdleTTL(Duration.seconds(5))
   )
 )
 
-export const aiWatcherMetricsAtom = Atom.family((watcherId: string) =>
+export const aiRunnerMetricsAtom = Atom.family((runnerId: string) =>
   Atom.make(
     Effect.gen(function* () {
-      const client = yield* AiWatcherClient
-      return yield* client.getWatcherMetrics(watcherId)
+      const client = yield* AiRunnerClient
+      return yield* client.getRunnerMetrics(runnerId)
     })
   ).pipe(
-    Atom.withReactivityKeys(['ai-watcher:metrics', watcherId]),
+    Atom.withReactivityKeys(['ai-runner:metrics', runnerId]),
     Atom.setIdleTTL(Duration.seconds(5))
   )
 )
@@ -481,11 +481,11 @@ export const aiWatcherMetricsAtom = Atom.family((watcherId: string) =>
 
 ### 6.2 Components
 
-**File:** `src/renderer/components/AiWatcherMonitor.tsx`
+**File:** `src/renderer/components/AiRunnerMonitor.tsx`
 
 ```typescript
-export function AiWatcherMonitor({ watcherId }: { watcherId: string }) {
-  const metricsResult = useAtomValue(aiWatcherMetricsAtom(watcherId))
+export function AiRunnerMonitor({ runnerId }: { runnerId: string }) {
+  const metricsResult = useAtomValue(aiRunnerMetricsAtom(runnerId))
 
   return Result.builder(metricsResult)
     .onInitial(() => <LoadingSpinner />)
@@ -496,13 +496,13 @@ export function AiWatcherMonitor({ watcherId }: { watcherId: string }) {
       <ErrorAlert error={error} />
     ))
     .onDefect((defect) => {
-      console.error('[AiWatcherMonitor]', defect)
+      console.error('[AiRunnerMonitor]', defect)
       return <ErrorAlert message={String(defect)} />
     })
     .onSuccess((metrics) => (
       <div className="space-y-4">
-        <WatcherStats metrics={metrics} />
-        <TmuxSessionInfo watcherId={watcherId} />
+        <RunnerStats metrics={metrics} />
+        <TmuxSessionInfo runnerId={runnerId} />
       </div>
     ))
     .render()
@@ -535,7 +535,7 @@ export function AiWatcherMonitor({ watcherId }: { watcherId: string }) {
 
 ### Phase 1: Foundation (Week 1)
 
-- [ ] Create `src/main/ai-watchers/` directory
+- [ ] Create `src/main/ai-runners/` directory
 - [ ] Define ports in `ports.ts`
 - [ ] Define errors in `errors.ts`
 - [ ] Create `TmuxSessionManagerService`
@@ -544,8 +544,8 @@ export function AiWatcherMonitor({ watcherId }: { watcherId: string }) {
 ### Phase 2: Service Implementation (Week 2)
 
 - [ ] Implement `ProcessMonitorService` (tmux-based adapter)
-- [ ] Implement `AiWatcherService` (high-level orchestration)
-- [ ] Implement `AiWatcherRegistry` (multi-watcher management)
+- [ ] Implement `AiRunnerService` (high-level orchestration)
+- [ ] Implement `AiRunnerRegistry` (multi-runner management)
 - [ ] Update error mapper
 - [ ] Update `MainLayer`
 
@@ -569,20 +569,20 @@ export function AiWatcherMonitor({ watcherId }: { watcherId: string }) {
 ## Files to Create/Update
 
 ### New Files
-1. `src/main/ai-watchers/ports.ts`
-2. `src/main/ai-watchers/errors.ts`
-3. `src/main/ai-watchers/tmux-session-manager.ts`
-4. `src/main/ai-watchers/process-monitor.ts`
-5. `src/main/ai-watchers/ai-watcher-service.ts`
-6. `src/main/ai-watchers/ai-watcher-registry.ts`
-7. `src/main/ipc/ai-watcher-handlers.ts`
-8. `src/renderer/atoms/ai-watcher-atoms.ts`
-9. `src/renderer/components/AiWatcherMonitor.tsx`
+1. `src/main/ai-runners/ports.ts`
+2. `src/main/ai-runners/errors.ts`
+3. `src/main/ai-runners/tmux-session-manager.ts`
+4. `src/main/ai-runners/process-monitor.ts`
+5. `src/main/ai-runners/ai-runner-service.ts`
+6. `src/main/ai-runners/ai-runner-registry.ts`
+7. `src/main/ipc/ai-runner-handlers.ts`
+8. `src/renderer/atoms/ai-runner-atoms.ts`
+9. `src/renderer/components/AiRunnerMonitor.tsx`
 
 ### Updated Files
-1. `src/main/ipc/error-mapper.ts` - Add AI watcher error mappings
+1. `src/main/ipc/error-mapper.ts` - Add AI runner error mappings
 2. `src/shared/schemas/errors.ts` - Add shared error types
-3. `src/shared/ipc-contracts.ts` - Add AI watcher contracts
+3. `src/shared/ipc-contracts.ts` - Add AI runner contracts
 4. `src/main/index.ts` - Add to MainLayer and setup handlers
 
 ---

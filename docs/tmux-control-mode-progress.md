@@ -21,7 +21,7 @@ Create a new Effect Layer-based adapter that:
 
 ### Deliverables
 
-- [ ] Create `src/main/ai-watchers/adapters/tmux-control-client-adapter.ts`
+- [ ] Create `src/main/ai-runners/adapters/tmux-control-client-adapter.ts`
   - [ ] `TmuxControlClient.spawn()` - spawn tmux -CC
   - [ ] `TmuxControlClient.parseEvents()` - parse %output lines
   - [ ] `TmuxControlClient.sendKeys()` - send input to panes
@@ -37,7 +37,7 @@ Create a new Effect Layer-based adapter that:
 
 ### Key Implementation Details
 
-**File Location**: `src/main/ai-watchers/adapters/tmux-control-client-adapter.ts`
+**File Location**: `src/main/ai-runners/adapters/tmux-control-client-adapter.ts`
 
 **Dependencies**:
 - `effect/Effect`, `effect/Stream`
@@ -70,7 +70,7 @@ Modify `NodeProcessMonitorAdapter` to detect tmux sessions and route to `TmuxCon
 
 ### Changes Required
 
-**File**: `src/main/ai-watchers/adapters/node-process-monitor-adapter.ts`
+**File**: `src/main/ai-runners/adapters/node-process-monitor-adapter.ts`
 
 - [ ] Modify `attachToSession()` to detect tmux
   - [ ] Check if `sessionName` is a valid tmux session (`tmux has-session -t <session>`)
@@ -198,16 +198,16 @@ const silenceTimer = setInterval(() => {
 
 ### Integration Tests
 
-- [ ] Spawn multiple tmux sessions with watchers
+- [ ] Spawn multiple tmux sessions with runners
 - [ ] Type in each buffer → verify LED turns green within 10ms
 - [ ] Switch panes → verify ONLY the active pane stays green (no batching)
-- [ ] Kill a pane → verify watcher detects EOF
+- [ ] Kill a pane → verify runner detects EOF
 - [ ] Detach session → verify control mode client handles gracefully
 
 ### Performance Benchmarks
 
 - [ ] Measure activity detection latency (target: < 10ms)
-- [ ] Measure CPU usage per watcher (target: < 1% per watcher)
+- [ ] Measure CPU usage per runner (target: < 1% per runner)
 - [ ] Measure memory usage (target: < 4MB total regardless of pane count)
 - [ ] Compare vs. old pipe-pane approach
 
@@ -221,12 +221,12 @@ const silenceTimer = setInterval(() => {
 
 ### Manual Testing Checklist
 
-- [ ] Create 4 tmux panes with watchers
+- [ ] Create 4 tmux panes with runners
 - [ ] Type slowly in pane 1 → LED turns green immediately
 - [ ] Type in panes 2, 3, 4 without switching → all turn green individually
 - [ ] Switch focus → only focused pane stays green
 - [ ] Type fast in one pane → LED updates continuously (no batching)
-- [ ] Kill a pane → watcher detects termination
+- [ ] Kill a pane → runner detects termination
 - [ ] Verify console logs show proper event sequence
 
 ---
@@ -236,7 +236,7 @@ const silenceTimer = setInterval(() => {
 ### Status: ⏳ PENDING (Depends on Phase 5)
 
 - [ ] Update CLAUDE.md with Control Mode architecture
-- [ ] Add examples to AI watchers documentation
+- [ ] Add examples to AI runners documentation
 - [ ] Document event types and lifecycle
 - [ ] Create troubleshooting guide
 - [ ] Add migration notes for future developers
@@ -274,7 +274,7 @@ const silenceTimer = setInterval(() => {
 ✅ **Phase 2**: Integration complete, both code paths functional (tmux vs. non-tmux)
 ✅ **Phase 3**: Old pipe-pane code removed, codebase cleaner
 ✅ **Phase 4**: Silence detection works event-driven, no polling overhead
-✅ **Phase 5**: Activity latency < 10ms, no batching behavior, CPU usage < 1% per watcher
+✅ **Phase 5**: Activity latency < 10ms, no batching behavior, CPU usage < 1% per runner
 ✅ **Phase 6**: Documentation complete, team understands new architecture
 
 ---
@@ -316,11 +316,11 @@ const silenceTimer = setInterval(() => {
 ### Phases 1-2 Delivered ✅
 
 **File Created**:
-- `src/main/ai-watchers/adapters/tmux-control-client-adapter.ts` - TmuxControlClient namespace with utilities for control mode
+- `src/main/ai-runners/adapters/tmux-control-client-adapter.ts` - TmuxControlClient namespace with utilities for control mode
 
 **Files Modified**:
-- `src/main/ai-watchers/adapters/node-process-monitor-adapter.ts` - Added control mode detection and fallback logic
-- `src/main/ai-watchers/adapters/tmux-session-manager-adapter.ts` - Fixed sessionName parameter passing
+- `src/main/ai-runners/adapters/node-process-monitor-adapter.ts` - Added control mode detection and fallback logic
+- `src/main/ai-runners/adapters/tmux-session-manager-adapter.ts` - Fixed sessionName parameter passing
 
 **Key Features Implemented**:
 - ✅ `TmuxControlClient.spawn()` - Spawn tmux -CC for real-time events
@@ -337,7 +337,7 @@ const silenceTimer = setInterval(() => {
    - Session name validated via `tmux has-session`
    - Control client spawned with `tmux -CC attach-session`
    - Event stream created from stdout
-   - Events parsed and emitted to watcher
+   - Events parsed and emitted to runner
 
 2. **Real-Time Latency**:
    - %output events received immediately (no redraw buffering)

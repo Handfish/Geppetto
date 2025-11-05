@@ -1,14 +1,14 @@
-# AI Watcher XTerm.js Terminal - Complete Implementation Plan
+# AI Runner XTerm.js Terminal - Complete Implementation Plan
 
-> **Goal**: Replace tmux-based AI watchers with an integrated xterm.js terminal window featuring LED status indicators, multi-process management, and seamless process switching.
+> **Goal**: Replace tmux-based AI runners with an integrated xterm.js terminal window featuring LED status indicators, multi-process management, and seamless process switching.
 
 ## Executive Summary
 
-This plan outlines the migration from tmux-based AI watchers to a native xterm.js terminal implementation within the Electron application. The new system will provide:
+This plan outlines the migration from tmux-based AI runners to a native xterm.js terminal implementation within the Electron application. The new system will provide:
 
 - **Native Terminal Integration**: xterm.js embedded directly in the UI
 - **LED Status Indicators**: Visual process status within the terminal window
-- **Multi-Process Management**: Launch and switch between multiple AI watcher processes
+- **Multi-Process Management**: Launch and switch between multiple AI runner processes
 - **Hexagonal Architecture**: Clean separation via ports and adapters
 - **Effect-TS Integration**: Type-safe process management with Effect patterns
 
@@ -508,7 +508,7 @@ import { ProcessConfig, ProcessState, OutputChunk, ProcessEvent, TerminalError }
 import { AccountContextService } from '../account/account-context-service'
 import { TierService } from '../tier/tier-service'
 
-interface WatcherProcessConfig extends ProcessConfig {
+interface RunnerProcessConfig extends ProcessConfig {
   accountId: string
   agentType: string
   prompt: string
@@ -522,10 +522,10 @@ export class TerminalService extends Effect.Service<TerminalService>()(
       const accountService = yield* AccountContextService
       const tierService = yield* TierService
 
-      // Track active watchers
-      const activeWatchers = yield* Ref.make(HashMap.empty<string, WatcherProcessConfig>())
+      // Track active runners
+      const activeRunners = yield* Ref.make(HashMap.empty<string, RunnerProcessConfig>())
 
-      const spawnAiWatcher = (config: {
+      const spawnAiRunner = (config: {
         accountId: string
         agentType: string
         prompt: string
@@ -539,21 +539,21 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         }
       }) => Effect.gen(function* () {
         // Check tier limits
-        yield* tierService.checkFeatureAvailable('ai-watchers')
+        yield* tierService.checkFeatureAvailable('ai-runners')
 
         const account = yield* accountService.getAccountContext(config.accountId)
         const adapter = yield* registry.getDefaultAdapter()
 
         // Generate process ID
         const processId = config.issueContext
-          ? `watcher-${config.accountId}-issue-${config.issueContext.issueNumber}`
-          : `watcher-${config.accountId}-${Date.now()}`
+          ? `runner-${config.accountId}-issue-${config.issueContext.issueNumber}`
+          : `runner-${config.accountId}-${Date.now()}`
 
         // Build command based on agent type
         const command = config.agentType === 'claude' ? 'claude' : 'cursor'
         const cwd = config.issueContext?.worktreePath || process.cwd()
 
-        const processConfig: WatcherProcessConfig = {
+        const processConfig: RunnerProcessConfig = {
           id: processId,
           command,
           args: ['--task', config.prompt],
@@ -573,8 +573,8 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         // Spawn the process
         const state = yield* adapter.spawn(processConfig)
 
-        // Track the watcher
-        yield* Ref.update(activeWatchers, HashMap.set(processId, processConfig))
+        // Track the runner
+        yield* Ref.update(activeRunners, HashMap.set(processId, processConfig))
 
         return {
           processId,
@@ -582,18 +582,18 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         }
       })
 
-      const killWatcher = (processId: string) => Effect.gen(function* () {
+      const killRunner = (processId: string) => Effect.gen(function* () {
         const adapter = yield* registry.getDefaultAdapter()
         yield* adapter.kill(processId)
-        yield* Ref.update(activeWatchers, HashMap.remove(processId))
+        yield* Ref.update(activeRunners, HashMap.remove(processId))
       })
 
-      const killAllWatchers = () => Effect.gen(function* () {
-        const watchers = yield* Ref.get(activeWatchers)
+      const killAllRunners = () => Effect.gen(function* () {
+        const runners = yield* Ref.get(activeRunners)
         const adapter = yield* registry.getDefaultAdapter()
 
         yield* Effect.all(
-          Array.from(HashMap.keys(watchers)).map((processId) =>
+          Array.from(HashMap.keys(runners)).map((processId) =>
             adapter.kill(processId).pipe(
               Effect.catchAll(() => Effect.void) // Ignore errors
             )
@@ -601,42 +601,42 @@ export class TerminalService extends Effect.Service<TerminalService>()(
           { concurrency: 'unbounded' }
         )
 
-        yield* Ref.set(activeWatchers, HashMap.empty())
+        yield* Ref.set(activeRunners, HashMap.empty())
       })
 
-      const restartWatcher = (processId: string) => Effect.gen(function* () {
-        const watchers = yield* Ref.get(activeWatchers)
-        const config = HashMap.get(watchers, processId)
+      const restartRunner = (processId: string) => Effect.gen(function* () {
+        const runners = yield* Ref.get(activeRunners)
+        const config = HashMap.get(runners, processId)
 
         if (config._tag === 'None') {
-          return yield* Effect.fail(new TerminalError('ProcessNotFound', `Watcher ${processId} not found`))
+          return yield* Effect.fail(new TerminalError('ProcessNotFound', `Runner ${processId} not found`))
         }
 
         const adapter = yield* registry.getDefaultAdapter()
         return yield* adapter.restart(processId)
       })
 
-      const writeToWatcher = (processId: string, data: string) => Effect.gen(function* () {
+      const writeToRunner = (processId: string, data: string) => Effect.gen(function* () {
         const adapter = yield* registry.getDefaultAdapter()
         yield* adapter.write(processId, data)
       })
 
-      const resizeWatcher = (processId: string, rows: number, cols: number) => Effect.gen(function* () {
+      const resizeRunner = (processId: string, rows: number, cols: number) => Effect.gen(function* () {
         const adapter = yield* registry.getDefaultAdapter()
         yield* adapter.resize(processId, rows, cols)
       })
 
-      const getWatcherState = (processId: string) => Effect.gen(function* () {
+      const getRunnerState = (processId: string) => Effect.gen(function* () {
         const adapter = yield* registry.getDefaultAdapter()
         return yield* adapter.getState(processId)
       })
 
-      const listActiveWatchers = () => Effect.gen(function* () {
-        const watchers = yield* Ref.get(activeWatchers)
+      const listActiveRunners = () => Effect.gen(function* () {
+        const runners = yield* Ref.get(activeRunners)
         const adapter = yield* registry.getDefaultAdapter()
 
         const states = yield* Effect.all(
-          Array.from(HashMap.entries(watchers)).map(([processId, config]) =>
+          Array.from(HashMap.entries(runners)).map(([processId, config]) =>
             adapter.getState(processId).pipe(
               Effect.map((state) => ({
                 processId,
@@ -662,14 +662,14 @@ export class TerminalService extends Effect.Service<TerminalService>()(
         return states
       })
 
-      const subscribeToWatcher = (processId: string) => {
+      const subscribeToRunner = (processId: string) => {
         const adapter = registry.getDefaultAdapter()
         return Stream.fromEffect(adapter).pipe(
           Stream.flatMap((adapter) => adapter.subscribe(processId))
         )
       }
 
-      const subscribeToWatcherEvents = (processId: string) => {
+      const subscribeToRunnerEvents = (processId: string) => {
         const adapter = registry.getDefaultAdapter()
         return Stream.fromEffect(adapter).pipe(
           Stream.flatMap((adapter) => adapter.subscribeToEvents(processId))
@@ -677,16 +677,16 @@ export class TerminalService extends Effect.Service<TerminalService>()(
       }
 
       return {
-        spawnAiWatcher,
-        killWatcher,
-        killAllWatchers,
-        restartWatcher,
-        writeToWatcher,
-        resizeWatcher,
-        getWatcherState,
-        listActiveWatchers,
-        subscribeToWatcher,
-        subscribeToWatcherEvents,
+        spawnAiRunner,
+        killRunner,
+        killAllRunners,
+        restartRunner,
+        writeToRunner,
+        resizeRunner,
+        getRunnerState,
+        listActiveRunners,
+        subscribeToRunner,
+        subscribeToRunnerEvents,
       }
     }),
     dependencies: [TerminalRegistry, AccountContextService, TierService],
@@ -708,11 +708,11 @@ import { Schema as S } from 'effect'
 import { ProcessState, OutputChunk, ProcessEvent } from '../schemas/terminal'
 
 // Import schemas (will be created next)
-import { SpawnWatcherInput, WatcherInfo } from '../schemas/terminal'
+import { SpawnRunnerInput, RunnerInfo } from '../schemas/terminal'
 
 export const TerminalIpcContracts = {
-  spawnWatcher: IpcContract.make('terminal:spawn-watcher', {
-    input: SpawnWatcherInput,
+  spawnRunner: IpcContract.make('terminal:spawn-runner', {
+    input: SpawnRunnerInput,
     output: S.Struct({
       processId: S.String,
       state: ProcessState,
@@ -720,7 +720,7 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalError, AuthenticationError, TierLimitError),
   }),
 
-  killWatcher: IpcContract.make('terminal:kill-watcher', {
+  killRunner: IpcContract.make('terminal:kill-runner', {
     input: S.Struct({
       processId: S.String,
     }),
@@ -728,13 +728,13 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalError),
   }),
 
-  killAllWatchers: IpcContract.make('terminal:kill-all-watchers', {
+  killAllRunners: IpcContract.make('terminal:kill-all-runners', {
     input: S.Void,
     output: S.Void,
     errors: S.Never,
   }),
 
-  restartWatcher: IpcContract.make('terminal:restart-watcher', {
+  restartRunner: IpcContract.make('terminal:restart-runner', {
     input: S.Struct({
       processId: S.String,
     }),
@@ -742,7 +742,7 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalError),
   }),
 
-  writeToWatcher: IpcContract.make('terminal:write-to-watcher', {
+  writeToRunner: IpcContract.make('terminal:write-to-runner', {
     input: S.Struct({
       processId: S.String,
       data: S.String,
@@ -751,7 +751,7 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalError),
   }),
 
-  resizeWatcher: IpcContract.make('terminal:resize-watcher', {
+  resizeRunner: IpcContract.make('terminal:resize-runner', {
     input: S.Struct({
       processId: S.String,
       rows: S.Number,
@@ -761,7 +761,7 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalError),
   }),
 
-  getWatcherState: IpcContract.make('terminal:get-watcher-state', {
+  getRunnerState: IpcContract.make('terminal:get-runner-state', {
     input: S.Struct({
       processId: S.String,
     }),
@@ -769,14 +769,14 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalError),
   }),
 
-  listActiveWatchers: IpcContract.make('terminal:list-active-watchers', {
+  listActiveRunners: IpcContract.make('terminal:list-active-runners', {
     input: S.Void,
-    output: S.Array(WatcherInfo),
+    output: S.Array(RunnerInfo),
     errors: S.Never,
   }),
 
   // Stream subscriptions (handled differently for IPC)
-  subscribeToWatcher: IpcContract.make('terminal:subscribe-to-watcher', {
+  subscribeToRunner: IpcContract.make('terminal:subscribe-to-runner', {
     input: S.Struct({
       processId: S.String,
     }),
@@ -786,7 +786,7 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalError),
   }),
 
-  unsubscribeFromWatcher: IpcContract.make('terminal:unsubscribe-from-watcher', {
+  unsubscribeFromRunner: IpcContract.make('terminal:unsubscribe-from-runner', {
     input: S.Struct({
       subscriptionId: S.String,
     }),
@@ -826,7 +826,7 @@ export class ProcessEvent extends S.Class<ProcessEvent>('ProcessEvent')({
   metadata: S.optional(S.Unknown),
 }) {}
 
-export class SpawnWatcherInput extends S.Class<SpawnWatcherInput>('SpawnWatcherInput')({
+export class SpawnRunnerInput extends S.Class<SpawnRunnerInput>('SpawnRunnerInput')({
   accountId: S.String,
   agentType: S.String,
   prompt: S.String,
@@ -840,7 +840,7 @@ export class SpawnWatcherInput extends S.Class<SpawnWatcherInput>('SpawnWatcherI
   })),
 }) {}
 
-export class WatcherInfo extends S.Class<WatcherInfo>('WatcherInfo')({
+export class RunnerInfo extends S.Class<RunnerInfo>('RunnerInfo')({
   processId: S.String,
   accountId: S.String,
   agentType: S.String,
@@ -890,45 +890,45 @@ export const registerTerminalHandlers = () => Effect.gen(function* () {
 
   // Basic operations
   registerIpcHandler(
-    TerminalIpcContracts.spawnWatcher,
-    (input) => terminalService.spawnAiWatcher(input)
+    TerminalIpcContracts.spawnRunner,
+    (input) => terminalService.spawnAiRunner(input)
   )
 
   registerIpcHandler(
-    TerminalIpcContracts.killWatcher,
-    ({ processId }) => terminalService.killWatcher(processId)
+    TerminalIpcContracts.killRunner,
+    ({ processId }) => terminalService.killRunner(processId)
   )
 
   registerIpcHandler(
-    TerminalIpcContracts.killAllWatchers,
-    () => terminalService.killAllWatchers()
+    TerminalIpcContracts.killAllRunners,
+    () => terminalService.killAllRunners()
   )
 
   registerIpcHandler(
-    TerminalIpcContracts.restartWatcher,
-    ({ processId }) => terminalService.restartWatcher(processId)
+    TerminalIpcContracts.restartRunner,
+    ({ processId }) => terminalService.restartRunner(processId)
   )
 
   registerIpcHandler(
-    TerminalIpcContracts.writeToWatcher,
-    ({ processId, data }) => terminalService.writeToWatcher(processId, data)
+    TerminalIpcContracts.writeToRunner,
+    ({ processId, data }) => terminalService.writeToRunner(processId, data)
   )
 
   registerIpcHandler(
-    TerminalIpcContracts.resizeWatcher,
-    ({ processId, rows, cols }) => terminalService.resizeWatcher(processId, rows, cols)
+    TerminalIpcContracts.resizeRunner,
+    ({ processId, rows, cols }) => terminalService.resizeRunner(processId, rows, cols)
   )
 
   registerIpcHandler(
-    TerminalIpcContracts.getWatcherState,
-    ({ processId }) => terminalService.getWatcherState(processId)
+    TerminalIpcContracts.getRunnerState,
+    ({ processId }) => terminalService.getRunnerState(processId)
   )
 
   registerIpcHandler(
-    TerminalIpcContracts.listActiveWatchers,
-    () => terminalService.listActiveWatchers().pipe(
-      Effect.map((watchers) =>
-        watchers.map((w) => ({
+    TerminalIpcContracts.listActiveRunners,
+    () => terminalService.listActiveRunners().pipe(
+      Effect.map((runners) =>
+        runners.map((w) => ({
           processId: w.processId,
           accountId: w.config.accountId,
           agentType: w.config.agentType,
@@ -942,13 +942,13 @@ export const registerTerminalHandlers = () => Effect.gen(function* () {
 
   // Stream subscription handler
   registerIpcHandler(
-    TerminalIpcContracts.subscribeToWatcher,
+    TerminalIpcContracts.subscribeToRunner,
     ({ processId }) => Effect.gen(function* () {
       const subscriptionId = `sub-${processId}-${Date.now()}`
 
       // Set up output stream
-      const outputStream = terminalService.subscribeToWatcher(processId)
-      const eventStream = terminalService.subscribeToWatcherEvents(processId)
+      const outputStream = terminalService.subscribeToRunner(processId)
+      const eventStream = terminalService.subscribeToRunnerEvents(processId)
 
       // Create a fiber that runs the streams and sends data via IPC
       const fiber = yield* Stream.merge(
@@ -980,7 +980,7 @@ export const registerTerminalHandlers = () => Effect.gen(function* () {
   )
 
   registerIpcHandler(
-    TerminalIpcContracts.unsubscribeFromWatcher,
+    TerminalIpcContracts.unsubscribeFromRunner,
     ({ subscriptionId }) => Effect.sync(() => {
       const sub = subscriptions.get(subscriptionId)
       if (sub) {
@@ -1003,36 +1003,36 @@ export const registerTerminalHandlers = () => Effect.gen(function* () {
 ```typescript
 import { Atom, Result } from '@effect-atom/atom-react'
 import { Effect, Duration, Stream, HashMap, Ref } from 'effect'
-import { WatcherInfo, ProcessState, OutputChunk, ProcessEvent } from '../../shared/schemas/terminal'
+import { RunnerInfo, ProcessState, OutputChunk, ProcessEvent } from '../../shared/schemas/terminal'
 import { ElectronIpcClient } from '../lib/ipc-client'
 
-// Active watchers atom
-export const activeWatchersAtom = Atom.make(() =>
+// Active runners atom
+export const activeRunnersAtom = Atom.make(() =>
   Effect.gen(function* () {
     const ipc = yield* ElectronIpcClient
-    return yield* ipc.terminal.listActiveWatchers()
+    return yield* ipc.terminal.listActiveRunners()
   }).pipe(
-    Effect.map((watchers) => Result.success(watchers)),
+    Effect.map((runners) => Result.success(runners)),
     Effect.catchAll((error) => Effect.succeed(Result.fail(error)))
   )
 ).pipe(
   Atom.setIdleTTL(Duration.minutes(1)),
-  Atom.withKeys(['terminal:watchers'])
+  Atom.withKeys(['terminal:runners'])
 )
 
-// Individual watcher state atom family
-export const watcherStateAtom = Atom.family((processId: string) =>
+// Individual runner state atom family
+export const runnerStateAtom = Atom.family((processId: string) =>
   Atom.make(() =>
     Effect.gen(function* () {
       const ipc = yield* ElectronIpcClient
-      return yield* ipc.terminal.getWatcherState({ processId })
+      return yield* ipc.terminal.getRunnerState({ processId })
     }).pipe(
       Effect.map((state) => Result.success(state)),
       Effect.catchAll((error) => Effect.succeed(Result.fail(error)))
     )
   ).pipe(
     Atom.setIdleTTL(Duration.seconds(30)),
-    Atom.withKeys(['terminal:watcher:state', processId])
+    Atom.withKeys(['terminal:runner:state', processId])
   )
 )
 
@@ -1044,7 +1044,7 @@ interface OutputBuffer {
 
 const outputBuffers = new Map<string, OutputBuffer>()
 
-export const watcherOutputAtom = Atom.family((processId: string) =>
+export const runnerOutputAtom = Atom.family((processId: string) =>
   Atom.make(() => {
     // Initialize buffer if needed
     if (!outputBuffers.has(processId)) {
@@ -1073,7 +1073,7 @@ class TerminalSubscriptionManager {
       }
 
       const ipc = yield* ElectronIpcClient
-      const { subscriptionId } = yield* ipc.terminal.subscribeToWatcher({ processId })
+      const { subscriptionId } = yield* ipc.terminal.subscribeToRunner({ processId })
 
       this.subscriptions.set(processId, subscriptionId)
 
@@ -1114,7 +1114,7 @@ class TerminalSubscriptionManager {
     if (subscriptionId) {
       // Call IPC to unsubscribe
       ElectronIpcClient.pipe(
-        Effect.flatMap((ipc) => ipc.terminal.unsubscribeFromWatcher({ subscriptionId })),
+        Effect.flatMap((ipc) => ipc.terminal.unsubscribeFromRunner({ subscriptionId })),
         Effect.runPromise
       ).catch(console.error)
 
@@ -1150,7 +1150,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import { useAtomValue, useAtomRefresh } from '@effect-atom/atom-react'
 import { Result } from '@effect-atom/atom-react'
-import { watcherOutputAtom, terminalSubscriptionManager } from '../../atoms/terminal-atoms'
+import { runnerOutputAtom, terminalSubscriptionManager } from '../../atoms/terminal-atoms'
 import { OutputChunk, ProcessEvent } from '../../../shared/schemas/terminal'
 import { cn } from '../../lib/utils'
 
@@ -1175,8 +1175,8 @@ export function XTerminal({
   const searchAddonRef = useRef<SearchAddon | null>(null)
   const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null)
 
-  const outputResult = useAtomValue(watcherOutputAtom(processId))
-  const refreshOutput = useAtomRefresh(watcherOutputAtom(processId))
+  const outputResult = useAtomValue(runnerOutputAtom(processId))
+  const refreshOutput = useAtomRefresh(runnerOutputAtom(processId))
 
   // Initialize terminal
   useEffect(() => {
@@ -1455,7 +1455,7 @@ export function TerminalLED({ state, label, onClick, isActive, className }: Term
 import React, { useState, useCallback, useEffect } from 'react'
 import { useAtomValue, useAtomRefresh } from '@effect-atom/atom-react'
 import { Result } from '@effect-atom/atom-react'
-import { activeWatchersAtom, watcherStateAtom } from '../../atoms/terminal-atoms'
+import { activeRunnersAtom, runnerStateAtom } from '../../atoms/terminal-atoms'
 import { XTerminal } from './XTerminal'
 import { TerminalLED } from './TerminalLED'
 import { cn } from '../../lib/utils'
@@ -1468,52 +1468,52 @@ interface TerminalPanelProps {
 }
 
 export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
-  const watchersResult = useAtomValue(activeWatchersAtom)
-  const refreshWatchers = useAtomRefresh(activeWatchersAtom)
-  const { writeToWatcher, resizeWatcher, killWatcher, restartWatcher } = useTerminalOperations()
+  const runnersResult = useAtomValue(activeRunnersAtom)
+  const refreshRunners = useAtomRefresh(activeRunnersAtom)
+  const { writeToRunner, resizeRunner, killRunner, restartRunner } = useTerminalOperations()
 
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null)
   const [isMaximized, setIsMaximized] = useState(false)
 
-  // Auto-select first watcher
+  // Auto-select first runner
   useEffect(() => {
-    Result.match(watchersResult, {
-      onSuccess: (watchers) => {
-        if (watchers.length > 0 && !activeProcessId) {
-          setActiveProcessId(watchers[0].processId)
+    Result.match(runnersResult, {
+      onSuccess: (runners) => {
+        if (runners.length > 0 && !activeProcessId) {
+          setActiveProcessId(runners[0].processId)
         }
       },
       onError: () => {},
       onInitial: () => {},
     })
-  }, [watchersResult, activeProcessId])
+  }, [runnersResult, activeProcessId])
 
   const handleTerminalData = useCallback((data: string) => {
     if (activeProcessId) {
-      writeToWatcher(activeProcessId, data)
+      writeToRunner(activeProcessId, data)
     }
-  }, [activeProcessId, writeToWatcher])
+  }, [activeProcessId, writeToRunner])
 
   const handleTerminalResize = useCallback((rows: number, cols: number) => {
     if (activeProcessId) {
-      resizeWatcher(activeProcessId, rows, cols)
+      resizeRunner(activeProcessId, rows, cols)
     }
-  }, [activeProcessId, resizeWatcher])
+  }, [activeProcessId, resizeRunner])
 
   const handleKillProcess = useCallback((processId: string) => {
-    killWatcher(processId).then(() => {
-      refreshWatchers()
+    killRunner(processId).then(() => {
+      refreshRunners()
       if (processId === activeProcessId) {
         setActiveProcessId(null)
       }
     })
-  }, [activeProcessId, killWatcher, refreshWatchers])
+  }, [activeProcessId, killRunner, refreshRunners])
 
   const handleRestartProcess = useCallback((processId: string) => {
-    restartWatcher(processId).then(() => {
-      refreshWatchers()
+    restartRunner(processId).then(() => {
+      refreshRunners()
     })
-  }, [restartWatcher, refreshWatchers])
+  }, [restartRunner, refreshRunners])
 
   return (
     <div
@@ -1526,10 +1526,10 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-gray-200">AI Watchers Terminal</h3>
+          <h3 className="text-sm font-semibold text-gray-200">AI Runners Terminal</h3>
           <span className="text-xs text-gray-500">
-            {Result.match(watchersResult, {
-              onSuccess: (watchers) => `${watchers.length} active`,
+            {Result.match(runnersResult, {
+              onSuccess: (runners) => `${runners.length} active`,
               onError: () => 'Error',
               onInitial: () => 'Loading...',
             })}
@@ -1538,7 +1538,7 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
 
         <div className="flex items-center gap-1">
           <button
-            onClick={() => refreshWatchers()}
+            onClick={() => refreshRunners()}
             className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"
             title="Refresh"
           >
@@ -1563,29 +1563,29 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
 
       {/* LED Status Bar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800 overflow-x-auto">
-        {Result.builder(watchersResult)
-          .onSuccess((watchers) => (
+        {Result.builder(runnersResult)
+          .onSuccess((runners) => (
             <>
-              {watchers.map((watcher) => {
-                const stateResult = useAtomValue(watcherStateAtom(watcher.processId))
+              {runners.map((runner) => {
+                const stateResult = useAtomValue(runnerStateAtom(runner.processId))
 
                 return Result.builder(stateResult)
                   .onSuccess((state) => (
                     <TerminalLED
-                      key={watcher.processId}
+                      key={runner.processId}
                       state={state}
-                      label={watcher.issueContext ? `#${watcher.issueContext.issueNumber}` : watcher.agentType}
-                      isActive={watcher.processId === activeProcessId}
-                      onClick={() => setActiveProcessId(watcher.processId)}
+                      label={runner.issueContext ? `#${runner.issueContext.issueNumber}` : runner.agentType}
+                      isActive={runner.processId === activeProcessId}
+                      onClick={() => setActiveProcessId(runner.processId)}
                     />
                   ))
                   .onInitial(() => (
                     <TerminalLED
-                      key={watcher.processId}
-                      state={watcher.state}
-                      label={watcher.issueContext ? `#${watcher.issueContext.issueNumber}` : watcher.agentType}
-                      isActive={watcher.processId === activeProcessId}
-                      onClick={() => setActiveProcessId(watcher.processId)}
+                      key={runner.processId}
+                      state={runner.state}
+                      label={runner.issueContext ? `#${runner.issueContext.issueNumber}` : runner.agentType}
+                      isActive={runner.processId === activeProcessId}
+                      onClick={() => setActiveProcessId(runner.processId)}
                     />
                   ))
                   .onError(() => null)
@@ -1594,10 +1594,10 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
             </>
           ))
           .onInitial(() => (
-            <div className="text-xs text-gray-500">Loading watchers...</div>
+            <div className="text-xs text-gray-500">Loading runners...</div>
           ))
           .onError((error) => (
-            <div className="text-xs text-red-500">Error loading watchers</div>
+            <div className="text-xs text-red-500">Error loading runners</div>
           ))
           .render()}
       </div>
@@ -1615,8 +1615,8 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
             <div className="text-center">
-              <p className="mb-2">No active watchers</p>
-              <p className="text-xs">Launch AI watchers from the Issues modal</p>
+              <p className="mb-2">No active runners</p>
+              <p className="text-xs">Launch AI runners from the Issues modal</p>
             </div>
           </div>
         )}
@@ -1661,64 +1661,64 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
 import { useCallback } from 'react'
 import { Effect } from 'effect'
 import { ElectronIpcClient } from '../lib/ipc-client'
-import { SpawnWatcherInput } from '../../shared/schemas/terminal'
+import { SpawnRunnerInput } from '../../shared/schemas/terminal'
 
 export function useTerminalOperations() {
-  const spawnWatcher = useCallback(async (input: SpawnWatcherInput) => {
+  const spawnRunner = useCallback(async (input: SpawnRunnerInput) => {
     return Effect.runPromise(
       ElectronIpcClient.pipe(
-        Effect.flatMap((ipc) => ipc.terminal.spawnWatcher(input))
+        Effect.flatMap((ipc) => ipc.terminal.spawnRunner(input))
       )
     )
   }, [])
 
-  const killWatcher = useCallback(async (processId: string) => {
+  const killRunner = useCallback(async (processId: string) => {
     return Effect.runPromise(
       ElectronIpcClient.pipe(
-        Effect.flatMap((ipc) => ipc.terminal.killWatcher({ processId }))
+        Effect.flatMap((ipc) => ipc.terminal.killRunner({ processId }))
       )
     )
   }, [])
 
-  const killAllWatchers = useCallback(async () => {
+  const killAllRunners = useCallback(async () => {
     return Effect.runPromise(
       ElectronIpcClient.pipe(
-        Effect.flatMap((ipc) => ipc.terminal.killAllWatchers())
+        Effect.flatMap((ipc) => ipc.terminal.killAllRunners())
       )
     )
   }, [])
 
-  const restartWatcher = useCallback(async (processId: string) => {
+  const restartRunner = useCallback(async (processId: string) => {
     return Effect.runPromise(
       ElectronIpcClient.pipe(
-        Effect.flatMap((ipc) => ipc.terminal.restartWatcher({ processId }))
+        Effect.flatMap((ipc) => ipc.terminal.restartRunner({ processId }))
       )
     )
   }, [])
 
-  const writeToWatcher = useCallback(async (processId: string, data: string) => {
+  const writeToRunner = useCallback(async (processId: string, data: string) => {
     return Effect.runPromise(
       ElectronIpcClient.pipe(
-        Effect.flatMap((ipc) => ipc.terminal.writeToWatcher({ processId, data }))
+        Effect.flatMap((ipc) => ipc.terminal.writeToRunner({ processId, data }))
       )
     )
   }, [])
 
-  const resizeWatcher = useCallback(async (processId: string, rows: number, cols: number) => {
+  const resizeRunner = useCallback(async (processId: string, rows: number, cols: number) => {
     return Effect.runPromise(
       ElectronIpcClient.pipe(
-        Effect.flatMap((ipc) => ipc.terminal.resizeWatcher({ processId, rows, cols }))
+        Effect.flatMap((ipc) => ipc.terminal.resizeRunner({ processId, rows, cols }))
       )
     )
   }, [])
 
   return {
-    spawnWatcher,
-    killWatcher,
-    killAllWatchers,
-    restartWatcher,
-    writeToWatcher,
-    resizeWatcher,
+    spawnRunner,
+    killRunner,
+    killAllRunners,
+    restartRunner,
+    writeToRunner,
+    resizeRunner,
   }
 }
 ```
@@ -1762,16 +1762,16 @@ import { TerminalIpcContracts } from '../../shared/ipc-contracts/terminal-contra
 
 // Add terminal namespace
 const terminal = {
-  spawnWatcher: createIpcMethod(TerminalIpcContracts.spawnWatcher),
-  killWatcher: createIpcMethod(TerminalIpcContracts.killWatcher),
-  killAllWatchers: createIpcMethod(TerminalIpcContracts.killAllWatchers),
-  restartWatcher: createIpcMethod(TerminalIpcContracts.restartWatcher),
-  writeToWatcher: createIpcMethod(TerminalIpcContracts.writeToWatcher),
-  resizeWatcher: createIpcMethod(TerminalIpcContracts.resizeWatcher),
-  getWatcherState: createIpcMethod(TerminalIpcContracts.getWatcherState),
-  listActiveWatchers: createIpcMethod(TerminalIpcContracts.listActiveWatchers),
-  subscribeToWatcher: createIpcMethod(TerminalIpcContracts.subscribeToWatcher),
-  unsubscribeFromWatcher: createIpcMethod(TerminalIpcContracts.unsubscribeFromWatcher),
+  spawnRunner: createIpcMethod(TerminalIpcContracts.spawnRunner),
+  killRunner: createIpcMethod(TerminalIpcContracts.killRunner),
+  killAllRunners: createIpcMethod(TerminalIpcContracts.killAllRunners),
+  restartRunner: createIpcMethod(TerminalIpcContracts.restartRunner),
+  writeToRunner: createIpcMethod(TerminalIpcContracts.writeToRunner),
+  resizeRunner: createIpcMethod(TerminalIpcContracts.resizeRunner),
+  getRunnerState: createIpcMethod(TerminalIpcContracts.getRunnerState),
+  listActiveRunners: createIpcMethod(TerminalIpcContracts.listActiveRunners),
+  subscribeToRunner: createIpcMethod(TerminalIpcContracts.subscribeToRunner),
+  unsubscribeFromRunner: createIpcMethod(TerminalIpcContracts.unsubscribeFromRunner),
 }
 
 // Add to client object
@@ -1785,19 +1785,19 @@ return {
 
 ### 4.4 Update Issues Modal to Use Terminal
 
-**File**: `src/renderer/components/ai-watchers/IssuesModal.tsx` (modifications)
+**File**: `src/renderer/components/ai-runners/IssuesModal.tsx` (modifications)
 
 ```typescript
 import { useTerminalOperations } from '../../hooks/useTerminalOperations'
 
 // Replace tmux launcher with terminal operations
-const { spawnWatcher } = useTerminalOperations()
+const { spawnRunner } = useTerminalOperations()
 
-const handleLaunchWatchers = async () => {
+const handleLaunchRunners = async () => {
   // ... existing git worktree setup code ...
 
   // Replace tmux spawn with terminal spawn
-  await spawnWatcher({
+  await spawnRunner({
     accountId: selectedAccount.id,
     agentType: issue.agentType || globalAgentType,
     prompt: generatePrompt(issue),
@@ -1857,8 +1857,8 @@ const [showTerminal, setShowTerminal] = useState(false)
 - [ ] Check Layer composition in `src/main/index.ts`
 
 ### Phase 2: IPC
-- [ ] Test spawn watcher IPC call
-- [ ] Test kill watcher IPC call
+- [ ] Test spawn runner IPC call
+- [ ] Test kill runner IPC call
 - [ ] Test stream subscription
 - [ ] Verify error handling for invalid process IDs
 
@@ -1871,9 +1871,9 @@ const [showTerminal, setShowTerminal] = useState(false)
 - [ ] Resize handling works
 
 ### Phase 4: Integration
-- [ ] Launch watcher from Issues modal
+- [ ] Launch runner from Issues modal
 - [ ] Verify process appears in terminal panel
-- [ ] Test multiple concurrent watchers
+- [ ] Test multiple concurrent runners
 - [ ] Test restart functionality
 - [ ] Test kill functionality
 - [ ] Verify cleanup on app close
@@ -1905,7 +1905,7 @@ Add to `package.json`:
 ## Security Considerations
 
 1. **Input Sanitization**: Sanitize all terminal input to prevent injection
-2. **Process Isolation**: Each watcher runs in its own PTY process
+2. **Process Isolation**: Each runner runs in its own PTY process
 3. **Environment Variables**: Only pass necessary env vars to child processes
 4. **File System Access**: Restrict to worktree directories
 5. **Command Validation**: Validate AI agent commands before execution
@@ -1938,7 +1938,7 @@ Add to `package.json`:
 
 ## Conclusion
 
-This plan provides a complete migration path from tmux-based AI watchers to an integrated xterm.js terminal solution. The implementation follows our established patterns:
+This plan provides a complete migration path from tmux-based AI runners to an integrated xterm.js terminal solution. The implementation follows our established patterns:
 
 - **Hexagonal Architecture**: Clean port/adapter separation
 - **Effect-TS Patterns**: Type-safe service composition

@@ -66,7 +66,7 @@ export function ProcessRunnersPanel(): React.ReactNode {
                     key={runner.id}
                     onClear={handleClearRunner}
                     onClick={handleLEDClick}
-                    watcher={runner}
+                    runner={runner}
                   />
                 )
               })}

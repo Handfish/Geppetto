@@ -251,12 +251,12 @@ interface TerminalServiceMethods {
   // ... existing methods ...
 
   // Change from Stream to callback-based
-  subscribeToWatcher(processId: string, onOutput: (chunk: OutputChunk) => void): Effect.Effect<() => void, TerminalError, never>
-  subscribeToWatcherEvents(processId: string, onEvent: (event: ProcessEvent) => void): Effect.Effect<() => void, TerminalError, never>
+  subscribeToRunner(processId: string, onOutput: (chunk: OutputChunk) => void): Effect.Effect<() => void, TerminalError, never>
+  subscribeToRunnerEvents(processId: string, onEvent: (event: ProcessEvent) => void): Effect.Effect<() => void, TerminalError, never>
 }
 
-const subscribeToWatcher: TerminalServiceMethods['subscribeToWatcher'] = (processId, onOutput) => {
-  console.log('[TerminalService] subscribeToWatcher called for:', processId)
+const subscribeToRunner: TerminalServiceMethods['subscribeToRunner'] = (processId, onOutput) => {
+  console.log('[TerminalService] subscribeToRunner called for:', processId)
   return Effect.gen(function* () {
     const adapter = yield* registry.getDefaultAdapter()
     console.log('[TerminalService] Got adapter, calling subscribe')
@@ -264,7 +264,7 @@ const subscribeToWatcher: TerminalServiceMethods['subscribeToWatcher'] = (proces
   })
 }
 
-const subscribeToWatcherEvents: TerminalServiceMethods['subscribeToWatcherEvents'] = (processId, onEvent) => {
+const subscribeToRunnerEvents: TerminalServiceMethods['subscribeToRunnerEvents'] = (processId, onEvent) => {
   return Effect.gen(function* () {
     const adapter = yield* registry.getDefaultAdapter()
     return yield* adapter.subscribeToEvents(processId, onEvent)
@@ -293,17 +293,17 @@ interface Subscription {
   cleanupEvents: () => void
 }
 
-// Subscribe to watcher output/events
-console.log('[TerminalHandlers] Registering subscribe-to-watcher handler')
+// Subscribe to runner output/events
+console.log('[TerminalHandlers] Registering subscribe-to-runner handler')
 registerIpcHandler(
-  TerminalIpcContracts['terminal:subscribe-to-watcher'],
+  TerminalIpcContracts['terminal:subscribe-to-runner'],
   ({ processId }) => {
     console.log('[TerminalHandlers] ========== SUBSCRIPTION HANDLER CALLED ==========')
     console.log('[TerminalHandlers] ProcessId:', processId)
 
     return Effect.gen(function* () {
       console.log('[TerminalHandlers] ========== INSIDE EFFECT.GEN ==========')
-      console.log('[TerminalHandlers] Subscribing to watcher:', processId)
+      console.log('[TerminalHandlers] Subscribing to runner:', processId)
 
       const subscriptionId = `sub-${processId}-${Date.now()}`
 
@@ -341,8 +341,8 @@ registerIpcHandler(
 
       // Register callbacks with terminal service
       console.log('[TerminalHandlers] Registering callbacks with terminal service')
-      const cleanupOutput = yield* terminalService.subscribeToWatcher(processId, sendOutputViaIpc)
-      const cleanupEvents = yield* terminalService.subscribeToWatcherEvents(processId, sendEventViaIpc)
+      const cleanupOutput = yield* terminalService.subscribeToRunner(processId, sendOutputViaIpc)
+      const cleanupEvents = yield* terminalService.subscribeToRunnerEvents(processId, sendEventViaIpc)
       console.log('[TerminalHandlers] Callbacks registered')
 
       // Store subscription
@@ -359,10 +359,10 @@ registerIpcHandler(
   }
 )
 
-// Unsubscribe from watcher
-console.log('[TerminalHandlers] Registering unsubscribe-from-watcher handler')
+// Unsubscribe from runner
+console.log('[TerminalHandlers] Registering unsubscribe-from-runner handler')
 registerIpcHandler(
-  TerminalIpcContracts['terminal:unsubscribe-from-watcher'],
+  TerminalIpcContracts['terminal:unsubscribe-from-runner'],
   ({ subscriptionId }) => Effect.gen(function* () {
     const subscription = subscriptions.get(subscriptionId)
     if (subscription) {
@@ -405,7 +405,7 @@ class TerminalSubscriptionManager {
       }
 
       const ipc = yield* ElectronIpcClient
-      const { subscriptionId } = yield* ipc.invoke('terminal:subscribe-to-watcher', { processId })
+      const { subscriptionId } = yield* ipc.invoke('terminal:subscribe-to-runner', { processId })
 
       this.subscriptions.set(processId, subscriptionId)
 
@@ -466,7 +466,7 @@ class TerminalSubscriptionManager {
 
 ### Phase 4: Integration Test
 - [ ] Run `pnpm dev`
-- [ ] Spawn a watcher process
+- [ ] Spawn a runner process
 - [ ] Type in terminal - should see characters echoed
 - [ ] Check console logs for:
   - "Received PTY data"

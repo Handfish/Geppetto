@@ -58,25 +58,25 @@ const getStatusColor = (status: ProcessRunner['status']) => {
 }
 
 interface ProcessRunnerLEDProps {
-  watcher: ProcessRunner
+  runner: ProcessRunner
   onClear?: (runnerId: string) => void
   onClick?: (runner: ProcessRunner) => void
 }
 
-export function ProcessRunnerStatusLED({ watcher, onClear, onClick }: ProcessRunnerLEDProps) {
-  const colors = getStatusColor(watcher.status)
-  const favicon = getProviderFavicon(watcher.type)
-  const isActive = watcher.status === 'starting' || watcher.status === 'running' || watcher.status === 'idle'
-  const isDead = watcher.status === 'stopped' || watcher.status === 'errored'
+export function ProcessRunnerStatusLED({ runner, onClear, onClick }: ProcessRunnerLEDProps) {
+  const colors = getStatusColor(runner.status)
+  const favicon = getProviderFavicon(runner.type)
+  const isActive = runner.status === 'starting' || runner.status === 'running' || runner.status === 'idle'
+  const isDead = runner.status === 'stopped' || runner.status === 'errored'
 
   const handleClick = () => {
     console.log('[ProcessRunnerStatusLED] Button clicked!')
-    console.log('[ProcessRunnerStatusLED] Runner:', watcher.id, 'Status:', watcher.status)
+    console.log('[ProcessRunnerStatusLED] Runner:', runner.id, 'Status:', runner.status)
     console.log('[ProcessRunnerStatusLED] isDead:', isDead, 'onClick defined:', !!onClick)
 
     if (onClick && !isDead) {
       console.log('[ProcessRunnerStatusLED] Calling onClick handler...')
-      onClick(watcher)
+      onClick(runner)
     } else {
       console.log('[ProcessRunnerStatusLED] NOT calling onClick - isDead:', isDead, 'onClick:', !!onClick)
     }
@@ -130,7 +130,7 @@ export function ProcessRunnerStatusLED({ watcher, onClear, onClick }: ProcessRun
             className="absolute -top-1 -right-1 size-4 bg-gray-700 hover:bg-red-500 rounded-full flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
             onClick={(e) => {
               e.stopPropagation()
-              onClear(watcher.id)
+              onClear(runner.id)
             }}
             type="button"
           >
@@ -142,8 +142,8 @@ export function ProcessRunnerStatusLED({ watcher, onClear, onClick }: ProcessRun
       {/* Tooltip on hover */}
       <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
         <div className="bg-gray-900/95 border border-gray-700/50 rounded px-2 py-1 text-xs text-white backdrop-blur-xl">
-          <div className="font-medium">{watcher.name}</div>
-          <div className="text-gray-400 capitalize">{watcher.status}</div>
+          <div className="font-medium">{runner.name}</div>
+          <div className="text-gray-400 capitalize">{runner.status}</div>
         </div>
       </div>
     </motion.div>
@@ -151,4 +151,4 @@ export function ProcessRunnerStatusLED({ watcher, onClear, onClick }: ProcessRun
 }
 
 // Backwards compatibility alias
-export const WatcherStatusLED = ProcessRunnerStatusLED
+export const RunnerStatusLED = ProcessRunnerStatusLED

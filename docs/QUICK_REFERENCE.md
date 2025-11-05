@@ -1,4 +1,4 @@
-# Geppetto AI Watchers: Quick Reference Guide
+# Geppetto AI Runners: Quick Reference Guide
 
 ## Three Key Documents
 
@@ -41,7 +41,7 @@ export const ProcessMonitorService = Effect.Service.make<ProcessMonitorPort>(
 
 ### Service (High-level)
 ```typescript
-export const AiWatcherRegistry = Effect.Service.make<AiWatcherPort>()(
+export const AiRunnerRegistry = Effect.Service.make<AiRunnerPort>()(
   Effect.gen(function* () {
     const processMonitor = yield* ProcessMonitorPort
     // ... orchestration ...
@@ -75,10 +75,10 @@ UI                   Toast/Modal/Inline
 const MainLayer = Layer.mergeAll(
   // ... existing services ...
   
-  // NEW: AI Watchers
+  // NEW: AI Runners
   TmuxSessionManagerService.Default,
   ProcessMonitorService.Default,
-  AiWatcherRegistry.Default,
+  AiRunnerRegistry.Default,
 )
 ```
 
@@ -93,8 +93,8 @@ import { registerIpcHandler } from './ipc-handler-setup'
 
 // Register handlers with automatic type safety
 registerIpcHandler(
-  AiWatcherIpcContracts.getWatcher,
-  (input) => aiWatcherService.get(input.watcherId)
+  AiRunnerIpcContracts.getRunner,
+  (input) => aiRunnerService.get(input.runnerId)
 )
 ```
 
@@ -163,25 +163,25 @@ Effect.gen(function* () {
 ## File Structure Template
 
 ```
-src/main/ai-watchers/
-├── ports.ts                    # ProcessMonitorPort, AiWatcherPort
+src/main/ai-runners/
+├── ports.ts                    # ProcessMonitorPort, AiRunnerPort
 ├── errors.ts                   # Domain errors
 ├── tmux-session-manager.ts     # Tmux lifecycle
 ├── process-monitor.ts          # ProcessMonitor adapter
-├── ai-watcher-service.ts       # High-level service
-└── ai-watcher-registry.ts      # Multi-watcher registry
+├── ai-runner-service.ts       # High-level service
+└── ai-runner-registry.ts      # Multi-runner registry
 
 src/main/ipc/
-└── ai-watcher-handlers.ts      # IPC handler setup
+└── ai-runner-handlers.ts      # IPC handler setup
 
 src/shared/
-├── ipc-contracts.ts            # AiWatcherIpcContracts
+├── ipc-contracts.ts            # AiRunnerIpcContracts
 └── schemas/errors.ts           # ProcessOperationError, etc.
 
 src/renderer/
-├── atoms/ai-watcher-atoms.ts   # Effect atoms
+├── atoms/ai-runner-atoms.ts   # Effect atoms
 └── components/
-    └── AiWatcherMonitor.tsx    # React components
+    └── AiRunnerMonitor.tsx    # React components
 ```
 
 ---
@@ -200,18 +200,18 @@ src/renderer/
 
 ## Common Tasks
 
-### Add a New Provider Watcher
+### Add a New Provider Runner
 
-1. Create `src/main/ai-watchers/providers/openai-watcher-adapter.ts`
+1. Create `src/main/ai-runners/providers/openai-runner-adapter.ts`
 2. Implement custom metrics tracking
-3. Register in AiWatcherRegistry
+3. Register in AiRunnerRegistry
 4. Update renderer atoms and components
 
 ### Add a New Process Monitor Backend
 
 1. Create adapter implementing ProcessMonitorPort
 2. Replace TmuxSessionManagerService.Default
-3. No changes to AiWatcherRegistry or IPC contracts
+3. No changes to AiRunnerRegistry or IPC contracts
 
 ### Add a New Error Type
 
@@ -226,7 +226,7 @@ src/renderer/
 
 ### Unit Tests
 - ProcessMonitor spawning
-- AiWatcher metrics tracking
+- AiRunner metrics tracking
 - Error mapping
 
 ### Integration Tests
@@ -270,7 +270,7 @@ tmux kill-session -t <session-name>
 
 ## Performance Considerations
 
-- **Max Watchers:** 5-10 concurrent (depends on available fibers)
+- **Max Runners:** 5-10 concurrent (depends on available fibers)
 - **Log Rotation:** 100MB per file (configurable)
 - **Idle Timeout:** 5s default (configurable)
 - **Poll Interval:** 5s for atoms (adjustable)
@@ -282,14 +282,14 @@ tmux kill-session -t <session-name>
 - Tmux sessions inherit user permissions
 - Logs may contain sensitive output
 - Consider encryption for stored logs
-- Audit access to watcher metrics
+- Audit access to runner metrics
 
 ---
 
 ## Deliverables
 
 ### Week 1 (Foundation)
-- ProcessMonitorPort + AiWatcherPort defined
+- ProcessMonitorPort + AiRunnerPort defined
 - Domain errors defined
 - TmuxSessionManagerService implemented
 - Unit tests passing

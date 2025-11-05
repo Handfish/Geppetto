@@ -10,7 +10,7 @@ import { NodeFileSystemAdapter } from './adapters/file-system/node-file-system-a
  * - File system adapter (Node.js fs/promises implementation)
  * - Provider adapters (GitHub, GitLab, etc.) are in adapters/providers/
  *
- * Similar to AI Watchers pattern (single implementation per port):
+ * Similar to AI Runners pattern (single implementation per port):
  * - GitCommandRunnerPort → NodeGitCommandRunner (can swap with LibGit2Adapter, JGitAdapter)
  * - FileSystemPort → NodeFileSystemAdapter (can swap with MemoryFsAdapter, VirtualFsAdapter)
  *

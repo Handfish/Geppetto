@@ -25,12 +25,12 @@ Migrate custom Node.js API wrappers to stable `@effect/platform` modules (Comman
    - Operations: git command execution, streaming, timeout handling
 
 3. **TmuxSessionManagerAdapter** (319 lines)
-   - Location: `src/main/ai-watchers/adapters/tmux-session-manager-adapter.ts`
+   - Location: `src/main/ai-runners/adapters/tmux-session-manager-adapter.ts`
    - Wraps: `node:child_process.exec`, `node:child_process.spawn`
    - Operations: tmux session management, FIFO piping
 
 4. **NodeProcessMonitorAdapter** (782 lines)
-   - Location: `src/main/ai-watchers/adapters/node-process-monitor-adapter.ts`
+   - Location: `src/main/ai-runners/adapters/node-process-monitor-adapter.ts`
    - Wraps: `node:child_process.spawn`, `node:fs`, `node:path`
    - Operations: process spawning, monitoring, silence detection
 
@@ -199,7 +199,7 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
 **Files to update**:
 - `src/main/workspace/workspace-service.ts`
 - `src/main/source-control/services/*.ts`
-- `src/main/ai-watchers/adapters/*.ts`
+- `src/main/ai-runners/adapters/*.ts`
 
 **Before**:
 ```typescript
@@ -364,7 +364,7 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
 
 **Files**:
 - `src/main/workspace/workspace-service.ts`
-- `src/main/ai-watchers/adapters/node-process-monitor-adapter.ts`
+- `src/main/ai-runners/adapters/node-process-monitor-adapter.ts`
 
 **Before**:
 ```typescript
@@ -652,11 +652,11 @@ pnpm dev
 
 **Duration**: 8-12 hours
 **Risk**: Medium-High
-**Impact**: AI watchers feature
+**Impact**: AI runners feature
 
 ### 5.1 Migrate TmuxSessionManagerAdapter
 
-**File**: `src/main/ai-watchers/adapters/tmux-session-manager-adapter.ts`
+**File**: `src/main/ai-runners/adapters/tmux-session-manager-adapter.ts`
 
 **Strategy**: Replace exec/spawn with Command API
 
@@ -741,7 +741,7 @@ const createTempFifo = () =>
 
 ### 5.3 Migrate NodeProcessMonitorAdapter
 
-**File**: `src/main/ai-watchers/adapters/node-process-monitor-adapter.ts`
+**File**: `src/main/ai-runners/adapters/node-process-monitor-adapter.ts`
 
 **Strategy**: Tmux process spawning + FIFO streaming
 
@@ -821,12 +821,12 @@ const killTmuxSession = (sessionName: string) =>
 ### 5.4 Testing
 
 ```bash
-# Run AI watcher tests
-pnpm test src/main/ai-watchers
+# Run AI runner tests
+pnpm test src/main/ai-runners
 
 # Manual verification (requires tmux installed)
 pnpm dev
-# - Start AI watcher
+# - Start AI runner
 # - Verify output streaming
 # - Verify silence detection
 # - Verify cleanup on exit
@@ -841,7 +841,7 @@ pnpm dev
 - ✅ Cleanup on errors
 
 **Success Criteria**:
-- ✅ AI watchers functional
+- ✅ AI runners functional
 - ✅ Tmux operations work
 - ✅ Output streaming reliable
 - ✅ Cleanup prevents leaks
@@ -1095,7 +1095,7 @@ const GitInfrastructureLayer = USE_NEW_GIT_RUNNER
 
 **Status**: Tmux is Unix-only
 
-**Workaround**: AI watchers feature disabled on Windows or use alternative
+**Workaround**: AI runners feature disabled on Windows or use alternative
 
 **Future**: Consider Windows-specific implementation (named pipes?)
 
@@ -1115,7 +1115,7 @@ const GitInfrastructureLayer = USE_NEW_GIT_RUNNER
 
 ### Optional Testing Tools
 
-- `tmux` - For AI watcher testing
+- `tmux` - For AI runner testing
 - Git - For command runner testing
 
 ---

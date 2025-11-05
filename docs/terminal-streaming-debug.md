@@ -8,7 +8,7 @@ Xterm.js terminal displays no output. Typed characters are not echoed in the ter
 
 ## Data Flow Architecture
 ```
-User Types → XTerminal.onData → writeToWatcher → PTY Process
+User Types → XTerminal.onData → writeToRunner → PTY Process
                                                         ↓
                                                  PTY echoes back
                                                         ↓
@@ -111,7 +111,7 @@ Effect.tap(() => console.log('After runDrain'))
 
 1. Open app and navigate to repository
 2. Open Issues modal (select issues)
-3. Launch AI watchers
+3. Launch AI runners
 4. Click blue terminal button to show terminal panel
 5. Type characters in terminal
 6. Check both main process console and browser DevTools

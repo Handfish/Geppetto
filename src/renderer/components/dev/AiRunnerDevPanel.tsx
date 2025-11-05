@@ -77,7 +77,7 @@ function RunnerLogsDisplay({
   // Debug: Track renders
   renderCountRef.current++;
   console.log(
-    `[WatcherLogsDisplay ${runnerId}] Render #${renderCountRef.current}`,
+    `[RunnerLogsDisplay ${runnerId}] Render #${renderCountRef.current}`,
     {
       autoRefresh,
       logsResultTag: logsResult._tag,
@@ -93,13 +93,13 @@ function RunnerLogsDisplay({
   useEffect(() => {
     if (!autoRefresh) {
       console.log(
-        `[WatcherLogsDisplay ${runnerId}] Auto-refresh disabled, skipping`,
+        `[RunnerLogsDisplay ${runnerId}] Auto-refresh disabled, skipping`,
       );
       return;
     }
 
     console.log(
-      `[WatcherLogsDisplay ${runnerId}] Starting auto-refresh (${LOG_REFRESH_INTERVAL_MS}ms interval)`,
+      `[RunnerLogsDisplay ${runnerId}] Starting auto-refresh (${LOG_REFRESH_INTERVAL_MS}ms interval)`,
     );
 
     let intervalId: number | undefined;
@@ -107,13 +107,13 @@ function RunnerLogsDisplay({
 
     const runRefresh = () => {
       if (cancelled) {
-        console.log(`[WatcherLogsDisplay ${runnerId}] Refresh cancelled`);
+        console.log(`[RunnerLogsDisplay ${runnerId}] Refresh cancelled`);
         return;
       }
 
       refreshCountRef.current++;
       console.log(
-        `[WatcherLogsDisplay ${runnerId}] Calling refreshLogs #${refreshCountRef.current}`,
+        `[RunnerLogsDisplay ${runnerId}] Calling refreshLogs #${refreshCountRef.current}`,
       );
 
       // Use the ref to call the latest refreshLogs
@@ -128,7 +128,7 @@ function RunnerLogsDisplay({
 
     return () => {
       console.log(
-        `[WatcherLogsDisplay ${runnerId}] Cleaning up auto-refresh effect`,
+        `[RunnerLogsDisplay ${runnerId}] Cleaning up auto-refresh effect`,
       );
       cancelled = true;
       if (intervalId !== undefined) {
@@ -242,7 +242,7 @@ export function ProcessRunnerDevPanel() {
     useTmuxSessions();
 
   const [showPanel, setShowPanel] = useState(true);
-  const [expandedWatcherId, setExpandedWatcherId] = useState<string | null>(
+  const [expandedRunnerId, setExpandedRunnerId] = useState<string | null>(
     null,
   );
   const [autoRefreshLogs, setAutoRefreshLogs] = useState(true); // ✅ Auto-refresh ON by default
@@ -570,19 +570,19 @@ export function ProcessRunnerDevPanel() {
                               <button
                                 className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs"
                                 onClick={() => {
-                                  setExpandedWatcherId(
-                                    expandedWatcherId === runner.id
+                                  setExpandedRunnerId(
+                                    expandedRunnerId === runner.id
                                       ? null
                                       : runner.id,
                                   );
                                 }}
                                 title={
-                                  expandedWatcherId === runner.id
+                                  expandedRunnerId === runner.id
                                     ? "Hide logs"
                                     : "View logs"
                                 }
                               >
-                                {expandedWatcherId === runner.id ? "▼" : "▶"}
+                                {expandedRunnerId === runner.id ? "▼" : "▶"}
                               </button>
                               {runner.status === "stopped" ? (
                                 <button
@@ -609,7 +609,7 @@ export function ProcessRunnerDevPanel() {
                               )}
                             </div>
                           </div>
-                          {expandedWatcherId === runner.id && (
+                          {expandedRunnerId === runner.id && (
                             <RunnerLogsDisplay
                               autoRefresh={autoRefreshLogs}
                               runnerId={runner.id}

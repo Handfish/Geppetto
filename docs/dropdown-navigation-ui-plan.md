@@ -8,7 +8,7 @@ Add comprehensive keyboard navigation to RepositoryDropdown and IssuesModal:
 3. **Issues Panel Navigation**: Arrow keys navigate issues list when IssuesModal is open
 4. **Issue Checkbox Toggle**: Spacebar toggles issue selection
 5. **AI Agent Switching**: Left/Right arrows switch AI agent type for checked issues
-6. **Launch/Abort**: Enter launches watchers, Escape aborts
+6. **Launch/Abort**: Enter launches runners, Escape aborts
 
 **Status**: Not Started
 **Target Completion**: 1-2 days
@@ -22,7 +22,7 @@ Add comprehensive keyboard navigation to RepositoryDropdown and IssuesModal:
 
 **Schema Usage**: ALWAYS use `Schema.parse` (never validate/decode directly)
 ```typescript
-const config = Schema.parse(AiWatcherConfig, rawConfig)  // ✅ CORRECT
+const config = Schema.parse(AiRunnerConfig, rawConfig)  // ✅ CORRECT
 ```
 
 **Error Handling**: Use tagged errors with Effect
@@ -336,7 +336,7 @@ pnpm dev
 
 ### 2.1 Add Issue Navigation State to IssuesModal
 
-**File**: `src/renderer/components/ai-watchers/IssuesModal.tsx`
+**File**: `src/renderer/components/ai-runners/IssuesModal.tsx`
 
 ```typescript
 // Add state for focused issue
@@ -385,7 +385,7 @@ export interface IssueModalKeyboardNavigationOptions {
   /** Callback when spacebar is pressed (toggle selection) */
   onToggleSelection: () => void
 
-  /** Callback when Enter is pressed (launch watchers) */
+  /** Callback when Enter is pressed (launch runners) */
   onLaunch: () => void
 
   /** Callback when Escape is pressed (close modal) */
@@ -540,14 +540,14 @@ pnpm dev
 # - Press Up arrow - verify focus moves up
 # - Press Spacebar - verify issue toggles selection
 # - Verify visual focus ring appears
-# - Press Enter - verify watchers launch
+# - Press Enter - verify runners launch
 # - Press Escape - verify modal closes
 ```
 
 **Success Criteria**:
 - ✅ Arrow keys navigate issues
 - ✅ Spacebar toggles selection
-- ✅ Enter launches watchers
+- ✅ Enter launches runners
 - ✅ Escape closes modal
 - ✅ Visual focus indicator clear
 - ✅ Smooth scrolling to focused item
@@ -562,7 +562,7 @@ pnpm dev
 
 ### 3.1 Add Per-Issue Agent State
 
-**File**: `src/renderer/components/ai-watchers/IssuesModal.tsx`
+**File**: `src/renderer/components/ai-runners/IssuesModal.tsx`
 
 ```typescript
 // Add state for per-issue agent selection
@@ -728,7 +728,7 @@ const handleLaunch = async () => {
     for (const issue of shortlistedIssues) {
       const agent = getIssueAgent(issue.number)
 
-      await launchWatcherForIssue(
+      await launchRunnerForIssue(
         issue,
         agent,
         repositoryId,
@@ -737,22 +737,22 @@ const handleLaunch = async () => {
       )
     }
 
-    if (onLaunchWatchers) {
-      onLaunchWatchers(Array.from(shortlist))
+    if (onLaunchRunners) {
+      onLaunchRunners(Array.from(shortlist))
     }
 
     onClose()
   } catch (error) {
-    console.error('[IssuesModal] Failed to launch watchers:', error)
+    console.error('[IssuesModal] Failed to launch runners:', error)
   }
 }
 ```
 
-### 3.6 Update useAiWatcherLauncher Hook
+### 3.6 Update useAiRunnerLauncher Hook
 
-**File**: `src/renderer/hooks/useAiWatcherLauncher.ts`
+**File**: `src/renderer/hooks/useAiRunnerLauncher.ts`
 
-Remove `launchWatchersForIssues` - launch one at a time from modal with specific agent per issue.
+Remove `launchRunnersForIssues` - launch one at a time from modal with specific agent per issue.
 
 ### 3.7 Testing
 
@@ -791,7 +791,7 @@ pnpm dev
 
 ### 4.1 Update Modal Help Text
 
-**File**: `src/renderer/components/ai-watchers/IssuesModal.tsx`
+**File**: `src/renderer/components/ai-runners/IssuesModal.tsx`
 
 Update header help text:
 ```typescript
@@ -834,7 +834,7 @@ const [showShortcuts, setShowShortcuts] = useState(false)
       </div>
       <div className="flex items-center gap-2">
         <kbd className="px-1.5 py-0.5 bg-gray-700 rounded">Enter</kbd>
-        <span className="text-gray-400">Launch watchers</span>
+        <span className="text-gray-400">Launch runners</span>
       </div>
       <div className="flex items-center gap-2">
         <kbd className="px-1.5 py-0.5 bg-gray-700 rounded">Esc</kbd>
@@ -862,7 +862,7 @@ The application provides comprehensive keyboard navigation:
 - `↑` / `↓`: Navigate issues
 - `Space`: Toggle issue selection
 - `←` / `→`: Cycle AI agent (selected issues only)
-- `Enter`: Launch AI watchers
+- `Enter`: Launch AI runners
 - `Esc`: Close modal
 
 **Implementation**: Use dedicated keyboard hooks per component (`useDropdownKeyboardNavigation`, `useIssueModalKeyboardNavigation`) following the pattern from `useGraphKeyboardShortcuts`.
@@ -882,7 +882,7 @@ pnpm dev
 # 5. Select multiple issues with Space
 # 6. Change agents with Left/Right
 # 7. Launch with Enter
-# 8. Verify all watchers launch with correct agents
+# 8. Verify all runners launch with correct agents
 ```
 
 **Success Criteria**:

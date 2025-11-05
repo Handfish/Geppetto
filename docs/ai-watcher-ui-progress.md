@@ -1,4 +1,4 @@
-# AI Watcher UI Enhancement Progress
+# AI Runner UI Enhancement Progress
 
 **Last Updated**: 2025-10-30
 **Status**: ✅ Completed
@@ -10,7 +10,7 @@
 
 - [x] Phase 1: Backend - GitHub Issues Integration (2-3 hours) ✅
 - [x] Phase 2: Issues Modal UI (2-3 hours) ✅
-- [x] Phase 3: AI Watcher Integration with Git Worktrees (2-3 hours) ✅
+- [x] Phase 3: AI Runner Integration with Git Worktrees (2-3 hours) ✅
 - [x] Phase 4: LED Status Indicators (30 minutes) ✅
 
 **Total Estimated Time**: 1-2 days
@@ -96,22 +96,22 @@
 - [x] Wired up onClick to open modal and close dropdown
 
 ### 2.2 Create Issues Modal Component ✅
-- [x] Created `src/renderer/components/ai-watchers/IssuesModal.tsx`
+- [x] Created `src/renderer/components/ai-runners/IssuesModal.tsx`
 - [x] Implemented modal with AnimatePresence backdrop
 - [x] Used `repositoryIssuesAtom` to fetch issues
 - [x] Implemented shortlist state with Set<number>
 - [x] Created IssueRow component with checkbox and click to toggle
 - [x] Implemented Result.builder for error handling (AuthenticationError, NetworkError, NotFoundError, Defect)
 - [x] Added header with repository info and ListTodo icon
-- [x] Added footer with shortlist count and "Launch AI Watchers" button
+- [x] Added footer with shortlist count and "Launch AI Runners" button
 - [x] Wired modal into RepositoryDropdown with accountId, owner, repo props
 - [x] Added React fragment wrapper for multiple return elements
-- [x] Placeholder onLaunchWatchers handler (logs and shows toast)
+- [x] Placeholder onLaunchRunners handler (logs and shows toast)
 
 ### 2.3 Keyboard Shortcuts ✅
 - [x] Implemented inline keyboard shortcuts in IssuesModal (simpler than separate hook)
 - [x] Escape key closes modal
-- [x] Enter key launches watchers (when shortlist not empty)
+- [x] Enter key launches runners (when shortlist not empty)
 - [x] Event listeners properly added/removed based on isOpen
 - [x] Keyboard shortcuts respect modifier keys (no trigger if Shift/Ctrl/Meta pressed)
 
@@ -128,7 +128,7 @@
   - [ ] Verify checkbox toggles correctly
   - [ ] Verify shortlist counter updates
   - [ ] Press Escape to close
-  - [ ] Press Enter to launch watchers
+  - [ ] Press Enter to launch runners
   - [ ] Verify keyboard shortcuts work
 
 **Notes**:
@@ -158,7 +158,7 @@
 
 ---
 
-## Phase 3: AI Watcher Integration with Git Worktrees ✅
+## Phase 3: AI Runner Integration with Git Worktrees ✅
 
 **Status**: Completed
 **Duration**: 1.5 hours
@@ -166,7 +166,7 @@
 **Completed**: 2025-10-30
 
 ### 3.1 Fix Command Bug ✅
-- [x] Opened `src/main/ai-watchers/ai-watcher-service.ts`
+- [x] Opened `src/main/ai-runners/ai-runner-service.ts`
 - [x] Found `getAiAgentCommand` function (line 56)
 - [x] Changed `case 'claude-code': return { command: 'claude-code' }`
 - [x] To `case 'claude-code': return { command: 'claude' }`
@@ -203,9 +203,9 @@
   - Registered handler for `list-worktrees`
   - All handlers use proper domain type conversion (toDomainRepositoryId)
 
-### 3.5 Add Issue Context to Watcher Config Schema ✅
-- [x] Updated `src/main/ai-watchers/schemas.ts`
-- [x] Added `issueContext` optional field to AiWatcherConfig:
+### 3.5 Add Issue Context to Runner Config Schema ✅
+- [x] Updated `src/main/ai-runners/schemas.ts`
+- [x] Added `issueContext` optional field to AiRunnerConfig:
   ```typescript
   issueContext: S.optional(
     S.Struct({
@@ -226,42 +226,42 @@
 **Notes**:
 - Command bug fix ensures claude processes are correctly identified by 'claude' not 'claude-code'
 - Git worktree operations provide full isolation for each issue with automatic branch management
-- Issue context in watcher config enables tracking which issue a watcher is working on
-- Sequential watcher launches (to be implemented in Phase 2) will prevent git race conditions
+- Issue context in runner config enables tracking which issue a runner is working on
+- Sequential runner launches (to be implemented in Phase 2) will prevent git race conditions
 - Worktree paths use `../worktree-issue#<number>` pattern for clean organization
 
 **Frontend Integration Completed**:
-- ✅ Created useAiWatcherLauncher hook
+- ✅ Created useAiRunnerLauncher hook
 - ✅ Integrated launcher in IssuesModal
 - ✅ Added SourceControlClient to ipc-client
 - ✅ Updated RepositoryDropdown to pass repositoryId
 
 **Remaining Work**:
-- Test end-to-end worktree creation and watcher launching (manual testing with `pnpm dev`)
+- Test end-to-end worktree creation and runner launching (manual testing with `pnpm dev`)
 
-### 3.7 Frontend Integration: Watcher Launcher ✅
+### 3.7 Frontend Integration: Runner Launcher ✅
 - [x] Created `src/renderer/lib/ipc-client.ts` SourceControlClient:
   - Added `createWorktreeForIssue` method
   - Added `removeWorktree` method
   - Added `listWorktrees` method
   - All methods use ElectronIpcClient with proper Effect wrapping
-- [x] Created `src/renderer/hooks/useAiWatcherLauncher.ts`:
-  - `launchWatcherForIssue` - launches single watcher with worktree
-  - `launchWatchersForIssues` - launches multiple watchers sequentially
+- [x] Created `src/renderer/hooks/useAiRunnerLauncher.ts`:
+  - `launchRunnerForIssue` - launches single runner with worktree
+  - `launchRunnersForIssues` - launches multiple runners sequentially
   - Creates git worktrees using SourceControlClient
-  - Launches AI watchers with issue context
+  - Launches AI runners with issue context
   - Toast notifications for user feedback
   - Loading state management (isLaunching)
-- [x] Updated `src/renderer/components/ai-watchers/IssuesModal.tsx`:
+- [x] Updated `src/renderer/components/ai-runners/IssuesModal.tsx`:
   - Added repositoryId prop
-  - Integrated useAiWatcherLauncher hook
+  - Integrated useAiRunnerLauncher hook
   - Added provider selector dropdown (claude-code, codex, cursor)
-  - Updated handleLaunch to call launchWatchersForIssues
+  - Updated handleLaunch to call launchRunnersForIssues
   - Added loading state to Launch button (spinner + "Launching..." text)
   - Provider selector disabled during launch
 - [x] Updated `src/renderer/components/ui/RepositoryDropdown.tsx`:
   - Added repositoryId prop to IssuesModal: `{{ value: repo.repositoryId }}`
-  - Removed placeholder onLaunchWatchers toast
+  - Removed placeholder onLaunchRunners toast
 
 ### 3.8 Compilation Testing ✅
 - [x] Ran `pnpm compile:app` - **SUCCESS, exit code 0**
@@ -271,11 +271,11 @@
 
 **Notes**:
 - SourceControlClient follows same pattern as other IPC clients
-- useAiWatcherLauncher hook encapsulates all worktree + watcher logic
-- Sequential launching in launchWatchersForIssues prevents git conflicts
+- useAiRunnerLauncher hook encapsulates all worktree + runner logic
+- Sequential launching in launchRunnersForIssues prevents git conflicts
 - Provider selector allows choosing AI agent (claude-code, codex, cursor)
 - Loading states provide good UX during async operations
-- Issue context properly stored in watcher config for tracking
+- Issue context properly stored in runner config for tracking
 
 ---
 
@@ -286,8 +286,8 @@
 **Target**: 2-3 hours
 **Completed**: 2025-01-30
 
-### 4.1 Create WatcherStatusLED Component
-- [x] Create `src/renderer/components/ai-watchers/WatcherStatusLED.tsx`
+### 4.1 Create RunnerStatusLED Component
+- [x] Create `src/renderer/components/ai-runners/RunnerStatusLED.tsx`
 - [x] Implement `getProviderFavicon` helper
 - [x] Implement `getStatusColor` helper:
   - [x] Green (#10b981) for running
@@ -296,37 +296,37 @@
 - [x] Create LED square with glassmorphism
 - [x] Add favicon display
 - [x] Add pulsing glow animation for active states
-- [x] Add clear button (X) for dead watchers
-- [x] Add hover tooltip with watcher info
+- [x] Add clear button (X) for dead runners
+- [x] Add hover tooltip with runner info
 - [x] Use Framer Motion for animations
 
-### 4.2 Create Watchers Panel Component
-- [x] Create `src/renderer/components/ai-watchers/WatchersPanel.tsx`
-- [x] Use `aiWatchersAtom` to fetch active watchers
-- [x] Use `stopWatcherAtom` for clearing dead watchers
+### 4.2 Create Runners Panel Component
+- [x] Create `src/renderer/components/ai-runners/RunnersPanel.tsx`
+- [x] Use `aiRunnersAtom` to fetch active runners
+- [x] Use `stopRunnerAtom` for clearing dead runners
 - [x] Implement Result.builder for error handling
-- [x] Map watchers to WatcherStatusLED components
+- [x] Map runners to RunnerStatusLED components
 - [x] Use AnimatePresence with `mode="popLayout"`
 - [x] Position panel in top-right with fixed positioning
 
-### 4.3 Integrate Watchers Panel in Main Layout
+### 4.3 Integrate Runners Panel in Main Layout
 - [x] Find main layout component (App.tsx)
-- [x] Import WatchersPanel component
+- [x] Import RunnersPanel component
 - [x] Add to main layout
 - [x] Verify positioning doesn't overlap with other UI
 - [x] Check z-index layering
 
 ### 4.4 Testing
 - [ ] Run `pnpm dev`
-- [ ] Launch AI watchers from issues
+- [ ] Launch AI runners from issues
 - [ ] Verify LED indicators appear in top-right
 - [ ] Verify initial state is green (running)
 - [ ] Wait 30s to verify yellow state (idle)
-- [ ] Stop a watcher and verify unlit state
+- [ ] Stop a runner and verify unlit state
 - [ ] Hover over LED to see tooltip
-- [ ] Click X on dead watcher to clear
+- [ ] Click X on dead runner to clear
 - [ ] Verify animations smooth (no jank)
-- [ ] Test with multiple watchers
+- [ ] Test with multiple runners
 - [ ] Verify layout at different screen sizes
 
 **Notes**: [Add any notes here]
@@ -370,7 +370,7 @@ Track actual vs. expected outcomes:
 |--------|----------|--------|--------|
 | Backend Integration | Hexagonal architecture | ? | ⏳ |
 | Issues Modal | Keyboard-driven | ? | ⏳ |
-| Watcher Launching | Multi-issue support | ? | ⏳ |
+| Runner Launching | Multi-issue support | ? | ⏳ |
 | Command Bug | Fixed to 'claude' | ? | ⏳ |
 | LED Indicators | Color-coded + glassy | ? | ⏳ |
 | Code Additions | ~800 lines | ? | ⏳ |
@@ -425,7 +425,7 @@ Document insights and patterns discovered:
 - [ ] Test on both Free and Pro tiers
 - [ ] Monitor for issues in usage
 - [ ] Consider follow-up enhancements:
-  - [ ] Watcher logs viewer
+  - [ ] Runner logs viewer
   - [ ] Pause/resume controls
   - [ ] Issue comment integration
   - [ ] GitLab/Bitbucket providers
@@ -434,12 +434,12 @@ Document insights and patterns discovered:
 
 ## Rollback Information
 
-**Backup Branch**: `backup/pre-ai-watcher-ui`
+**Backup Branch**: `backup/pre-ai-runner-ui`
 **Rollback Commands**:
 ```bash
 # Full rollback
 git checkout main
-git reset --hard backup/pre-ai-watcher-ui
+git reset --hard backup/pre-ai-runner-ui
 ```
 
 ---
@@ -456,9 +456,9 @@ git reset --hard backup/pre-ai-watcher-ui
 - [ ] Issues fetch from GitHub
 - [ ] Modal opens and closes correctly
 - [ ] Keyboard shortcuts work
-- [ ] Watchers launch with correct commands
+- [ ] Runners launch with correct commands
 - [ ] LEDs display correct states
-- [ ] Clear button removes dead watchers
+- [ ] Clear button removes dead runners
 
 ### Post-Completion
 - [ ] Progress document finalized

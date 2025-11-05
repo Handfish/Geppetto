@@ -133,7 +133,7 @@ After each phase, verify with:
 
 The ultimate test:
 1. Run `pnpm dev`
-2. Spawn a watcher
+2. Spawn a runner
 3. Type characters in terminal
 4. See them echo back
 5. Check logs show data flow from PTY → callbacks → IPC → renderer
@@ -257,7 +257,7 @@ const sendViaIpc = (chunk: OutputChunk) => {
   })
 }
 
-const cleanupOutput = yield* terminalService.subscribeToWatcher(processId, sendViaIpc)
+const cleanupOutput = yield* terminalService.subscribeToRunner(processId, sendViaIpc)
 ```
 
 ### Data Flow Diagram
@@ -302,14 +302,14 @@ If data still doesn't flow after fix:
    - [ ] console.log shows "Invoking N callbacks"
 
 2. **Check service**:
-   - [ ] subscribeToWatcher accepts callback parameter
+   - [ ] subscribeToRunner accepts callback parameter
    - [ ] Returns cleanup function
    - [ ] Passes callback to adapter
 
 3. **Check handler**:
    - [ ] No Fiber imports/usage
    - [ ] sendViaIpc callback defined
-   - [ ] Calls terminalService.subscribeToWatcher(processId, sendViaIpc)
+   - [ ] Calls terminalService.subscribeToRunner(processId, sendViaIpc)
    - [ ] Stores cleanup function (not fiber)
 
 4. **Check renderer**:
@@ -462,16 +462,16 @@ Run this after implementing the fix:
 
 test('callback-based streaming works', async () => {
   // Spawn process
-  const { processId } = await spawnAiWatcher({ /* config */ })
+  const { processId } = await spawnAiRunner({ /* config */ })
 
   // Subscribe with test callback
   let receivedData = ''
-  const cleanup = await subscribeToWatcher(processId, (chunk) => {
+  const cleanup = await subscribeToRunner(processId, (chunk) => {
     receivedData += chunk.data
   })
 
   // Write to PTY
-  await writeToWatcher(processId, 'echo test\n')
+  await writeToRunner(processId, 'echo test\n')
 
   // Wait for output
   await sleep(500)
@@ -481,7 +481,7 @@ test('callback-based streaming works', async () => {
 
   // Cleanup
   cleanup()
-  await killWatcher(processId)
+  await killRunner(processId)
 })
 ```
 

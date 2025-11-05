@@ -178,4 +178,4 @@ export interface ProcessRunnerPort {
 }
 
 // Backwards compatibility alias
-export type AiWatcherPort = ProcessRunnerPort
+export type AiRunnerPort = ProcessRunnerPort

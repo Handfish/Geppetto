@@ -1,4 +1,4 @@
-# Rename Scope Visualization: ai-watchers → process-runners
+# Rename Scope Visualization: ai-runners → process-runners
 
 ## Impact Layers
 
@@ -41,9 +41,9 @@
 │                   SHARED LAYER - Schemas & Types                     │
 │                                                                       │
 │  Type Definitions:                                                   │
-│  - ProcessRunner (renamed from AiWatcher)                            │
-│  - ProcessRunnerConfig (renamed from AiWatcherConfig)                │
-│  - ProcessRunnerStatus (renamed from AiWatcherStatus)                │
+│  - ProcessRunner (renamed from AiRunner)                            │
+│  - ProcessRunnerConfig (renamed from AiRunnerConfig)                │
+│  - ProcessRunnerStatus (renamed from AiRunnerStatus)                │
 │  - Error types (unchanged - generic)                                 │
 │                                                                       │
 │  Files Changed: 3 (schemas directory + files)                        │
@@ -53,14 +53,14 @@
 │                MAIN PROCESS - Service & Domain Layer                 │
 │                                                                       │
 │  Domain Implementation:                                              │
-│  - ProcessRunnerService (renamed from AiWatcherService)              │
-│  - ProcessRunnersLayer (renamed from AiWatchersLayer)                │
-│  - RunnerAdaptersLayer (renamed from WatcherAdaptersLayer)           │
+│  - ProcessRunnerService (renamed from AiRunnerService)              │
+│  - ProcessRunnersLayer (renamed from AiRunnersLayer)                │
+│  - RunnerAdaptersLayer (renamed from RunnerAdaptersLayer)           │
 │  - Adapters (unchanged - ProcessMonitor, TmuxSessionManager)         │
 │  - Ports (unchanged - ProcessMonitorPort, SessionManagerPort)        │
 │                                                                       │
 │  Files Changed: 7 (service, index.ts, layer composition)             │
-│  Directory: process-runners/ (renamed from ai-watchers/)             │
+│  Directory: process-runners/ (renamed from ai-runners/)             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -72,31 +72,31 @@
 
 ```
 RENDERER (Frontend)
-├── Components: ai-watchers/ → process-runners/
-│   ├── WatchersPanel.tsx
-│   ├── WatcherStatusLED.tsx
+├── Components: ai-runners/ → process-runners/
+│   ├── RunnersPanel.tsx
+│   ├── RunnerStatusLED.tsx
 │   └── IssuesModal.tsx
-├── Atoms: ai-watcher-atoms.ts → process-runner-atoms.ts
-├── Hooks: useAiWatchers → useProcessRunners (2 files)
-├── IPC Client: AiWatcherClient → ProcessRunnerClient
+├── Atoms: ai-runner-atoms.ts → process-runner-atoms.ts
+├── Hooks: useAiRunners → useProcessRunners (2 files)
+├── IPC Client: AiRunnerClient → ProcessRunnerClient
 ├── App Integration: updated imports in App.tsx, main.tsx
 └── Total: 11 files
 
 SHARED (Cross-process)
-├── Schemas: ai-watchers/ → process-runners/
-│   ├── AiWatcher → ProcessRunner
-│   ├── AiWatcherConfig → ProcessRunnerConfig
-│   └── AiWatcherStatus → ProcessRunnerStatus
-├── IPC Contracts: AiWatcherIpcContracts → ProcessRunnerIpcContracts
-│   └── 10 channel names change: 'ai-watcher:*' → 'process-runner:*'
+├── Schemas: ai-runners/ → process-runners/
+│   ├── AiRunner → ProcessRunner
+│   ├── AiRunnerConfig → ProcessRunnerConfig
+│   └── AiRunnerStatus → ProcessRunnerStatus
+├── IPC Contracts: AiRunnerIpcContracts → ProcessRunnerIpcContracts
+│   └── 10 channel names change: 'ai-runner:*' → 'process-runner:*'
 └── Total: 3 files
 
 MAIN PROCESS (Backend)
-├── Domain: ai-watchers/ → process-runners/
-│   ├── Service: AiWatcherService → ProcessRunnerService
-│   ├── Layer: AiWatchersLayer → ProcessRunnersLayer
+├── Domain: ai-runners/ → process-runners/
+│   ├── Service: AiRunnerService → ProcessRunnerService
+│   ├── Layer: AiRunnersLayer → ProcessRunnersLayer
 │   └── Adapters: unchanged (generic names)
-├── IPC: ai-watcher-handlers → process-runner-handlers
+├── IPC: ai-runner-handlers → process-runner-handlers
 ├── Integration: MainLayer updated
 └── Total: 7 files
 ```
@@ -165,14 +165,14 @@ ProcessRunnersPanel (Displays runner)
 ### Type Changes (What Gets Renamed)
 
 ```typescript
-// AiWatcher Domain Names (CHANGE)
-AiWatcher                    → ProcessRunner
-AiWatcherConfig              → ProcessRunnerConfig
-AiWatcherStatus              → ProcessRunnerStatus
-AiWatcherPort                → ProcessRunnerPort
-AiWatcherService             → ProcessRunnerService
-AiWatchersLayer              → ProcessRunnersLayer
-WatcherAdaptersLayer         → RunnerAdaptersLayer
+// AiRunner Domain Names (CHANGE)
+AiRunner                    → ProcessRunner
+AiRunnerConfig              → ProcessRunnerConfig
+AiRunnerStatus              → ProcessRunnerStatus
+AiRunnerPort                → ProcessRunnerPort
+AiRunnerService             → ProcessRunnerService
+AiRunnersLayer              → ProcessRunnersLayer
+RunnerAdaptersLayer         → RunnerAdaptersLayer
 
 // Generic Names (STAY THE SAME)
 ProcessMonitorPort           ✅ (generic - all processes)
@@ -313,7 +313,7 @@ Risk of rollback: Minimal (just reverts strings)
 ✅ All 20 files renamed/updated
 ✅ Compilation succeeds with zero errors
 ✅ Dev server starts without crashing
-✅ No "ai-watcher" or "AiWatcher" in console
+✅ No "ai-runner" or "AiRunner" in console
 ✅ No "cannot find module" errors
 ✅ Feature test passes (start/stop runner works)
 ✅ Git log shows single commit with all changes

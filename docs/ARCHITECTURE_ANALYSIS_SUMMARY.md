@@ -1,8 +1,8 @@
-# Geppetto Architecture Analysis: Tmux AI Watchers & Process Monitoring
+# Geppetto Architecture Analysis: Tmux AI Runners & Process Monitoring
 
 ## Overview
 
-This analysis synthesizes three critical documents to provide a complete architectural blueprint for integrating tmux-based session management with AI agent watchers, process monitoring, and multi-provider support into Geppetto:
+This analysis synthesizes three critical documents to provide a complete architectural blueprint for integrating tmux-based session management with AI agent runners, process monitoring, and multi-provider support into Geppetto:
 
 1. **TmuxPrompts Design** (docs/TmuxPrompts/*)
 2. **Error-Refactor-Plan** (docs/error-refactor-plan.md)
@@ -26,13 +26,13 @@ Service Layer     VcsProviderService, AiProviderService, GitCommandService
 Adapter Layer     GitHubProviderAdapter, OpenAiBrowserAdapter, NodeGitCommandRunner
 ```
 
-**Key insight:** We can follow this proven pattern for AI Watchers.
+**Key insight:** We can follow this proven pattern for AI Runners.
 
-### New Ports for AI Watchers
+### New Ports for AI Runners
 
 ```
 ProcessMonitorPort      ← Manage tmux sessions and process I/O
-AiWatcherPort          ← Orchestrate multi-provider watchers
+AiRunnerPort          ← Orchestrate multi-provider runners
 ```
 
 ---
@@ -92,12 +92,12 @@ Is error a programming bug?
 
 **Goal:** <5% defect rate. Everything else is typed.
 
-### New Error Types for AI Watchers
+### New Error Types for AI Runners
 
 Domain errors (main process):
 ```typescript
 ProcessMonitorError     // Tmux/shell execution failed
-AiWatcherError         // Watcher orchestration failed
+AiRunnerError         // Runner orchestration failed
 TmuxSessionError       // Tmux session management failed
 ```
 
@@ -135,20 +135,20 @@ AiProviderAdapter (AI: OpenAI, Claude, Cursor)
         ↓
 ProcessMonitorPort (Tmux session management)
         ↓
-AiWatcherPort (Multi-watcher coordination)
+AiRunnerPort (Multi-runner coordination)
 ```
 
 ### Provider-Specific Adapters
 
-Each provider can customize watcher behavior:
+Each provider can customize runner behavior:
 
 ```
 OpenAiBrowserProviderAdapter
-    → OpenAiWatcherAdapter (custom metrics)
+    → OpenAiRunnerAdapter (custom metrics)
     → TokenTracker, CostCalculator, etc.
 
 ClaudeBrowserProviderAdapter
-    → ClaudeWatcherAdapter (custom metrics)
+    → ClaudeRunnerAdapter (custom metrics)
     → MessageCounter, etc.
 ```
 
@@ -178,8 +178,8 @@ TmuxSessionManagerService
 ProcessMonitorService
 
 // Domain services (high-level)
-AiWatcherService
-AiWatcherRegistry
+AiRunnerService
+AiRunnerRegistry
 ```
 
 ### IPC Handler Setup
@@ -189,7 +189,7 @@ Parallel to existing handlers:
 - `setupProviderIpcHandlers`
 - `setupAiProviderIpcHandlers`
 - `setupWorkspaceIpcHandlers`
-- **NEW:** `setupAiWatcherIpcHandlers`
+- **NEW:** `setupAiRunnerIpcHandlers`
 
 ---
 
@@ -200,12 +200,12 @@ Parallel to existing handlers:
 From CLAUDE.md (Critical Type Safety Section):
 
 ```typescript
-const AiWatcherIpcContracts = {
-  startWatcher: {
-    channel: 'ai-watcher:start' as const,
-    input: StartWatcherSchema,
-    output: WatcherSessionSchema,
-    errors: S.Union(AiWatcherError, ProcessMonitorError, TierLimitError),
+const AiRunnerIpcContracts = {
+  startRunner: {
+    channel: 'ai-runner:start' as const,
+    input: StartRunnerSchema,
+    output: RunnerSessionSchema,
+    errors: S.Union(AiRunnerError, ProcessMonitorError, TierLimitError),
   },
   // ... more contracts
 } as const
@@ -213,7 +213,7 @@ const AiWatcherIpcContracts = {
 // Handler setup (MUST preserve types!)
 type InputSchema = S.Schema<
   ContractInput<K>,
-  S.Schema.Encoded<typeof AiWatcherIpcContracts[K]['input']>
+  S.Schema.Encoded<typeof AiRunnerIpcContracts[K]['input']>
 >
 const validatedInput = yield* S.decodeUnknown(
   contract.input as unknown as InputSchema
@@ -229,12 +229,12 @@ const validatedInput = yield* S.decodeUnknown(
 ### Atom Pattern (Using @effect-atom/atom-react)
 
 ```typescript
-export const aiWatchersAtom = Atom.make(
+export const aiRunnersAtom = Atom.make(
   Effect.gen(function* () {
-    const client = yield* AiWatcherClient
-    return yield* client.listWatchers()
+    const client = yield* AiRunnerClient
+    return yield* client.listRunners()
   }).pipe(
-    Atom.withReactivityKeys(['ai-watcher:list']),
+    Atom.withReactivityKeys(['ai-runner:list']),
     Atom.setIdleTTL(Duration.seconds(5))
   )
 )
@@ -269,25 +269,25 @@ Result.builder(metricsResult)
 ### File Structure
 
 ```
-src/main/ai-watchers/
-├── ports.ts                      # ProcessMonitorPort, AiWatcherPort
-├── errors.ts                     # ProcessMonitorError, AiWatcherError
+src/main/ai-runners/
+├── ports.ts                      # ProcessMonitorPort, AiRunnerPort
+├── errors.ts                     # ProcessMonitorError, AiRunnerError
 ├── tmux-session-manager.ts       # Tmux lifecycle management
 ├── process-monitor.ts            # ProcessMonitorPort implementation
-├── ai-watcher-service.ts         # High-level watcher service
-└── ai-watcher-registry.ts        # Multi-watcher coordination
+├── ai-runner-service.ts         # High-level runner service
+└── ai-runner-registry.ts        # Multi-runner coordination
 
 src/main/ipc/
-└── ai-watcher-handlers.ts        # IPC handler setup
+└── ai-runner-handlers.ts        # IPC handler setup
 
 src/shared/
-├── ipc-contracts.ts              # AiWatcherIpcContracts
+├── ipc-contracts.ts              # AiRunnerIpcContracts
 └── schemas/errors.ts             # ProcessOperationError, etc.
 
 src/renderer/
-├── atoms/ai-watcher-atoms.ts     # Atom definitions
+├── atoms/ai-runner-atoms.ts     # Atom definitions
 └── components/
-    └── AiWatcherMonitor.tsx      # React components
+    └── AiRunnerMonitor.tsx      # React components
 ```
 
 This mirrors existing domain structure (github/, gitlab/, ai/, etc.)
@@ -296,10 +296,10 @@ This mirrors existing domain structure (github/, gitlab/, ai/, etc.)
 
 ## 9. Key Technical Decisions
 
-### 1. Why ProcessMonitorPort is Separate from AiWatcherPort
+### 1. Why ProcessMonitorPort is Separate from AiRunnerPort
 
 - ProcessMonitor: Low-level abstraction (tmux session, I/O)
-- AiWatcher: High-level orchestration (metrics, tier checking, events)
+- AiRunner: High-level orchestration (metrics, tier checking, events)
 
 **Benefit:** Can reuse ProcessMonitor for other long-running tasks (builds, tests)
 
@@ -351,14 +351,14 @@ Result.builder() exhaustively handles all states:
 
 ## 10. Error Scenarios & Handling
 
-### Scenario 1: User Tries to Start Watcher, Tier Limit
+### Scenario 1: User Tries to Start Runner, Tier Limit
 
 ```
-User clicks "Start Watcher"
+User clicks "Start Runner"
         ↓
-Renderer: ipcRenderer.invoke('ai-watcher:start', {...})
+Renderer: ipcRenderer.invoke('ai-runner:start', {...})
         ↓
-Main: tierService.checkFeatureAvailable('ai-watchers')
+Main: tierService.checkFeatureAvailable('ai-runners')
         ↓
 Throws: FeatureNotAvailableError
         ↓
@@ -404,8 +404,8 @@ UI: "Connection lost. Retrying..." with retry button
 ### Phase 1: Foundation (1 week)
 
 - [ ] Read: TmuxPrompts guides + error-refactor-plan.md + CLAUDE.md
-- [ ] Create `src/main/ai-watchers/` directory structure
-- [ ] Define `ProcessMonitorPort` and `AiWatcherPort` in ports.ts
+- [ ] Create `src/main/ai-runners/` directory structure
+- [ ] Define `ProcessMonitorPort` and `AiRunnerPort` in ports.ts
 - [ ] Define domain errors in errors.ts
 - [ ] Create TmuxSessionManagerService (copy patterns from tmux-logger.ts)
 - [ ] Write unit tests for session manager
@@ -413,19 +413,19 @@ UI: "Connection lost. Retrying..." with retry button
 ### Phase 2: Services (1 week)
 
 - [ ] Implement ProcessMonitorService adapter
-- [ ] Implement AiWatcherService
-- [ ] Implement AiWatcherRegistry
+- [ ] Implement AiRunnerService
+- [ ] Implement AiRunnerRegistry
 - [ ] Integrate with tier-service for feature gating
 - [ ] Update error-mapper.ts with new domain errors
 - [ ] Update MainLayer in src/main/index.ts
 
 ### Phase 3: IPC & Frontend (1 week)
 
-- [ ] Create AiWatcherIpcContracts in src/shared/ipc-contracts.ts
-- [ ] Implement ai-watcher-handlers.ts with proper type safety
+- [ ] Create AiRunnerIpcContracts in src/shared/ipc-contracts.ts
+- [ ] Implement ai-runner-handlers.ts with proper type safety
 - [ ] Add ProcessOperationError + AiProviderOperationError to shared errors
-- [ ] Create ai-watcher-atoms.ts with atom families
-- [ ] Build AiWatcherMonitor.tsx component
+- [ ] Create ai-runner-atoms.ts with atom families
+- [ ] Build AiRunnerMonitor.tsx component
 
 ### Phase 4: Error Handling & Polish (1 week)
 
@@ -512,17 +512,17 @@ We create a **type-safe, composable, maintainable system** for monitoring long-r
 
 ## Questions & Decisions
 
-### Decision: Should AiWatcher be monolithic or modular?
+### Decision: Should AiRunner be monolithic or modular?
 
 **Proposed:** Modular
 - ProcessMonitorPort (reusable for other tasks)
-- AiWatcherService (AI-specific orchestration)
+- AiRunnerService (AI-specific orchestration)
 - Provider-specific adapters (OpenAi, Claude, etc.)
 
 ### Decision: Where to check tier limits?
 
-**Proposed:** In AiWatcherRegistry.startWatcher()
-- Prevents starting watcher that will fail
+**Proposed:** In AiRunnerRegistry.startRunner()
+- Prevents starting runner that will fail
 - Ties tier check to account context
 - Follows existing pattern (TierService)
 
@@ -530,7 +530,7 @@ We create a **type-safe, composable, maintainable system** for monitoring long-r
 
 **Proposed:** Via event stream + Ref
 - ProcessMonitor emits activity events
-- AiWatcher tracks metrics in Ref
+- AiRunner tracks metrics in Ref
 - Renderer polls via atom
 - Can swap polling for websocket later
 

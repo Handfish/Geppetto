@@ -1,4 +1,4 @@
-# AI Watcher XTerm.js Terminal - Migration Progress
+# AI Runner XTerm.js Terminal - Migration Progress
 
 > **Status**: ✅ Complete (All 4 Phases Done)
 > **Start Date**: 2025-11-01
@@ -35,8 +35,8 @@
   - [x] Support for multiple adapter types
 
 - [x] 1.4 Create Terminal Service (`src/main/terminal/terminal-service.ts`)
-  - [x] Implement spawnAiWatcher with tier checks
-  - [x] Track active watchers in HashMap
+  - [x] Implement spawnAiRunner with tier checks
+  - [x] Track active runners in HashMap
   - [x] Implement kill/restart operations
   - [x] Implement write/resize delegation
   - [x] Create stream subscriptions
@@ -57,22 +57,22 @@
 **Duration**: ~45 minutes
 
 - [x] 2.1 Define IPC Contracts (`src/shared/ipc-contracts.ts`)
-  - [x] spawnWatcher contract
-  - [x] killWatcher contract
-  - [x] killAllWatchers contract
-  - [x] restartWatcher contract
-  - [x] writeToWatcher contract
-  - [x] resizeWatcher contract
-  - [x] getWatcherState contract
-  - [x] listActiveWatchers contract
+  - [x] spawnRunner contract
+  - [x] killRunner contract
+  - [x] killAllRunners contract
+  - [x] restartRunner contract
+  - [x] writeToRunner contract
+  - [x] resizeRunner contract
+  - [x] getRunnerState contract
+  - [x] listActiveRunners contract
   - [x] Stream subscription contracts
 
 - [x] 2.2 Create Shared Schemas (`src/shared/schemas/terminal/index.ts` and `errors.ts`)
   - [x] ProcessState class
   - [x] OutputChunk class
   - [x] ProcessEvent class
-  - [x] SpawnWatcherInput class
-  - [x] WatcherInfo class
+  - [x] SpawnRunnerInput class
+  - [x] RunnerInfo class
   - [x] TerminalError for IPC (with detailed error types)
 
 - [x] 2.3 Create IPC Handlers (`src/main/ipc/terminal-handlers.ts`)
@@ -98,9 +98,9 @@
 **Duration**: ~1.5 hours
 
 - [x] 3.1 Create Terminal Atoms (`src/renderer/atoms/terminal-atoms.ts`)
-  - [x] activeWatchersAtom for watcher list
-  - [x] watcherStateAtom family for individual states
-  - [x] watcherOutputAtom family for output buffers
+  - [x] activeRunnersAtom for runner list
+  - [x] runnerStateAtom family for individual states
+  - [x] runnerOutputAtom family for output buffers
   - [x] TerminalSubscriptionManager class
   - [x] Stream subscription management
   - [x] Action atoms (spawn, kill, restart, write, resize)
@@ -124,11 +124,11 @@
 
 - [x] 3.4 Create Terminal Panel Component (`src/renderer/components/terminal/TerminalPanel.tsx`)
   - [x] Header with title and controls
-  - [x] LED status bar with all watchers
+  - [x] LED status bar with all runners
   - [x] Terminal container with active process
   - [x] Footer with process controls (restart/kill)
   - [x] Maximize/minimize functionality
-  - [x] Auto-select first watcher
+  - [x] Auto-select first runner
   - [x] Result.builder pattern for error handling
 
 - [x] 3.5 Create useTerminalOperations Hook (`src/renderer/hooks/useTerminalOperations.ts`)
@@ -142,7 +142,7 @@
 - TerminalSubscriptionManager handles IPC streaming with proper cleanup
 - XTerminal component integrates Effect.runPromise for subscriptions
 - Result.builder used for type-safe error handling in UI
-- TTL caching: 30s for watchers list, 10s for individual states
+- TTL caching: 30s for runners list, 10s for individual states
 - useAtomCallback used for action atoms to ensure reactivity
 - Compilation successful with no TypeScript errors
 - Custom theme with proper color scheme for terminal
@@ -154,12 +154,12 @@
 **Duration**: ~1 hour
 
 - [x] 4.1 Create Terminal Operations Hook (`src/renderer/hooks/useTerminalOperations.ts`)
-  - [x] spawnWatcher method
-  - [x] killWatcher method
-  - [x] killAllWatchers method
-  - [x] restartWatcher method
-  - [x] writeToWatcher method
-  - [x] resizeWatcher method
+  - [x] spawnRunner method
+  - [x] killRunner method
+  - [x] killAllRunners method
+  - [x] restartRunner method
+  - [x] writeToRunner method
+  - [x] resizeRunner method
   - [x] Fixed to use useAtom pattern (not useAtomCallback)
 
 - [x] 4.2 Update Main Layer (`src/main/index.ts`)
@@ -175,7 +175,7 @@
 
 - [x] 4.4 Update Issues Modal (Deferred)
   - [x] Terminal integration ready for future use
-  - [x] Can be integrated when replacing tmux watchers
+  - [x] Can be integrated when replacing tmux runners
 
 - [x] 4.5 Add Terminal Panel to Main Layout (`src/renderer/App.tsx`)
   - [x] Add terminal visibility state with useState
@@ -210,8 +210,8 @@
 - [ ] Run `pnpm compile:app:pro` - no errors (not tested yet)
 
 ### Terminal Functionality
-- [ ] Spawn single AI watcher
-- [ ] Spawn multiple AI watchers concurrently
+- [ ] Spawn single AI runner
+- [ ] Spawn multiple AI runners concurrently
 - [ ] Switch between processes via LED buttons
 - [ ] Terminal displays output correctly
 - [ ] Keyboard input works in terminal
@@ -255,7 +255,7 @@
 ### Issue 2: useAtomCallback API Does Not Exist
 **Phase**: Phase 4 (Integration & Testing)
 **Problem**: Compilation error in `useTerminalOperations.ts` - `useAtomCallback` is not exported by @effect-atom/atom-react
-**Solution**: Changed to `useAtom` pattern by referencing existing hooks (useAiWatcherLauncher.ts). This is the correct pattern used throughout the codebase.
+**Solution**: Changed to `useAtom` pattern by referencing existing hooks (useAiRunnerLauncher.ts). This is the correct pattern used throughout the codebase.
 **Impact**: Minor - Quick fix (<5 minutes). Lesson learned to check existing code patterns before using new APIs.
 
 ### Issue 3: TierLimitError Not Imported in IPC Contracts
@@ -266,7 +266,7 @@
 
 ### Issue 4: IPC Handlers Not Ready - Race Condition
 **Phase**: Phase 4 (Integration & Testing)
-**Problem**: Network error in renderer: `Error: No handler registered for 'ai-watcher:list'`. IPC handlers were being registered asynchronously in background (`Effect.runPromise` without await) while window was already created and showing. React components mounted and tried to fetch data before handlers were ready.
+**Problem**: Network error in renderer: `Error: No handler registered for 'ai-runner:list'`. IPC handlers were being registered asynchronously in background (`Effect.runPromise` without await) while window was already created and showing. React components mounted and tried to fetch data before handlers were ready.
 **Solution**: Changed handler registration to blocking by adding `await` before `Effect.runPromise` in src/main/index.ts (line 400). Now all IPC handlers are guaranteed to be registered before window renders and React components mount.
 **Impact**: Moderate - Fix took 5 minutes. Critical for ensuring reliable app startup. Changed console log from "registering in background..." to "✓ All IPC handlers registered successfully".
 
@@ -286,13 +286,13 @@
 - Line 210: Added `satisfies TerminalServiceMethods` to ensure return type matches interface
 
 **Additional TypeScript Fixes** (cont'd):
-- Lines 49-191: Changed all service methods to use interface constraint pattern (e.g., `const spawnAiWatcher: TerminalServiceMethods['spawnAiWatcher'] = ...`) instead of explicit type annotations. This ensures proper type inference without using `any` types.
-- Lines 161-181: Fixed listActiveWatchers mapping to extract config fields (accountId, agentType, prompt, issueContext) instead of returning full config object
+- Lines 49-191: Changed all service methods to use interface constraint pattern (e.g., `const spawnAiRunner: TerminalServiceMethods['spawnAiRunner'] = ...`) instead of explicit type annotations. This ensures proper type inference without using `any` types.
+- Lines 161-181: Fixed listActiveRunners mapping to extract config fields (accountId, agentType, prompt, issueContext) instead of returning full config object
 
 **TypeScript Fixes** (src/main/ipc/terminal-handlers.ts):
 - Lines 20-21: Changed Fiber error types from `never` to `TerminalError` in Subscription interface
 - Line 12: Added TerminalError import
-- Lines 77-80: Simplified listActiveWatchers handler to directly call service method (removed redundant mapping)
+- Lines 77-80: Simplified listActiveRunners handler to directly call service method (removed redundant mapping)
 
 **Impact**: Critical - Fix took 120 minutes to fully diagnose and resolve all related type errors without using `any`. This was blocking app startup entirely. Lesson learned: Native modules must be lazy-loaded in Effect services to avoid loading during service construction. Use dynamic imports for native dependencies. Use interface constraint pattern (`const method: Interface['method'] = ...`) for Effect.Service methods to get proper type inference without explicit type annotations.
 
@@ -395,7 +395,7 @@ pnpm install:deps
 - [ ] Create user guide for new terminal
 - [ ] Performance profiling
 - [ ] Memory leak testing
-- [ ] Load testing with 10+ watchers
+- [ ] Load testing with 10+ runners
 
 ## Completion Summary
 
@@ -415,7 +415,7 @@ pnpm install:deps
 
 ### What Could Be Improved
 - **Bundle size**: 464kB increase exceeds target (<25kB), but unavoidable with xterm.js. Consider lazy loading terminal panel
-- **Initial API mistake**: Used non-existent `useAtomCallback` before checking existing code patterns (fixed quickly by referencing useAiWatcherLauncher.ts)
+- **Initial API mistake**: Used non-existent `useAtomCallback` before checking existing code patterns (fixed quickly by referencing useAiRunnerLauncher.ts)
 - **Missing import**: TierLimitError used in terminal contracts but not imported in ipc-contracts.ts (fixed by adding to imports)
 - **Native module rebuild**: node-pty required manual rebuild for Electron after installation (documented for future reference)
 - **Race condition**: IPC handlers registered asynchronously allowed window to render before handlers ready (fixed by making registration blocking)
@@ -458,10 +458,10 @@ pnpm install:deps
 **Issue 10: Atom Function Signatures**
 - **Problem**: terminalRuntime.fn doesn't support multiple parameters directly
 - **Solution**: Wrap multiple parameters in single object parameter
-- **Impact**: writeToWatcherAtom and resizeWatcherAtom updated to accept parameter objects
+- **Impact**: writeToRunnerAtom and resizeRunnerAtom updated to accept parameter objects
 
 ### Lessons Learned
-- **Check existing hooks first**: Before implementing new patterns, always reference similar existing code (e.g., useAiWatcherLauncher.ts for atom hooks)
+- **Check existing hooks first**: Before implementing new patterns, always reference similar existing code (e.g., useAiRunnerLauncher.ts for atom hooks)
 - **Verify all imports**: When adding new IPC contracts with error unions, verify all error types are imported in ipc-contracts.ts
 - **Native modules in Electron**: Native Node.js modules (like node-pty) must be rebuilt for Electron using electron-rebuild
 - **Lazy-load native modules**: In Effect services, use dynamic imports (`require()` wrapped in `Effect.sync()`) for native modules to prevent loading during service construction. Top-level imports of native modules cause immediate loading and failures

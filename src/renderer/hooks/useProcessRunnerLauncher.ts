@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAtom } from '@effect-atom/atom-react'
 import { createRunnerAtom } from '../atoms/process-runner-atoms'
-import { spawnWatcherAtom } from '../atoms/terminal-atoms'
+import { spawnRunnerAtom } from '../atoms/terminal-atoms'
 import type { GitHubIssue } from '../../shared/schemas/github/issue'
 import type { ProcessRunnerConfig } from '../../shared/schemas/process-runners'
 import { SourceControlClient, WorkspaceClient } from '../lib/ipc-client'
@@ -20,7 +20,7 @@ import { useTerminalType } from '../atoms/terminal-settings-atoms'
  */
 export function useProcessRunnerLauncher() {
   const [createResult, createRunner] = useAtom(createRunnerAtom)
-  const [spawnResult, spawnWatcher] = useAtom(spawnWatcherAtom)
+  const [spawnResult, spawnRunner] = useAtom(spawnRunnerAtom)
   const [isCreatingWorktree, setIsCreatingWorktree] = useState(false)
   const { terminalType } = useTerminalType()
 
@@ -105,7 +105,7 @@ export function useProcessRunnerLauncher() {
 
       if (terminalType === 'xterm') {
         // Use new xterm.js + node-pty terminal
-        spawnWatcher({
+        spawnRunner({
           accountId: `${provider}:user`, // TODO: Get actual account ID from context
           agentType: provider === 'claude-code' ? 'claude' : provider === 'codex' ? 'codex' : 'cursor',
           prompt: `Work on issue #${issue.number}: ${issue.title}`,

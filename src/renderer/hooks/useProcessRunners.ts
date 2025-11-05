@@ -61,7 +61,7 @@ export function useProcessRunners() {
 }
 
 /**
- * Hook for individual watcher details
+ * Hook for individual runner details
  *
  * Returns full Result for exhaustive error handling.
  * Use Result.builder in components to handle all states.

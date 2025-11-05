@@ -470,8 +470,8 @@ export function RepositoryDropdown({
         provider={repo.provider}
         defaultBranch={repo.defaultBranch}
         onClose={() => setShowIssuesModal(false)}
-        onLaunchWatchers={(issueNumbers) => {
-          console.log('[RepositoryDropdown] AI watchers launched for issues:', issueNumbers)
+        onLaunchRunners={(issueNumbers) => {
+          console.log('[RepositoryDropdown] AI runners launched for issues:', issueNumbers)
         }}
       />
     )}

@@ -109,7 +109,7 @@ const MainLayer = Layer.mergeAll(
       AiAccountContextService.Default,
       AiProviderRegistryService.Default,    // Can now access adapters!
       AiProviderService.Default,
-      AiWatchersLayer
+      AiRunnersLayer
     ),
     AiAdaptersLayer  // Provides adapters to all services above
   ),

@@ -1,4 +1,4 @@
-# AI Watcher XTerm.js Terminal - Implementation Prompts
+# AI Runner XTerm.js Terminal - Implementation Prompts
 
 > **Purpose**: Ready-to-use prompts for implementing the xterm.js terminal migration following our established patterns and Effect-TS best practices.
 
@@ -7,7 +7,7 @@
 Use this prompt when starting the implementation from scratch:
 
 ```
-Please implement the AI Watcher XTerm.js terminal migration as documented in docs/ai-watcher-xterm-plan.md.
+Please implement the AI Runner XTerm.js terminal migration as documented in docs/ai-runner-xterm-plan.md.
 
 Follow our established patterns:
 1. **Hexagonal Architecture**: Start with the port definition, then create adapters as Effect Layers
@@ -32,7 +32,7 @@ Key requirements:
 - Integration with AccountContextService for credentials
 
 After each phase, run `pnpm compile:app` to verify no TypeScript errors.
-Update docs/ai-watcher-xterm-progress.md as you complete each section.
+Update docs/ai-runner-xterm-progress.md as you complete each section.
 
 Expected duration: 10-12 hours across 4 phases.
 ```
@@ -44,9 +44,9 @@ Use this prompt to continue work in the same conversation:
 ```
 Let's continue implementing the xterm.js terminal migration.
 
-First, check the progress document at docs/ai-watcher-xterm-progress.md to see what's been completed.
+First, check the progress document at docs/ai-runner-xterm-progress.md to see what's been completed.
 
-Continue with the next uncompleted phase, following the plan in docs/ai-watcher-xterm-plan.md.
+Continue with the next uncompleted phase, following the plan in docs/ai-runner-xterm-plan.md.
 
 Remember our key patterns:
 - Hexagonal architecture with ports and adapters
@@ -70,11 +70,11 @@ Focus on clean, maintainable code that follows our established patterns.
 Use this prompt when starting a new conversation to resume work:
 
 ```
-I need to resume implementing the AI Watcher xterm.js terminal migration.
+I need to resume implementing the AI Runner xterm.js terminal migration.
 
 Please:
-1. Read docs/ai-watcher-xterm-plan.md to understand the full implementation plan
-2. Read docs/ai-watcher-xterm-progress.md to see what's already completed
+1. Read docs/ai-runner-xterm-plan.md to understand the full implementation plan
+2. Read docs/ai-runner-xterm-progress.md to see what's already completed
 3. Review the codebase to verify actual implementation state:
    - Check if src/main/terminal/ exists
    - Check if terminal IPC contracts are defined
@@ -94,7 +94,7 @@ Then continue from where we left off, following these patterns:
 - **UI**: React components with proper memoization
 
 Our goal is to replace tmux with an integrated xterm.js terminal that:
-- Shows LED status indicators for each AI watcher
+- Shows LED status indicators for each AI runner
 - Allows switching between multiple processes
 - Provides native terminal emulation
 - Integrates seamlessly with the Issues modal workflow
@@ -185,33 +185,33 @@ export class TerminalService extends Effect.Service<TerminalService>()('Terminal
 #### IPC Handler Registration
 ```typescript
 registerIpcHandler(
-  TerminalIpcContracts.spawnWatcher,
-  (input) => terminalService.spawnAiWatcher(input)
+  TerminalIpcContracts.spawnRunner,
+  (input) => terminalService.spawnAiRunner(input)
 )
 ```
 
 #### Atom Pattern
 ```typescript
-export const activeWatchersAtom = Atom.make(() =>
+export const activeRunnersAtom = Atom.make(() =>
   Effect.gen(function* () {
     const ipc = yield* ElectronIpcClient
-    return yield* ipc.terminal.listActiveWatchers()
+    return yield* ipc.terminal.listActiveRunners()
   }).pipe(
     Effect.map(Result.success),
     Effect.catchAll((error) => Effect.succeed(Result.fail(error)))
   )
 ).pipe(
   Atom.setIdleTTL(Duration.minutes(1)),
-  Atom.withKeys(['terminal:watchers'])
+  Atom.withKeys(['terminal:runners'])
 )
 ```
 
 #### Result.builder Pattern
 ```typescript
-{Result.builder(watchersResult)
+{Result.builder(runnersResult)
   .onInitial(() => <div>Loading...</div>)
   .onErrorTag('TerminalError', (error) => <div>Error: {error.message}</div>)
-  .onSuccess((watchers) => <WatcherList watchers={watchers} />)
+  .onSuccess((runners) => <RunnerList runners={runners} />)
   .render()}
 ```
 
@@ -230,7 +230,7 @@ After each phase:
 1. Compile check: `pnpm compile:app`
 2. Manual test in development: `pnpm dev`
 3. Test basic operations:
-   - Spawn a watcher
+   - Spawn a runner
    - See output in terminal
    - Kill the process
 4. Document any issues in progress tracker
@@ -271,7 +271,7 @@ return () => {
 **Solution**: Kill all processes on app close
 ```typescript
 app.on('before-quit', () => {
-  Effect.runPromise(terminalService.killAllWatchers())
+  Effect.runPromise(terminalService.killAllRunners())
 })
 ```
 
@@ -280,7 +280,7 @@ app.on('before-quit', () => {
 The migration is complete when:
 1. ✅ All tmux functionality replaced with xterm.js
 2. ✅ LED indicators show process status
-3. ✅ Multiple watchers can run concurrently
+3. ✅ Multiple runners can run concurrently
 4. ✅ Terminal accepts input and shows output
 5. ✅ Process management (kill/restart) works
 6. ✅ Integration with Issues modal seamless

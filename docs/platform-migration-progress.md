@@ -94,8 +94,8 @@
 - [x] Injected Path.Path service
 - [x] Added Path.layer to dependencies
 
-### 2.4 Replace Direct path Imports - AI Watchers
-- [x] `src/main/ai-watchers/adapters/node-process-monitor-adapter.ts` - Migrated
+### 2.4 Replace Direct path Imports - AI Runners
+- [x] `src/main/ai-runners/adapters/node-process-monitor-adapter.ts` - Migrated
 - [x] Replaced `Path.join` calls with injected service
 - [x] Added Path.layer to dependencies
 
@@ -163,8 +163,8 @@ File: `src/main/workspace/workspace-service.ts`
 - [x] Add dependencies: Path.layer, NodeFileSystem.layer
 - [x] Compile and test successfully
 
-### 3.4 Update Direct fs Usage - AI Watchers ✅
-File: `src/main/ai-watchers/adapters/node-process-monitor-adapter.ts`
+### 3.4 Update Direct fs Usage - AI Runners ✅
+File: `src/main/ai-runners/adapters/node-process-monitor-adapter.ts`
 
 - [x] Reviewed fs operations (3 usages found)
   - `FsPromises.mkdtemp()` - Creating temp directories for FIFO
@@ -307,11 +307,11 @@ File: `src/main/source-control/adapters/git/node-git-command-runner.ts`
 
 ### 5.1 Problem Identified ✅
 
-**Current Issue**: Watcher doesn't detect when tmux session dies externally
+**Current Issue**: Runner doesn't detect when tmux session dies externally
 - Tmux sessions run detached (`-d` flag)
 - `spawn()` completes immediately after creating session
 - No monitoring of session lifecycle
-- If session dies → watcher never knows
+- If session dies → runner never knows
 
 ### 5.2 Solution: Scope-Based Lifecycle Management ✅
 
@@ -325,7 +325,7 @@ File: `src/main/source-control/adapters/git/node-git-command-runner.ts`
 
 ### 5.3 Implementation ✅
 
-**SessionManagerPort** (`src/main/ai-watchers/ports.ts`):
+**SessionManagerPort** (`src/main/ai-runners/ports.ts`):
 ```typescript
 createSession(
   name: string,
@@ -339,7 +339,7 @@ createSession(
 >
 ```
 
-**TmuxSessionManagerAdapter** (`src/main/ai-watchers/adapters/tmux-session-manager-adapter.ts`):
+**TmuxSessionManagerAdapter** (`src/main/ai-runners/adapters/tmux-session-manager-adapter.ts`):
 - [x] Removed `-d` flag (run attached)
 - [x] Used Command.make() + Command.start()
 - [x] Monitor exitCode in Effect.forkScoped()
@@ -361,23 +361,23 @@ yield* Effect.forkScoped(
 )
 ```
 
-**AiWatcherService** (`src/main/ai-watchers/ai-watcher-service.ts`):
-- [x] Create watcherScope before session creation
-- [x] Use Scope.extend() to bind session to watcher
-- [x] When tmux dies → watcherScope closes → watcher cleanup
+**AiRunnerService** (`src/main/ai-runners/ai-runner-service.ts`):
+- [x] Create runnerScope before session creation
+- [x] Use Scope.extend() to bind session to runner
+- [x] When tmux dies → runnerScope closes → runner cleanup
 
 **Key Code**:
 ```typescript
-// Create watcher scope first
-const watcherScope = yield* Scope.make()
+// Create runner scope first
+const runnerScope = yield* Scope.make()
 
-// Extend session scope into watcher scope
+// Extend session scope into runner scope
 processHandle = yield* Scope.extend(
   tmuxManager.createSession(name, command, args, cwd),
-  watcherScope
+  runnerScope
 )
 
-// Now tmux lifecycle is bound to watcher lifecycle!
+// Now tmux lifecycle is bound to runner lifecycle!
 ```
 
 ### 5.4 Benefits of Scope-Based Approach ✅
@@ -385,7 +385,7 @@ processHandle = yield* Scope.extend(
 **Automatic Death Detection**:
 - ✅ When tmux session exits → Command.exitCode completes
 - ✅ Scoped fork completes → Scope closes
-- ✅ Watcher cleanup triggered automatically
+- ✅ Runner cleanup triggered automatically
 - ✅ No manual polling or checking required
 
 **Structured Concurrency**:
@@ -404,21 +404,21 @@ processHandle = yield* Scope.extend(
 ```
 IPC Handler (no Scope)
   ↓
-AiWatcherService.create() (manages Scope internally)
+AiRunnerService.create() (manages Scope internally)
   ↓
-watcherScope = Scope.make()
+runnerScope = Scope.make()
   ↓
-Scope.extend(createSession(), watcherScope)
+Scope.extend(createSession(), runnerScope)
   ↓
 createSession() returns Effect<Handle, Error, Scope>
   ↓
-Scope contained within watcher lifecycle
+Scope contained within runner lifecycle
 ```
 
 **Why This Works**:
-- AiWatcherService already creates scopes for each watcher
-- createSession's Scope is extended into watcher's Scope
-- IPC handlers just see `Effect<Watcher, Error, never>`
+- AiRunnerService already creates scopes for each runner
+- createSession's Scope is extended into runner's Scope
+- IPC handlers just see `Effect<Runner, Error, never>`
 - No Scope requirement leaks out
 
 ### 5.6 Testing ✅
@@ -449,7 +449,7 @@ Scope contained within watcher lifecycle
 4. ✅ For monitored long-running processes
 
 **Key Pattern**: **Scope Extension**
-- Create Scope at appropriate level (watcher, request, etc.)
+- Create Scope at appropriate level (runner, request, etc.)
 - Use Scope.extend() to bind scoped effects to parent scope
 - Scope closes → all child effects cleaned up automatically
 
@@ -620,7 +620,7 @@ Track actual vs. expected code reduction:
 |----------|--------|-------|--------|
 | Clone large repo | ? MB | ? MB | ? |
 | Browse files | ? MB | ? MB | ? |
-| AI watcher active | ? MB | ? MB | ? |
+| AI runner active | ? MB | ? MB | ? |
 
 ---
 

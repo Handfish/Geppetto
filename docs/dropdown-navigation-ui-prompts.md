@@ -33,7 +33,7 @@ Implement the Dropdown Navigation UI Enhancement following the plan in `/docs/dr
 - ✅ **Per-issue AI agent selection with left/right arrows**
 - ✅ **Agent badges display on shortlisted issues**
 - ✅ **Each issue launches with its own selected agent**
-- ✅ Enter launches watchers with per-issue agents
+- ✅ Enter launches runners with per-issue agents
 - ✅ Escape closes modal
 - ✅ Visual focus indicators clear
 - ✅ All phases marked complete in progress tracker
@@ -109,9 +109,9 @@ Resume the Dropdown Navigation UI Enhancement implementation. First, analyze the
 - `src/renderer/hooks/useDropdownKeyboardNavigation.ts` - Arrow navigation hook
 - `src/renderer/hooks/useIssueModalKeyboardNavigation.ts` - Issue navigation hook (with left/right)
 - `src/renderer/components/ui/RepositoryDropdown.tsx` - Focus state, menuItemRefs
-- `src/renderer/components/ai-watchers/IssuesModal.tsx` - **issueAgents Map, cycleIssueAgent helper**
-- `src/renderer/components/ai-watchers/IssuesModal.tsx` IssueRow - **Agent badge display**
-- `src/renderer/hooks/useAiWatcherLauncher.ts` - Single issue launch
+- `src/renderer/components/ai-runners/IssuesModal.tsx` - **issueAgents Map, cycleIssueAgent helper**
+- `src/renderer/components/ai-runners/IssuesModal.tsx` IssueRow - **Agent badge display**
+- `src/renderer/hooks/useAiRunnerLauncher.ts` - Single issue launch
 
 **Critical Phase 3 Validation**:
 - Check `issueAgents` state exists: `Map<number, 'claude-code' | 'codex' | 'cursor'>`
@@ -196,7 +196,7 @@ git diff --stat
 # Check for new files
 ls -la src/renderer/hooks/
 ls -la src/renderer/components/ui/
-ls -la src/renderer/components/ai-watchers/
+ls -la src/renderer/components/ai-runners/
 
 # Search for specific implementations
 grep -r "useDropdownKeyboardNavigation" src/renderer
@@ -238,7 +238,7 @@ Since Phase 3 is the most complex, here's a detailed checklist:
 ### Launch Integration
 - [ ] Update `handleLaunch` to use per-issue agents
 - [ ] Iterate shortlisted issues
-- [ ] Call `launchWatcherForIssue` with `getIssueAgent(issue.number)`
+- [ ] Call `launchRunnerForIssue` with `getIssueAgent(issue.number)`
 - [ ] Verify each issue launches with correct agent
 
 ---

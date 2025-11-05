@@ -77,8 +77,8 @@ import {
 } from '../process-runners/errors'
 import {
   ProcessError,
-  WatcherNotFoundError as IpcWatcherNotFoundError,
-  WatcherOperationError,
+  RunnerNotFoundError as IpcRunnerNotFoundError,
+  RunnerOperationError,
   TmuxError,
 } from '../../shared/schemas/process-runners/errors'
 import {
@@ -109,8 +109,8 @@ export type IpcErrorResult = {
     | SharedAiFeatureUnavailableError
     | SharedAiUsageUnavailableError
     | ProcessError
-    | IpcWatcherNotFoundError
-    | WatcherOperationError
+    | IpcRunnerNotFoundError
+    | RunnerOperationError
     | TmuxError
     | SharedTerminalError
 }
@@ -325,9 +325,9 @@ export const mapDomainErrorToIpcError = (
     if (error instanceof DomainRunnerNotFoundError) {
       return Effect.succeed({
         _tag: 'Error' as const,
-        error: new IpcWatcherNotFoundError({
+        error: new IpcRunnerNotFoundError({
           message: error.message,
-          watcherId: error.runnerId,
+          runnerId: error.runnerId,
         }),
       })
     }
@@ -340,9 +340,9 @@ export const mapDomainErrorToIpcError = (
     ) {
       return Effect.succeed({
         _tag: 'Error' as const,
-        error: new WatcherOperationError({
+        error: new RunnerOperationError({
           message: error.message,
-          watcherId: 'runnerId' in error ? error.runnerId : undefined,
+          runnerId: 'runnerId' in error ? error.runnerId : undefined,
           operation:
             error instanceof ProcessRunnerCreateError
               ? 'create'

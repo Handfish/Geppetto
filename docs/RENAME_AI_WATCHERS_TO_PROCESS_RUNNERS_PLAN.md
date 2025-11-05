@@ -1,8 +1,8 @@
-# Rename ai-watchers → process-runners: Multi-Step Plan
+# Rename ai-runners → process-runners: Multi-Step Plan
 
 ## Overview
 
-Renaming `ai-watchers` → `process-runners` affects:
+Renaming `ai-runners` → `process-runners` affects:
 - **IPC contracts** (6 channel names)
 - **Shared schemas** (types and errors)
 - **Main process** (service, handlers, layer composition)
@@ -50,20 +50,20 @@ Renaming `ai-watchers` → `process-runners` affects:
 
 ### A1: Rename Main Domain Directory
 ```bash
-mv src/main/ai-watchers src/main/process-runners
+mv src/main/ai-runners src/main/process-runners
 ```
 
 **Files affected in src/main/process-runners/:**
 - `ports.ts` (NO CHANGES - port names stay generic)
 - `schemas.ts` (NO CHANGES - data structures stay generic)
 - `errors.ts` (NO CHANGES - error names stay generic)
-- `services/ai-watcher-service.ts` → `services/process-runner-service.ts`
+- `services/ai-runner-service.ts` → `services/process-runner-service.ts`
 - `index.ts` (UPDATE exports)
 - `adapters/` (NO CHANGES - adapter names stay generic)
 
 ### A2: Rename Service File
 ```bash
-mv src/main/process-runners/services/ai-watcher-service.ts \
+mv src/main/process-runners/services/ai-runner-service.ts \
    src/main/process-runners/services/process-runner-service.ts
 ```
 
@@ -72,8 +72,8 @@ mv src/main/process-runners/services/ai-watcher-service.ts \
 **Change class name:**
 ```typescript
 // BEFORE
-export class AiWatcherService extends Effect.Service<AiWatcherService>()(
-  'AiWatcherService',
+export class AiRunnerService extends Effect.Service<AiRunnerService>()(
+  'AiRunnerService',
   // ...
 )
 
@@ -87,8 +87,8 @@ export class ProcessRunnerService extends Effect.Service<ProcessRunnerService>()
 **Update interface:**
 ```typescript
 // BEFORE
-interface AiWatcherPort {
-  create(config: AiWatcherConfig): Effect.Effect<AiWatcher, AiWatcherCreateError>
+interface AiRunnerPort {
+  create(config: AiRunnerConfig): Effect.Effect<AiRunner, AiRunnerCreateError>
   // ...
 }
 
@@ -102,8 +102,8 @@ interface ProcessRunnerPort {
 **Update type imports:**
 ```typescript
 // BEFORE
-import type { AiWatcherPort } from '../ports'
-import { AiWatcher, AiWatcherConfig } from '../schemas'
+import type { AiRunnerPort } from '../ports'
+import { AiRunner, AiRunnerConfig } from '../schemas'
 
 // AFTER
 import type { ProcessRunnerPort } from '../ports'
@@ -113,11 +113,11 @@ import { ProcessRunner, ProcessRunnerConfig } from '../schemas'
 ### A4: Update src/main/process-runners/index.ts
 ```typescript
 // BEFORE
-import { AiWatcherService } from './services'
-export { AiWatcherService }
-export const AiWatchersLayer = Layer.mergeAll(
-  WatcherAdaptersLayer,
-  AiWatcherService.Default
+import { AiRunnerService } from './services'
+export { AiRunnerService }
+export const AiRunnersLayer = Layer.mergeAll(
+  RunnerAdaptersLayer,
+  AiRunnerService.Default
 )
 
 // AFTER
@@ -130,18 +130,18 @@ export const ProcessRunnersLayer = Layer.mergeAll(
 ```
 
 **Rename exports:**
-- `AiWatchersLayer` → `ProcessRunnersLayer`
-- `WatcherAdaptersLayer` → `RunnerAdaptersLayer`
+- `AiRunnersLayer` → `ProcessRunnersLayer`
+- `RunnerAdaptersLayer` → `RunnerAdaptersLayer`
 - `NodeProcessMonitorAdapter` stays same (generic)
 - `TmuxSessionManagerAdapter` stays same (generic)
 
 ### A5: Update src/main/index.ts
 ```typescript
 // BEFORE
-import { AiWatchersLayer } from './ai-watchers'
+import { AiRunnersLayer } from './ai-runners'
 // ...
 const MainLayer = Layer.mergeAll(
-  AiWatchersLayer,
+  AiRunnersLayer,
   // ...
 )
 
@@ -166,7 +166,7 @@ pnpm compile:app:pro
 
 ### B1: Rename Shared Schemas Directory
 ```bash
-mv src/shared/schemas/ai-watchers src/shared/schemas/process-runners
+mv src/shared/schemas/ai-runners src/shared/schemas/process-runners
 ```
 
 **Files in this directory:**
@@ -176,9 +176,9 @@ mv src/shared/schemas/ai-watchers src/shared/schemas/process-runners
 ### B2: Update src/shared/schemas/process-runners/index.ts
 ```typescript
 // BEFORE
-export class AiWatcher extends S.Class<AiWatcher>('AiWatcher') { ... }
-export class AiWatcherConfig extends S.Class<AiWatcherConfig>('AiWatcherConfig') { ... }
-export class AiWatcherStatus extends S.Class<AiWatcherStatus>('AiWatcherStatus') { ... }
+export class AiRunner extends S.Class<AiRunner>('AiRunner') { ... }
+export class AiRunnerConfig extends S.Class<AiRunnerConfig>('AiRunnerConfig') { ... }
+export class AiRunnerStatus extends S.Class<AiRunnerStatus>('AiRunnerStatus') { ... }
 export type LogEntry = { ... }
 export type TmuxSession = { ... }
 
@@ -191,16 +191,16 @@ export type TmuxSession = { ... }
 ```
 
 **Classes to rename:**
-- `AiWatcher` → `ProcessRunner`
-- `AiWatcherConfig` → `ProcessRunnerConfig`
-- `AiWatcherStatus` → `ProcessRunnerStatus`
+- `AiRunner` → `ProcessRunner`
+- `AiRunnerConfig` → `ProcessRunnerConfig`
+- `AiRunnerStatus` → `ProcessRunnerStatus`
 - Keep: `LogEntry`, `TmuxSession`, `ProcessHandle`, `ProcessEvent`, `ProcessConfig`
 
 ### B3: Update src/shared/schemas/process-runners/errors.ts
 **No changes needed - error names are generic:**
 - `ProcessError` ✅ (stays same)
-- `WatcherNotFoundError` ✅ (stays same, refers to process runner)
-- `WatcherOperationError` ✅ (stays same)
+- `RunnerNotFoundError` ✅ (stays same, refers to process runner)
+- `RunnerOperationError` ✅ (stays same)
 - `TmuxError` ✅ (stays same)
 
 ### B4: Update src/shared/ipc-contracts.ts
@@ -209,11 +209,11 @@ export type TmuxSession = { ... }
 ```typescript
 // BEFORE
 import {
-  AiWatcher,
-  AiWatcherConfig,
+  AiRunner,
+  AiRunnerConfig,
   LogEntry,
   TmuxSession,
-} from './schemas/ai-watchers'
+} from './schemas/ai-runners'
 
 // AFTER
 import {
@@ -227,9 +227,9 @@ import {
 **Rename contract object:**
 ```typescript
 // BEFORE
-export const AiWatcherIpcContracts = {
-  'ai-watcher:create': { ... },
-  'ai-watcher:list': { ... },
+export const AiRunnerIpcContracts = {
+  'ai-runner:create': { ... },
+  'ai-runner:list': { ... },
   // ...
 }
 
@@ -242,22 +242,22 @@ export const ProcessRunnerIpcContracts = {
 ```
 
 **Rename channel names:**
-- `'ai-watcher:create'` → `'process-runner:create'`
-- `'ai-watcher:attach-tmux'` → `'process-runner:attach-tmux'`
-- `'ai-watcher:list'` → `'process-runner:list'`
-- `'ai-watcher:get'` → `'process-runner:get'`
-- `'ai-watcher:stop'` → `'process-runner:stop'`
-- `'ai-watcher:start'` → `'process-runner:start'`
-- `'ai-watcher:get-logs'` → `'process-runner:get-logs'`
-- `'ai-watcher:list-tmux'` → `'process-runner:list-tmux'`
-- `'ai-watcher:switch-tmux'` → `'process-runner:switch-tmux'`
-- `'ai-watcher:get-output'` → `'process-runner:get-output'`
+- `'ai-runner:create'` → `'process-runner:create'`
+- `'ai-runner:attach-tmux'` → `'process-runner:attach-tmux'`
+- `'ai-runner:list'` → `'process-runner:list'`
+- `'ai-runner:get'` → `'process-runner:get'`
+- `'ai-runner:stop'` → `'process-runner:stop'`
+- `'ai-runner:start'` → `'process-runner:start'`
+- `'ai-runner:get-logs'` → `'process-runner:get-logs'`
+- `'ai-runner:list-tmux'` → `'process-runner:list-tmux'`
+- `'ai-runner:switch-tmux'` → `'process-runner:switch-tmux'`
+- `'ai-runner:get-output'` → `'process-runner:get-output'`
 
 **Update output types:**
 ```typescript
 // BEFORE
-output: AiWatcher,
-output: S.Array(AiWatcher),
+output: AiRunner,
+output: S.Array(AiRunner),
 
 // AFTER
 output: ProcessRunner,
@@ -267,7 +267,7 @@ output: S.Array(ProcessRunner),
 **Update input types:**
 ```typescript
 // BEFORE
-input: AiWatcherConfig,
+input: AiRunnerConfig,
 
 // AFTER
 input: ProcessRunnerConfig,
@@ -283,7 +283,7 @@ export { ProcessRunnerIpcContracts }
 
 Make sure ProcessRunnerIpcContracts is exported where used:
 ```typescript
-// Wherever AiWatcherIpcContracts is referenced:
+// Wherever AiRunnerIpcContracts is referenced:
 // Change to ProcessRunnerIpcContracts
 ```
 
@@ -293,26 +293,26 @@ Make sure ProcessRunnerIpcContracts is exported where used:
 
 ### C1: Rename Components Directory
 ```bash
-mv src/renderer/components/ai-watchers src/renderer/components/process-runners
+mv src/renderer/components/ai-runners src/renderer/components/process-runners
 ```
 
 **Files:**
-- `WatchersPanel.tsx`
-- `WatcherStatusLED.tsx`
+- `RunnersPanel.tsx`
+- `RunnerStatusLED.tsx`
 - `IssuesModal.tsx`
 
 ### C2: Rename Atoms File
 ```bash
-mv src/renderer/atoms/ai-watcher-atoms.ts \
+mv src/renderer/atoms/ai-runner-atoms.ts \
    src/renderer/atoms/process-runner-atoms.ts
 ```
 
 ### C3: Rename Hooks Files
 ```bash
-mv src/renderer/hooks/useAiWatchers.ts \
+mv src/renderer/hooks/useAiRunners.ts \
    src/renderer/hooks/useProcessRunners.ts
 
-mv src/renderer/hooks/useAiWatcherLauncher.ts \
+mv src/renderer/hooks/useAiRunnerLauncher.ts \
    src/renderer/hooks/useProcessRunnerLauncher.ts
 ```
 
@@ -321,10 +321,10 @@ mv src/renderer/hooks/useAiWatcherLauncher.ts \
 **Rename atom constants:**
 ```typescript
 // BEFORE
-export const aiWatchersAtom = Atom.make(...)
-export const aiWatcherByIdAtom = Atom.family(...)
-export const aiWatcherLogsAtom = Atom.family(...)
-export const aiWatcherStatusAtom = Atom.family(...)
+export const aiRunnersAtom = Atom.make(...)
+export const aiRunnerByIdAtom = Atom.family(...)
+export const aiRunnerLogsAtom = Atom.family(...)
+export const aiRunnerStatusAtom = Atom.family(...)
 
 // AFTER
 export const processRunnersAtom = Atom.make(...)
@@ -336,7 +336,7 @@ export const processRunnerStatusAtom = Atom.family(...)
 **Update IPC contract reference:**
 ```typescript
 // BEFORE
-import { AiWatcherIpcContracts } from '../../shared/ipc-contracts'
+import { AiRunnerIpcContracts } from '../../shared/ipc-contracts'
 
 // AFTER
 import { ProcessRunnerIpcContracts } from '../../shared/ipc-contracts'
@@ -344,7 +344,7 @@ import { ProcessRunnerIpcContracts } from '../../shared/ipc-contracts'
 
 **Update channel references:**
 ```typescript
-// All references to AiWatcherIpcContracts.* become ProcessRunnerIpcContracts.*
+// All references to AiRunnerIpcContracts.* become ProcessRunnerIpcContracts.*
 ```
 
 ### C5: Update src/renderer/hooks/useProcessRunners.ts
@@ -352,9 +352,9 @@ import { ProcessRunnerIpcContracts } from '../../shared/ipc-contracts'
 **Update hook names:**
 ```typescript
 // BEFORE
-export function useAiWatchers() { ... }
-export const aiWatchersQuery = { ... }
-export const aiWatcherQuery = { ... }
+export function useAiRunners() { ... }
+export const aiRunnersQuery = { ... }
+export const aiRunnerQuery = { ... }
 
 // AFTER
 export function useProcessRunners() { ... }
@@ -365,7 +365,7 @@ export const processRunnerQuery = { ... }
 **Update imports:**
 ```typescript
 // BEFORE
-import { aiWatchersAtom, aiWatcherByIdAtom } from '../atoms/ai-watcher-atoms'
+import { aiRunnersAtom, aiRunnerByIdAtom } from '../atoms/ai-runner-atoms'
 
 // AFTER
 import { processRunnersAtom, processRunnerByIdAtom } from '../atoms/process-runner-atoms'
@@ -376,7 +376,7 @@ import { processRunnersAtom, processRunnerByIdAtom } from '../atoms/process-runn
 **Update hook names:**
 ```typescript
 // BEFORE
-export function useAiWatcherLauncher() { ... }
+export function useAiRunnerLauncher() { ... }
 
 // AFTER
 export function useProcessRunnerLauncher() { ... }
@@ -384,45 +384,45 @@ export function useProcessRunnerLauncher() { ... }
 
 **Update service references:**
 ```typescript
-// Update any AiWatcher references to ProcessRunner
+// Update any AiRunner references to ProcessRunner
 ```
 
 ### C7: Update Component Files
 
-**src/renderer/components/process-runners/WatchersPanel.tsx:**
+**src/renderer/components/process-runners/RunnersPanel.tsx:**
 ```typescript
 // BEFORE
-import { useAiWatchers } from '../../hooks/useAiWatchers'
-export function AiWatchersPanel() { ... }
+import { useAiRunners } from '../../hooks/useAiRunners'
+export function AiRunnersPanel() { ... }
 
 // AFTER
 import { useProcessRunners } from '../../hooks/useProcessRunners'
 export function ProcessRunnersPanel() { ... }
 ```
 
-**src/renderer/components/process-runners/WatcherStatusLED.tsx:**
+**src/renderer/components/process-runners/RunnerStatusLED.tsx:**
 ```typescript
 // BEFORE
-export function AiWatcherStatusLED(props: { watcherId: string }) { ... }
+export function AiRunnerStatusLED(props: { runnerId: string }) { ... }
 
 // AFTER
 export function ProcessRunnerStatusLED(props: { runnerId: string }) { ... }
 ```
 
-**Update any internal references to `watcherId` → `runnerId`** (optional, for consistency)
+**Update any internal references to `runnerId` → `runnerId`** (optional, for consistency)
 
 **src/renderer/components/process-runners/IssuesModal.tsx:**
 ```typescript
-// Update imports and any watcher references to runner
+// Update imports and any runner references to runner
 ```
 
 ### C8: Update Dev Component
-**src/renderer/components/dev/AiWatcherDevPanel.tsx:**
+**src/renderer/components/dev/AiRunnerDevPanel.tsx:**
 
 Rename and update:
 ```typescript
 // BEFORE
-export function AiWatcherDevPanel() { ... }
+export function AiRunnerDevPanel() { ... }
 
 // AFTER
 export function ProcessRunnerDevPanel() { ... }
@@ -432,19 +432,19 @@ export function ProcessRunnerDevPanel() { ... }
 
 ```typescript
 // BEFORE
-import { AiWatchersPanel } from './components/ai-watchers/WatchersPanel'
-import { AiWatcherStatusLED } from './components/ai-watchers/WatcherStatusLED'
+import { AiRunnersPanel } from './components/ai-runners/RunnersPanel'
+import { AiRunnerStatusLED } from './components/ai-runners/RunnerStatusLED'
 
 // AFTER
-import { ProcessRunnersPanel } from './components/process-runners/WatchersPanel'
-import { ProcessRunnerStatusLED } from './components/process-runners/WatcherStatusLED'
+import { ProcessRunnersPanel } from './components/process-runners/RunnersPanel'
+import { ProcessRunnerStatusLED } from './components/process-runners/RunnerStatusLED'
 ```
 
 **Update render calls:**
 ```typescript
 // BEFORE
-<AiWatchersPanel />
-<AiWatcherStatusLED watcherId={...} />
+<AiRunnersPanel />
+<AiRunnerStatusLED runnerId={...} />
 
 // AFTER
 <ProcessRunnersPanel />
@@ -454,35 +454,35 @@ import { ProcessRunnerStatusLED } from './components/process-runners/WatcherStat
 ### C10: Update main.tsx
 ```typescript
 // BEFORE
-import { WatchersPanel } from '../components/ai-watchers/WatchersPanel'
+import { RunnersPanel } from '../components/ai-runners/RunnersPanel'
 
 // AFTER
-import { WatchersPanel } from '../components/process-runners/WatchersPanel'
+import { RunnersPanel } from '../components/process-runners/RunnersPanel'
 ```
 
 ### C11: Update RepositoryDropdown.tsx
 ```typescript
-// Find and update any watcher references
-// If it references AiWatcher types, update to ProcessRunner
+// Find and update any runner references
+// If it references AiRunner types, update to ProcessRunner
 ```
 
 ---
 
 ## PHASE D: IPC Integration
 
-### D1: Update src/main/ipc/ai-watcher-handlers.ts
+### D1: Update src/main/ipc/ai-runner-handlers.ts
 
 **Rename file:**
 ```bash
-mv src/main/ipc/ai-watcher-handlers.ts \
+mv src/main/ipc/ai-runner-handlers.ts \
    src/main/ipc/process-runner-handlers.ts
 ```
 
 **Update function name:**
 ```typescript
 // BEFORE
-export const setupAiWatcherIpcHandlers = Effect.gen(function* () {
-  const aiWatcherService = yield* AiWatcherService
+export const setupAiRunnerIpcHandlers = Effect.gen(function* () {
+  const aiRunnerService = yield* AiRunnerService
 
 // AFTER
 export const setupProcessRunnerIpcHandlers = Effect.gen(function* () {
@@ -492,7 +492,7 @@ export const setupProcessRunnerIpcHandlers = Effect.gen(function* () {
 **Update contract references:**
 ```typescript
 // BEFORE
-registerIpcHandler(AiWatcherIpcContracts['ai-watcher:create'], ...)
+registerIpcHandler(AiRunnerIpcContracts['ai-runner:create'], ...)
 
 // AFTER
 registerIpcHandler(ProcessRunnerIpcContracts['process-runner:create'], ...)
@@ -506,12 +506,12 @@ registerIpcHandler(ProcessRunnerIpcContracts['process-runner:create'], ...)
 
 ```typescript
 // BEFORE
-import { setupAiWatcherIpcHandlers } from './ipc/ai-watcher-handlers'
+import { setupAiRunnerIpcHandlers } from './ipc/ai-runner-handlers'
 
 app.whenReady().then(async () => {
   await Effect.runPromise(
     Effect.gen(function* () {
-      yield* setupAiWatcherIpcHandlers
+      yield* setupAiRunnerIpcHandlers
       // ...
     })
   )
@@ -535,7 +535,7 @@ app.whenReady().then(async () => {
 **Rename class:**
 ```typescript
 // BEFORE
-export class AiWatcherClient extends Effect.Service<AiWatcherClient>()('AiWatcherClient', ...)
+export class AiRunnerClient extends Effect.Service<AiRunnerClient>()('AiRunnerClient', ...)
 
 // AFTER
 export class ProcessRunnerClient extends Effect.Service<ProcessRunnerClient>()('ProcessRunnerClient', ...)
@@ -544,9 +544,9 @@ export class ProcessRunnerClient extends Effect.Service<ProcessRunnerClient>()('
 **Update method names:**
 ```typescript
 // BEFORE
-readonly createWatcher = (config: AiWatcherConfig) => ...
-readonly listWatchers = () => ...
-readonly getWatcher = (watcherId: string) => ...
+readonly createRunner = (config: AiRunnerConfig) => ...
+readonly listRunners = () => ...
+readonly getRunner = (runnerId: string) => ...
 
 // AFTER
 readonly createRunner = (config: ProcessRunnerConfig) => ...
@@ -557,7 +557,7 @@ readonly getRunner = (runnerId: string) => ...
 **Update channel references:**
 ```typescript
 // BEFORE
-invoke('ai-watcher:create', config)
+invoke('ai-runner:create', config)
 
 // AFTER
 invoke('process-runner:create', config)
@@ -569,17 +569,17 @@ invoke('process-runner:create', config)
 - May need to update import path if schemas moved:
 ```typescript
 // BEFORE
-import { WatcherNotFoundError } from '../ai-watchers/errors'
+import { RunnerNotFoundError } from '../ai-runners/errors'
 
 // AFTER
-import { WatcherNotFoundError } from '../process-runners/errors'
+import { RunnerNotFoundError } from '../process-runners/errors'
 ```
 
 ### D5: Update src/main/ipc/ipc-handler-setup.ts
 
 **Check if any direct references exist:**
 ```bash
-grep -n "ai-watcher\|AiWatcher" src/main/ipc/ipc-handler-setup.ts
+grep -n "ai-runner\|AiRunner" src/main/ipc/ipc-handler-setup.ts
 # Should be none or minimal
 ```
 
@@ -598,13 +598,13 @@ pnpm compile:app:pro
 ```bash
 pnpm dev:pro
 # Should start without errors
-# Check DevTools console for no AiWatcher/ai-watcher references
+# Check DevTools console for no AiRunner/ai-runner references
 ```
 
 ### E3: Feature Testing
 1. Open repository dropdown
-2. Check watcher/runner LED shows
-3. Start a process runner (simulate AI watcher)
+2. Check runner/runner LED shows
+3. Start a process runner (simulate AI runner)
 4. Check logs display
 5. Stop process runner
 6. Verify no errors in console
@@ -621,33 +621,33 @@ git status
 ### E5: Create Commit
 ```bash
 git add -A
-git commit -m "refactor: rename ai-watchers → process-runners for clarity
+git commit -m "refactor: rename ai-runners → process-runners for clarity
 
 CHANGES:
-- Rename src/main/ai-watchers → src/main/process-runners
-- Rename src/shared/schemas/ai-watchers → src/shared/schemas/process-runners
-- Rename src/renderer/components/ai-watchers → src/renderer/components/process-runners
+- Rename src/main/ai-runners → src/main/process-runners
+- Rename src/shared/schemas/ai-runners → src/shared/schemas/process-runners
+- Rename src/renderer/components/ai-runners → src/renderer/components/process-runners
 
 UPDATES:
 Main Process:
-- AiWatcherService → ProcessRunnerService
-- AiWatchersLayer → ProcessRunnersLayer
+- AiRunnerService → ProcessRunnerService
+- AiRunnersLayer → ProcessRunnersLayer
 
 IPC:
-- AiWatcherIpcContracts → ProcessRunnerIpcContracts
-- Channel names: 'ai-watcher:*' → 'process-runner:*'
-- ai-watcher-handlers → process-runner-handlers
-- AiWatcherClient → ProcessRunnerClient
+- AiRunnerIpcContracts → ProcessRunnerIpcContracts
+- Channel names: 'ai-runner:*' → 'process-runner:*'
+- ai-runner-handlers → process-runner-handlers
+- AiRunnerClient → ProcessRunnerClient
 
 Schemas:
-- AiWatcher → ProcessRunner
-- AiWatcherConfig → ProcessRunnerConfig
-- AiWatcherStatus → ProcessRunnerStatus
+- AiRunner → ProcessRunner
+- AiRunnerConfig → ProcessRunnerConfig
+- AiRunnerStatus → ProcessRunnerStatus
 
 Frontend:
-- Atoms: aiWatchersAtom → processRunnersAtom
-- Hooks: useAiWatchers → useProcessRunners
-- Components: AiWatchersPanel → ProcessRunnersPanel
+- Atoms: aiRunnersAtom → processRunnersAtom
+- Hooks: useAiRunners → useProcessRunners
+- Components: AiRunnersPanel → ProcessRunnersPanel
 
 Generic names (unchanged):
 - ProcessMonitorAdapter, TmuxSessionManagerAdapter
@@ -705,8 +705,8 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - [ ] `src/renderer/atoms/process-runner-atoms.ts`
 - [ ] `src/renderer/hooks/useProcessRunners.ts`
 - [ ] `src/renderer/hooks/useProcessRunnerLauncher.ts`
-- [ ] `src/renderer/components/process-runners/WatchersPanel.tsx`
-- [ ] `src/renderer/components/process-runners/WatcherStatusLED.tsx`
+- [ ] `src/renderer/components/process-runners/RunnersPanel.tsx`
+- [ ] `src/renderer/components/process-runners/RunnerStatusLED.tsx`
 - [ ] `src/renderer/components/process-runners/IssuesModal.tsx`
 - [ ] `src/renderer/components/dev/ProcessRunnerDevPanel.tsx`
 - [ ] `src/renderer/lib/ipc-client.ts`

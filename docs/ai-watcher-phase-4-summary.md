@@ -1,4 +1,4 @@
-# AI Watcher Phase 4 Complete - Summary
+# AI Runner Phase 4 Complete - Summary
 
 ## ✅ Phase 4: Renderer Integration - COMPLETE
 
@@ -12,9 +12,9 @@
 ### Phase 4.1: Atoms & Hooks ✅
 
 **Files:**
-- `src/renderer/lib/ipc-client.ts` - Added `AiWatcherClient` service
-- `src/renderer/atoms/ai-watcher-atoms.ts` - 8 reactive atoms (4 data + 4 actions)
-- `src/renderer/hooks/useAiWatchers.ts` - 4 custom React hooks
+- `src/renderer/lib/ipc-client.ts` - Added `AiRunnerClient` service
+- `src/renderer/atoms/ai-runner-atoms.ts` - 8 reactive atoms (4 data + 4 actions)
+- `src/renderer/hooks/useAiRunners.ts` - 4 custom React hooks
 
 **Features:**
 - Type-safe IPC client following existing patterns
@@ -27,26 +27,26 @@
 ### Phase 4.2: UI Components ✅
 
 **Files:**
-- `src/renderer/components/dev/AiWatcherDevPanel.tsx` - Development testing panel
+- `src/renderer/components/dev/AiRunnerDevPanel.tsx` - Development testing panel
 - `src/renderer/App.tsx` - Integration in dev mode
-- `docs/ai-watcher-dev-panel-usage.md` - Complete usage guide
+- `docs/ai-runner-dev-panel-usage.md` - Complete usage guide
 
 **Features:**
 - **Visual Panel:**
   - Toggleable UI in bottom-right corner
   - "List Tmux Sessions" button
-  - "List Watchers" button
+  - "List Runners" button
   - Real-time status updates
-  - Color-coded watcher states
+  - Color-coded runner states
   - Attach buttons for tmux sessions
 
 - **Console API:**
   - `window.__DEV_AI_WATCHERS__.listTmuxSessions()`
-  - `window.__DEV_AI_WATCHERS__.listWatchers()`
-  - `window.__DEV_AI_WATCHERS__.createWatcher(config)`
+  - `window.__DEV_AI_WATCHERS__.listRunners()`
+  - `window.__DEV_AI_WATCHERS__.createRunner(config)`
   - `window.__DEV_AI_WATCHERS__.attachToTmux(name)`
-  - `window.__DEV_AI_WATCHERS__.stopWatcher(id)`
-  - `window.__DEV_AI_WATCHERS__.startWatcher(id)`
+  - `window.__DEV_AI_WATCHERS__.stopRunner(id)`
+  - `window.__DEV_AI_WATCHERS__.startRunner(id)`
   - `window.__DEV_AI_WATCHERS__.showPanel()`
   - `window.__DEV_AI_WATCHERS__.getResults()`
 
@@ -87,10 +87,10 @@ window.__DEV_AI_WATCHERS__.showPanel()
 
 You'll see a purple-bordered panel in the bottom-right with:
 - "List Tmux Sessions" button
-- "List Watchers" button
+- "List Runners" button
 - Real-time results display
 
-### 5. Create a Test Watcher
+### 5. Create a Test Runner
 
 First, create a tmux session (in terminal):
 ```bash
@@ -101,7 +101,7 @@ Then in browser console:
 ```javascript
 window.__DEV_AI_WATCHERS__.listTmuxSessions()
 window.__DEV_AI_WATCHERS__.attachToTmux('test-session')
-window.__DEV_AI_WATCHERS__.listWatchers()
+window.__DEV_AI_WATCHERS__.listRunners()
 ```
 
 ---
@@ -119,15 +119,15 @@ React Hook (useTmuxSessions)
   ↓
 Atom (tmuxSessionsAtom)
   ↓
-AiWatcherClient.listTmuxSessions()
+AiRunnerClient.listTmuxSessions()
   ↓
-ElectronIpcClient.invoke('ai-watcher:list-tmux')
+ElectronIpcClient.invoke('ai-runner:list-tmux')
   ↓
-IPC Channel (ai-watcher:list-tmux)
+IPC Channel (ai-runner:list-tmux)
   ↓
-Main Process Handler (ai-watcher-handlers.ts)
+Main Process Handler (ai-runner-handlers.ts)
   ↓
-AiWatcherService
+AiRunnerService
   ↓
 TmuxSessionManager.listSessions()
   ↓
@@ -181,7 +181,7 @@ Every step is **fully type-safe**:
 ✅ **All Core Functionality:**
 - Process monitoring with silence detection (30s idle)
 - Tmux session management (create, attach, list, kill)
-- AI watcher lifecycle (create, start, stop, status)
+- AI runner lifecycle (create, start, stop, status)
 - Log streaming and batching (1000 entry buffer)
 - IPC communication (type-safe contracts)
 - Reactive state management (atoms with TTL)
@@ -207,7 +207,7 @@ Every step is **fully type-safe**:
 
 ### Non-Critical TypeScript Errors
 
-There are some TypeScript errors in `ai-watcher-handlers.ts` related to type inference in the IPC handler pattern. These are:
+There are some TypeScript errors in `ai-runner-handlers.ts` related to type inference in the IPC handler pattern. These are:
 - **Pre-existing pattern limitation** (same pattern used in other handlers)
 - **Do not prevent compilation** (build succeeds)
 - **Runtime type safety maintained** via Effect Schema validation
@@ -215,7 +215,7 @@ There are some TypeScript errors in `ai-watcher-handlers.ts` related to type inf
 
 ### Development-Only UI
 
-The current UI (AiWatcherDevPanel) is intentionally development-only:
+The current UI (AiRunnerDevPanel) is intentionally development-only:
 - **Purpose:** Testing and debugging the backend
 - **Production UI:** Would need to be built separately
 - **Current Solution:** Sufficient for validating all functionality works
@@ -224,17 +224,17 @@ The current UI (AiWatcherDevPanel) is intentionally development-only:
 
 ## Next Steps (Optional)
 
-The core AI Watcher system is **fully functional**. Optional enhancements:
+The core AI Runner system is **fully functional**. Optional enhancements:
 
 ### Phase 5: CLI Integration (Optional)
 - Create CLI server in main process
 - Create bash script for `geppetto-cli`
-- Allow command-line control of watchers
+- Allow command-line control of runners
 
 ### Phase 6: Multi-Provider Refactor (Optional)
 - Abstract VCS providers (GitHub, GitLab, etc.)
 - Hexagonal architecture with adapters
-- Provider-agnostic AI watcher attachment
+- Provider-agnostic AI runner attachment
 
 ### Phase 7: Testing (Optional)
 - Unit tests for services
@@ -246,33 +246,33 @@ The core AI Watcher system is **fully functional**. Optional enhancements:
 ## Files Modified Summary
 
 ### Created (15 files):
-1. `src/main/ai-watchers/ports.ts`
-2. `src/main/ai-watchers/errors.ts`
-3. `src/main/ai-watchers/schemas.ts`
-4. `src/main/ai-watchers/tmux-session-manager.ts`
-5. `src/main/ai-watchers/process-monitor-service.ts`
-6. `src/main/ai-watchers/ai-watcher-service.ts`
-7. `src/main/ai-watchers/index.ts`
-8. `src/main/ipc/ai-watcher-handlers.ts`
-9. `src/shared/schemas/ai-watchers/index.ts`
-10. `src/shared/schemas/ai-watchers/errors.ts`
-11. `src/renderer/atoms/ai-watcher-atoms.ts`
-12. `src/renderer/hooks/useAiWatchers.ts`
-13. `src/renderer/components/dev/AiWatcherDevPanel.tsx`
-14. `docs/ai-watcher-dev-panel-usage.md`
-15. `docs/ai-watcher-phase-4-summary.md` (this file)
+1. `src/main/ai-runners/ports.ts`
+2. `src/main/ai-runners/errors.ts`
+3. `src/main/ai-runners/schemas.ts`
+4. `src/main/ai-runners/tmux-session-manager.ts`
+5. `src/main/ai-runners/process-monitor-service.ts`
+6. `src/main/ai-runners/ai-runner-service.ts`
+7. `src/main/ai-runners/index.ts`
+8. `src/main/ipc/ai-runner-handlers.ts`
+9. `src/shared/schemas/ai-runners/index.ts`
+10. `src/shared/schemas/ai-runners/errors.ts`
+11. `src/renderer/atoms/ai-runner-atoms.ts`
+12. `src/renderer/hooks/useAiRunners.ts`
+13. `src/renderer/components/dev/AiRunnerDevPanel.tsx`
+14. `docs/ai-runner-dev-panel-usage.md`
+15. `docs/ai-runner-phase-4-summary.md` (this file)
 
 ### Modified (5 files):
-1. `src/shared/ipc-contracts.ts` - Added AiWatcherIpcContracts
-2. `src/main/ipc/error-mapper.ts` - Added AI watcher error mapping
+1. `src/shared/ipc-contracts.ts` - Added AiRunnerIpcContracts
+2. `src/main/ipc/error-mapper.ts` - Added AI runner error mapping
 3. `src/main/index.ts` - Registered handlers and layer
-4. `src/renderer/lib/ipc-client.ts` - Added AiWatcherClient
-5. `src/renderer/App.tsx` - Added AiWatcherDevPanel
+4. `src/renderer/lib/ipc-client.ts` - Added AiRunnerClient
+5. `src/renderer/App.tsx` - Added AiRunnerDevPanel
 
 ### Documentation (3 files):
-1. `docs/ai-watcher-tmux-plan.md` - Original plan
-2. `docs/ai-watcher-progress.md` - Implementation tracker
-3. `docs/ai-watcher-dev-panel-usage.md` - Usage guide
+1. `docs/ai-runner-tmux-plan.md` - Original plan
+2. `docs/ai-runner-progress.md` - Implementation tracker
+3. `docs/ai-runner-dev-panel-usage.md` - Usage guide
 
 ---
 
@@ -280,7 +280,7 @@ The core AI Watcher system is **fully functional**. Optional enhancements:
 
 **Phase 4 is complete and fully functional!** 🎉
 
-The AI Watcher Tmux Integration system is now:
+The AI Runner Tmux Integration system is now:
 - ✅ **Built** - All services, IPC, atoms, and UI complete
 - ✅ **Type-safe** - End-to-end type safety maintained
 - ✅ **Testable** - Dev panel provides comprehensive testing interface
@@ -292,7 +292,7 @@ You can now:
 2. Detect idle state (30s silence)
 3. Attach to tmux sessions
 4. Stream logs in real-time
-5. Control watcher lifecycle
+5. Control runner lifecycle
 6. Test everything via console API or visual UI
 
 The system follows all Effect-TS patterns from CLAUDE.md and maintains strict type safety throughout the stack.

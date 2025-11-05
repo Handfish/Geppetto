@@ -1,51 +1,51 @@
-# AI-Watchers → Process-Runners: Quick Reference
+# AI-Runners → Process-Runners: Quick Reference
 
 ## Rename Mappings
 
 ### Directory Structure
 ```
-ai-watchers/          → process-runners/
-ai-watcher-atoms.ts   → process-runner-atoms.ts
-ai-watcher-handlers   → process-runner-handlers.ts
-ai-watchers/          → process-runners/ (components)
+ai-runners/          → process-runners/
+ai-runner-atoms.ts   → process-runner-atoms.ts
+ai-runner-handlers   → process-runner-handlers.ts
+ai-runners/          → process-runners/ (components)
 ```
 
 ### Type Names
 ```
-AiWatcher             → ProcessRunner
-AiWatcherConfig       → ProcessRunnerConfig
-AiWatcherStatus       → ProcessRunnerStatus
-AiWatcherPort         → ProcessRunnerPort
+AiRunner             → ProcessRunner
+AiRunnerConfig       → ProcessRunnerConfig
+AiRunnerStatus       → ProcessRunnerStatus
+AiRunnerPort         → ProcessRunnerPort
 ```
 
 ### Service Names
 ```
-AiWatcherService      → ProcessRunnerService
-AiWatchersLayer       → ProcessRunnersLayer
-WatcherAdaptersLayer  → RunnerAdaptersLayer
+AiRunnerService      → ProcessRunnerService
+AiRunnersLayer       → ProcessRunnersLayer
+RunnerAdaptersLayer  → RunnerAdaptersLayer
 ```
 
 ### IPC Names
 ```
-AiWatcherIpcContracts → ProcessRunnerIpcContracts
-ai-watcher:*          → process-runner:*
-AiWatcherClient       → ProcessRunnerClient
+AiRunnerIpcContracts → ProcessRunnerIpcContracts
+ai-runner:*          → process-runner:*
+AiRunnerClient       → ProcessRunnerClient
 ```
 
 ### Atom/Hook Names
 ```
-aiWatchersAtom        → processRunnersAtom
-aiWatcherByIdAtom     → processRunnerByIdAtom
-aiWatcherLogsAtom     → processRunnerLogsAtom
-useAiWatchers         → useProcessRunners
-useAiWatcherLauncher  → useProcessRunnerLauncher
+aiRunnersAtom        → processRunnersAtom
+aiRunnerByIdAtom     → processRunnerByIdAtom
+aiRunnerLogsAtom     → processRunnerLogsAtom
+useAiRunners         → useProcessRunners
+useAiRunnerLauncher  → useProcessRunnerLauncher
 ```
 
 ### Component Names
 ```
-AiWatchersPanel       → ProcessRunnersPanel
-AiWatcherStatusLED    → ProcessRunnerStatusLED
-AiWatcherDevPanel     → ProcessRunnerDevPanel
+AiRunnersPanel       → ProcessRunnersPanel
+AiRunnerStatusLED    → ProcessRunnerStatusLED
+AiRunnerDevPanel     → ProcessRunnerDevPanel
 ```
 
 ---
@@ -64,7 +64,7 @@ ProcessConfig                ✅ (no change)
 LogEntry                     ✅ (no change)
 TmuxSession                  ✅ (no change)
 ProcessError                 ✅ (no change)
-WatcherNotFoundError         ✅ (no change)
+RunnerNotFoundError         ✅ (no change)
 TmuxError                    ✅ (no change)
 ```
 
@@ -73,16 +73,16 @@ TmuxError                    ✅ (no change)
 ## Channel Names Mapping
 
 ```
-'ai-watcher:create'        → 'process-runner:create'
-'ai-watcher:attach-tmux'   → 'process-runner:attach-tmux'
-'ai-watcher:list'          → 'process-runner:list'
-'ai-watcher:get'           → 'process-runner:get'
-'ai-watcher:stop'          → 'process-runner:stop'
-'ai-watcher:start'         → 'process-runner:start'
-'ai-watcher:get-logs'      → 'process-runner:get-logs'
-'ai-watcher:list-tmux'     → 'process-runner:list-tmux'
-'ai-watcher:switch-tmux'   → 'process-runner:switch-tmux'
-'ai-watcher:get-output'    → 'process-runner:get-output'
+'ai-runner:create'        → 'process-runner:create'
+'ai-runner:attach-tmux'   → 'process-runner:attach-tmux'
+'ai-runner:list'          → 'process-runner:list'
+'ai-runner:get'           → 'process-runner:get'
+'ai-runner:stop'          → 'process-runner:stop'
+'ai-runner:start'         → 'process-runner:start'
+'ai-runner:get-logs'      → 'process-runner:get-logs'
+'ai-runner:list-tmux'     → 'process-runner:list-tmux'
+'ai-runner:switch-tmux'   → 'process-runner:switch-tmux'
+'ai-runner:get-output'    → 'process-runner:get-output'
 ```
 
 ---
@@ -104,22 +104,22 @@ TmuxError                    ✅ (no change)
 Use these in your editor (VS Code find/replace):
 
 ### Main Process
-- Find: `ai-watcher-service` Replace: `process-runner-service`
-- Find: `AiWatcherService` Replace: `ProcessRunnerService`
-- Find: `AiWatchersLayer` Replace: `ProcessRunnersLayer`
-- Find: `WatcherAdaptersLayer` Replace: `RunnerAdaptersLayer`
+- Find: `ai-runner-service` Replace: `process-runner-service`
+- Find: `AiRunnerService` Replace: `ProcessRunnerService`
+- Find: `AiRunnersLayer` Replace: `ProcessRunnersLayer`
+- Find: `RunnerAdaptersLayer` Replace: `RunnerAdaptersLayer`
 
 ### Shared Layer
-- Find: `AiWatcher` Replace: `ProcessRunner` (context-aware!)
-- Find: `ai-watchers` Replace: `process-runners`
+- Find: `AiRunner` Replace: `ProcessRunner` (context-aware!)
+- Find: `ai-runners` Replace: `process-runners`
 
 ### Frontend
-- Find: `AiWatcher` Replace: `ProcessRunner`
-- Find: `aiWatcher` Replace: `processRunner`
-- Find: `useAiWatcher` Replace: `useProcessRunner`
+- Find: `AiRunner` Replace: `ProcessRunner`
+- Find: `aiRunner` Replace: `processRunner`
+- Find: `useAiRunner` Replace: `useProcessRunner`
 
 ### IPC Channels
-- Find: `'ai-watcher:` Replace: `'process-runner:`
+- Find: `'ai-runner:` Replace: `'process-runner:`
 
 ---
 
@@ -127,16 +127,16 @@ Use these in your editor (VS Code find/replace):
 
 ```bash
 # Rename directory
-mv src/main/ai-watchers src/main/process-runners
-mv src/shared/schemas/ai-watchers src/shared/schemas/process-runners
-mv src/renderer/components/ai-watchers src/renderer/components/process-runners
+mv src/main/ai-runners src/main/process-runners
+mv src/shared/schemas/ai-runners src/shared/schemas/process-runners
+mv src/renderer/components/ai-runners src/renderer/components/process-runners
 
 # Rename files
-mv src/renderer/atoms/ai-watcher-atoms.ts src/renderer/atoms/process-runner-atoms.ts
-mv src/renderer/hooks/useAiWatchers.ts src/renderer/hooks/useProcessRunners.ts
-mv src/renderer/hooks/useAiWatcherLauncher.ts src/renderer/hooks/useProcessRunnerLauncher.ts
-mv src/main/ipc/ai-watcher-handlers.ts src/main/ipc/process-runner-handlers.ts
-mv src/renderer/components/dev/AiWatcherDevPanel.tsx src/renderer/components/dev/ProcessRunnerDevPanel.tsx
+mv src/renderer/atoms/ai-runner-atoms.ts src/renderer/atoms/process-runner-atoms.ts
+mv src/renderer/hooks/useAiRunners.ts src/renderer/hooks/useProcessRunners.ts
+mv src/renderer/hooks/useAiRunnerLauncher.ts src/renderer/hooks/useProcessRunnerLauncher.ts
+mv src/main/ipc/ai-runner-handlers.ts src/main/ipc/process-runner-handlers.ts
+mv src/renderer/components/dev/AiRunnerDevPanel.tsx src/renderer/components/dev/ProcessRunnerDevPanel.tsx
 
 # Stage all changes
 git add -A
@@ -145,7 +145,7 @@ git add -A
 git status
 
 # Commit
-git commit -m "refactor: rename ai-watchers → process-runners"
+git commit -m "refactor: rename ai-runners → process-runners"
 ```
 
 ---
@@ -157,7 +157,7 @@ After all changes:
 - [ ] `git status` shows expected renames and changes
 - [ ] `pnpm compile:app:pro` succeeds with no errors
 - [ ] `pnpm dev:pro` starts without errors
-- [ ] DevTools console has no "ai-watcher" or "AiWatcher" errors
+- [ ] DevTools console has no "ai-runner" or "AiRunner" errors
 - [ ] Can open repository dropdown
 - [ ] Status LED appears and works
 - [ ] Can start/stop process runner

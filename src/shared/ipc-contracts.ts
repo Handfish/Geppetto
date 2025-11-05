@@ -41,24 +41,24 @@ import {
   ProcessRunnerConfig,
   LogEntry,
   TmuxSession,
-  AiWatcher,
-  AiWatcherConfig,
+  AiRunner,
+  AiRunnerConfig,
 } from './schemas/process-runners'
 import {
   ProcessError,
   RunnerNotFoundError,
   RunnerOperationError,
   TmuxError,
-  WatcherNotFoundError,
-  WatcherOperationError,
+  RunnerNotFoundError,
+  RunnerOperationError,
 } from './schemas/process-runners/errors'
 import {
   ProcessState,
   OutputChunk,
   ProcessEvent,
-  SpawnWatcherInput,
-  WatcherInfo,
-  SpawnWatcherResult,
+  SpawnRunnerInput,
+  RunnerInfo,
+  SpawnRunnerResult,
 } from './schemas/terminal'
 import {
   TerminalError as TerminalErrorSchema,
@@ -392,7 +392,7 @@ export const ProcessRunnerIpcContracts = {
 } as const
 
 // Backwards compatibility alias for Phase B
-export const AiWatcherIpcContracts = ProcessRunnerIpcContracts
+export const AiRunnerIpcContracts = ProcessRunnerIpcContracts
 
 /**
  * Source Control IPC Contracts
@@ -769,10 +769,10 @@ export const KeyboardLayerIpcContracts = {
  * Terminal IPC Contracts
  */
 export const TerminalIpcContracts = {
-  'terminal:spawn-watcher': {
-    channel: 'terminal:spawn-watcher' as const,
-    input: SpawnWatcherInput,
-    output: SpawnWatcherResult,
+  'terminal:spawn-runner': {
+    channel: 'terminal:spawn-runner' as const,
+    input: SpawnRunnerInput,
+    output: SpawnRunnerResult,
     errors: S.Union(
       TerminalErrorSchema,
       AuthenticationError,
@@ -780,8 +780,8 @@ export const TerminalIpcContracts = {
     ),
   },
 
-  'terminal:kill-watcher': {
-    channel: 'terminal:kill-watcher' as const,
+  'terminal:kill-runner': {
+    channel: 'terminal:kill-runner' as const,
     input: S.Struct({
       processId: S.String,
     }),
@@ -789,15 +789,15 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalErrorSchema),
   },
 
-  'terminal:kill-all-watchers': {
-    channel: 'terminal:kill-all-watchers' as const,
+  'terminal:kill-all-runners': {
+    channel: 'terminal:kill-all-runners' as const,
     input: S.Void,
     output: S.Void,
     errors: S.Never,
   },
 
-  'terminal:restart-watcher': {
-    channel: 'terminal:restart-watcher' as const,
+  'terminal:restart-runner': {
+    channel: 'terminal:restart-runner' as const,
     input: S.Struct({
       processId: S.String,
     }),
@@ -805,8 +805,8 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalErrorSchema),
   },
 
-  'terminal:write-to-watcher': {
-    channel: 'terminal:write-to-watcher' as const,
+  'terminal:write-to-runner': {
+    channel: 'terminal:write-to-runner' as const,
     input: S.Struct({
       processId: S.String,
       data: S.String,
@@ -815,8 +815,8 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalErrorSchema),
   },
 
-  'terminal:resize-watcher': {
-    channel: 'terminal:resize-watcher' as const,
+  'terminal:resize-runner': {
+    channel: 'terminal:resize-runner' as const,
     input: S.Struct({
       processId: S.String,
       rows: S.Number,
@@ -826,8 +826,8 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalErrorSchema),
   },
 
-  'terminal:get-watcher-state': {
-    channel: 'terminal:get-watcher-state' as const,
+  'terminal:get-runner-state': {
+    channel: 'terminal:get-runner-state' as const,
     input: S.Struct({
       processId: S.String,
     }),
@@ -835,16 +835,16 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalErrorSchema),
   },
 
-  'terminal:list-active-watchers': {
-    channel: 'terminal:list-active-watchers' as const,
+  'terminal:list-active-runners': {
+    channel: 'terminal:list-active-runners' as const,
     input: S.Void,
-    output: S.Array(WatcherInfo),
+    output: S.Array(RunnerInfo),
     errors: S.Never,
   },
 
   // Stream subscriptions (handled differently in IPC)
-  'terminal:subscribe-to-watcher': {
-    channel: 'terminal:subscribe-to-watcher' as const,
+  'terminal:subscribe-to-runner': {
+    channel: 'terminal:subscribe-to-runner' as const,
     input: S.Struct({
       processId: S.String,
     }),
@@ -854,8 +854,8 @@ export const TerminalIpcContracts = {
     errors: S.Union(TerminalErrorSchema),
   },
 
-  'terminal:unsubscribe-from-watcher': {
-    channel: 'terminal:unsubscribe-from-watcher' as const,
+  'terminal:unsubscribe-from-runner': {
+    channel: 'terminal:unsubscribe-from-runner' as const,
     input: S.Struct({
       subscriptionId: S.String,
     }),
@@ -872,7 +872,7 @@ export const IpcContracts = {
   ...ProviderIpcContracts,
   ...AiProviderIpcContracts,
   ...WorkspaceIpcContracts,
-  ...AiWatcherIpcContracts,
+  ...AiRunnerIpcContracts,
   ...SourceControlIpcContracts,
   ...GitHubIssueIpcContracts,
   ...KeyboardLayerIpcContracts,

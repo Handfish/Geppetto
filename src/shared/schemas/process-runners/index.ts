@@ -13,8 +13,8 @@ export const ProcessRunnerStatus = S.Literal('starting', 'running', 'idle', 'sto
 export type ProcessRunnerStatus = S.Schema.Type<typeof ProcessRunnerStatus>
 
 // Backwards compatibility alias for Phase B
-export const AiWatcherStatus = ProcessRunnerStatus
-export type AiWatcherStatus = ProcessRunnerStatus
+export const AiRunnerStatus = ProcessRunnerStatus
+export type AiRunnerStatus = ProcessRunnerStatus
 
 /**
  * Process handle - represents a process being monitored
@@ -39,7 +39,7 @@ export class ProcessRunnerConfig extends S.Class<ProcessRunnerConfig>('ProcessRu
 }) {}
 
 // Backwards compatibility alias for Phase B
-export const AiWatcherConfig = ProcessRunnerConfig
+export const AiRunnerConfig = ProcessRunnerConfig
 
 /**
  * Process Runner - represents a monitored process instance
@@ -56,7 +56,7 @@ export class ProcessRunner extends S.Class<ProcessRunner>('ProcessRunner')({
 }) {}
 
 // Backwards compatibility alias for Phase B
-export const AiWatcher = ProcessRunner
+export const AiRunner = ProcessRunner
 
 /**
  * Log entry for process runner logs
@@ -67,15 +67,6 @@ export class LogEntry extends S.Class<LogEntry>('LogEntry')({
   message: S.String,
   runnerId: S.String,
 }) {}
-
-// Backwards compatibility: also accept watcherId
-export const LogEntryCompat = S.Class<any>('LogEntry')({
-  timestamp: S.Date,
-  level: S.Literal('info', 'error', 'debug', 'stdout', 'stderr'),
-  message: S.String,
-  watcherId: S.optional(S.String),
-  runnerId: S.optional(S.String),
-})
 
 /**
  * Tmux session information

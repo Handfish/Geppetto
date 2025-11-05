@@ -75,7 +75,7 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
       // Map of process ID to process information
       const processes = new Map<string, ProcessInfo>()
 
-      // Mutex to serialize FIFO opening (prevents cross-contamination when multiple watchers start)
+      // Mutex to serialize FIFO opening (prevents cross-contamination when multiple runners start)
       // Uses a bounded queue with size 1 as a simple mutex: take() = acquire, offer() = release
       const fifoOpenMutex = yield* Queue.bounded<void>(1)
       yield* Queue.offer(fifoOpenMutex, undefined) // Initialize with one permit
@@ -889,7 +889,7 @@ export class NodeProcessMonitorAdapter extends Effect.Service<NodeProcessMonitor
                         yield* markActivity(handle.id)
                       }
 
-                      // Map the event's processId (pane ID) back to the watcher's handle ID
+                      // Map the event's processId (pane ID) back to the runner's handle ID
                       const mappedEvent = event
                       ;(mappedEvent as any).processId = handle.id
                       yield* emitEvent(handle.id, mappedEvent)

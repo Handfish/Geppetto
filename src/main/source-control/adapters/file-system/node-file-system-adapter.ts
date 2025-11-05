@@ -207,7 +207,7 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
         watchDirectory: (dirPath: string) =>
           Stream.asyncScoped<FileEvent, FileSystemError>((emit) =>
             Effect.gen(function* () {
-              const watcher = yield* Effect.acquireRelease(
+              const runner = yield* Effect.acquireRelease(
                 Effect.sync(() => {
                   const w = watch(dirPath, {
                     ignored: /(^|[/\\])\../, // Ignore dotfiles except the watched dir
@@ -244,7 +244,7 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
                       new FileSystemError({
                         path: dirPath,
                         operation: 'watch',
-                        reason: 'File watcher error',
+                        reason: 'File runner error',
                         cause: error,
                       })
                     )
@@ -258,7 +258,7 @@ export class NodeFileSystemAdapter extends Effect.Service<NodeFileSystemAdapter>
               )
 
               return Effect.sync(() => {
-                watcher.close()
+                runner.close()
               })
             })
           ),

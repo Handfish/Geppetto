@@ -1,14 +1,14 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { useAtomValue, useAtomRefresh } from '@effect-atom/atom-react'
 import { Result } from '@effect-atom/atom-react'
-import { activeWatchersAtom, watcherStateAtom, onStatusUpdate } from '../../atoms/terminal-atoms'
+import { activeRunnersAtom, runnerStateAtom, onStatusUpdate } from '../../atoms/terminal-atoms'
 import { XTerminal } from './XTerminal'
 import { TerminalLED } from './TerminalLED'
 import { TerminalTypeSwitcher } from './TerminalTypeSwitcher'
 import { cn } from '../../lib/utils'
 import { X, Maximize2, Minimize2, RotateCcw } from 'lucide-react'
 import { useTerminalOperations } from '../../hooks/useTerminalOperations'
-import type { WatcherInfo } from '../../../shared/schemas/terminal'
+import type { RunnerInfo } from '../../../shared/schemas/terminal'
 
 interface TerminalPanelProps {
   className?: string
@@ -16,16 +16,16 @@ interface TerminalPanelProps {
 }
 
 export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
-  const watchersResult = useAtomValue(activeWatchersAtom)
-  const refreshWatchers = useAtomRefresh(activeWatchersAtom)
-  const { writeToWatcher, resizeWatcher, killWatcher, restartWatcher } = useTerminalOperations()
+  const runnersResult = useAtomValue(activeRunnersAtom)
+  const refreshRunners = useAtomRefresh(activeRunnersAtom)
+  const { writeToRunner, resizeRunner, killRunner, restartRunner } = useTerminalOperations()
 
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null)
   const [isMaximized, setIsMaximized] = useState(false)
 
-  // Auto-select first watcher
+  // Auto-select first runner
   useEffect(() => {
-    Result.matchWithError(watchersResult, {
+    Result.matchWithError(runnersResult, {
       onSuccess: (data) => {
         if (data && data.value.length > 0 && !activeProcessId) {
           setActiveProcessId(data.value[0].processId)
@@ -35,37 +35,37 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
       onDefect: () => {},
       onInitial: () => {},
     })
-  }, [watchersResult, activeProcessId])
+  }, [runnersResult, activeProcessId])
 
   const handleTerminalData = useCallback(async (data: string) => {
     if (activeProcessId) {
-      await writeToWatcher({ processId: activeProcessId, data })
+      await writeToRunner({ processId: activeProcessId, data })
     }
-  }, [activeProcessId, writeToWatcher])
+  }, [activeProcessId, writeToRunner])
 
   const handleTerminalResize = useCallback(async (rows: number, cols: number) => {
     if (!activeProcessId) return
 
     try {
-      await resizeWatcher({ processId: activeProcessId, rows, cols })
+      await resizeRunner({ processId: activeProcessId, rows, cols })
     } catch (error) {
       // Silently ignore resize errors (process may have died)
       console.warn(`[TerminalPanel] Resize failed for process ${activeProcessId}:`, error)
     }
-  }, [activeProcessId, resizeWatcher])
+  }, [activeProcessId, resizeRunner])
 
   const handleKillProcess = useCallback(async (processId: string) => {
-    await killWatcher(processId)
-    refreshWatchers()
+    await killRunner(processId)
+    refreshRunners()
     if (processId === activeProcessId) {
       setActiveProcessId(null)
     }
-  }, [activeProcessId, killWatcher, refreshWatchers])
+  }, [activeProcessId, killRunner, refreshRunners])
 
   const handleRestartProcess = useCallback(async (processId: string) => {
-    await restartWatcher(processId)
-    refreshWatchers()
-  }, [restartWatcher, refreshWatchers])
+    await restartRunner(processId)
+    refreshRunners()
+  }, [restartRunner, refreshRunners])
 
   return (
     <div
@@ -78,9 +78,9 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-gray-200">AI Watchers Terminal</h3>
+          <h3 className="text-sm font-semibold text-gray-200">AI Runners Terminal</h3>
           <span className="text-xs text-gray-500">
-            {Result.matchWithError(watchersResult, {
+            {Result.matchWithError(runnersResult, {
               onSuccess: (data) => `${data.value.length} active`,
               onError: () => 'Error',
               onDefect: () => 'Error',
@@ -91,7 +91,7 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
 
         <div className="flex items-center gap-1">
           <button
-            onClick={() => refreshWatchers()}
+            onClick={() => refreshRunners()}
             className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"
             title="Refresh"
           >
@@ -116,27 +116,27 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
 
       {/* LED Status Bar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800 overflow-x-auto">
-        {Result.builder(watchersResult)
-          .onSuccess((watchers) => (
+        {Result.builder(runnersResult)
+          .onSuccess((runners) => (
             <>
-              {watchers.map((watcher) => {
+              {runners.map((runner) => {
                 // Use a component to handle the atom subscription
                 return (
-                  <WatcherLEDWithState
-                    key={watcher.processId}
-                    watcher={watcher}
-                    isActive={watcher.processId === activeProcessId}
-                    onClick={() => setActiveProcessId(watcher.processId)}
+                  <RunnerLEDWithState
+                    key={runner.processId}
+                    runner={runner}
+                    isActive={runner.processId === activeProcessId}
+                    onClick={() => setActiveProcessId(runner.processId)}
                   />
                 )
               })}
             </>
           ))
           .onInitial(() => (
-            <div className="text-xs text-gray-500">Loading watchers...</div>
+            <div className="text-xs text-gray-500">Loading runners...</div>
           ))
           .onFailure((error) => (
-            <div className="text-xs text-red-500">Error loading watchers</div>
+            <div className="text-xs text-red-500">Error loading runners</div>
           ))
           .render()}
       </div>
@@ -154,8 +154,8 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
             <div className="text-center">
-              <p className="mb-2">No active watchers</p>
-              <p className="text-xs">Launch AI watchers from the Issues modal</p>
+              <p className="mb-2">No active runners</p>
+              <p className="text-xs">Launch AI runners from the Issues modal</p>
             </div>
           </div>
         )}
@@ -191,45 +191,45 @@ export function TerminalPanel({ className, onClose }: TerminalPanelProps) {
 }
 
 /**
- * Helper component to handle individual watcher LED with state subscription
+ * Helper component to handle individual runner LED with state subscription
  */
-function WatcherLEDWithState({
-  watcher,
+function RunnerLEDWithState({
+  runner,
   isActive,
   onClick,
 }: {
-  watcher: { processId: string; issueContext?: { issueNumber: number }; agentType: string; state: any }
+  runner: { processId: string; issueContext?: { issueNumber: number }; agentType: string; state: any }
   isActive: boolean
   onClick: () => void
 }) {
-  const stateResult = useAtomValue(watcherStateAtom(watcher.processId))
-  const refreshState = useAtomRefresh(watcherStateAtom(watcher.processId))
+  const stateResult = useAtomValue(runnerStateAtom(runner.processId))
+  const refreshState = useAtomRefresh(runnerStateAtom(runner.processId))
 
-  console.log('[WatcherLEDWithState] Atom result for', watcher.processId, ':', stateResult)
+  console.log('[RunnerLEDWithState] Atom result for', runner.processId, ':', stateResult)
 
   // Subscribe to status updates and refresh when notified
   useEffect(() => {
-    console.log('[WatcherLEDWithState] Subscribing to status updates for:', watcher.processId)
+    console.log('[RunnerLEDWithState] Subscribing to status updates for:', runner.processId)
     const unsubscribe = onStatusUpdate(() => {
-      console.log('[WatcherLEDWithState] Status update received, refreshing state for:', watcher.processId)
+      console.log('[RunnerLEDWithState] Status update received, refreshing state for:', runner.processId)
       refreshState()
     })
     return unsubscribe
-  }, [refreshState, watcher.processId])
+  }, [refreshState, runner.processId])
 
   return Result.builder(stateResult)
     .onSuccess((state) => (
       <TerminalLED
         state={state}
-        label={watcher.issueContext ? `#${watcher.issueContext.issueNumber}` : watcher.agentType}
+        label={runner.issueContext ? `#${runner.issueContext.issueNumber}` : runner.agentType}
         isActive={isActive}
         onClick={onClick}
       />
     ))
     .onInitial(() => (
       <TerminalLED
-        state={watcher.state}
-        label={watcher.issueContext ? `#${watcher.issueContext.issueNumber}` : watcher.agentType}
+        state={runner.state}
+        label={runner.issueContext ? `#${runner.issueContext.issueNumber}` : runner.agentType}
         isActive={isActive}
         onClick={onClick}
       />

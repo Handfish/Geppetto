@@ -1,13 +1,13 @@
-# AI Watcher UI Enhancement Implementation Prompts
+# AI Runner UI Enhancement Implementation Prompts
 
-These prompts help you implement the AI Watcher UI enhancement in incremental, manageable steps. Use them to start, continue, or resume the work.
+These prompts help you implement the AI Runner UI enhancement in incremental, manageable steps. Use them to start, continue, or resume the work.
 
 ---
 
 ## 1. Initial Implementation Prompt
 
 ```
-Implement the AI Watcher UI Enhancement following the plan in `/docs/ai-watcher-ui-plan.md`. Start with Phase 1: Backend - GitHub Issues Integration. Create the hexagonal architecture ports and adapters for GitHub Issues (Port → Schema → Adapter → Service → IPC → Atoms). Follow the hexagonal architecture patterns from CLAUDE.md exactly - use Schema.parse not validate, implement proper error handling with Effect, keep ports abstract and adapters concrete. After Phase 1, continue with Phase 2: Issues Modal UI, then Phase 3: AI Watcher Integration with Git Worktrees (CRITICAL: each watcher must run in an isolated git worktree with branch name `issue#<number>`, creating the branch from main/default if it doesn't exist), and finally Phase 4: LED Status Indicators. Update `/docs/ai-watcher-ui-progress.md` after completing each phase, checking off items as you finish. Test thoroughly after each phase to ensure no regressions.
+Implement the AI Runner UI Enhancement following the plan in `/docs/ai-runner-ui-plan.md`. Start with Phase 1: Backend - GitHub Issues Integration. Create the hexagonal architecture ports and adapters for GitHub Issues (Port → Schema → Adapter → Service → IPC → Atoms). Follow the hexagonal architecture patterns from CLAUDE.md exactly - use Schema.parse not validate, implement proper error handling with Effect, keep ports abstract and adapters concrete. After Phase 1, continue with Phase 2: Issues Modal UI, then Phase 3: AI Runner Integration with Git Worktrees (CRITICAL: each runner must run in an isolated git worktree with branch name `issue#<number>`, creating the branch from main/default if it doesn't exist), and finally Phase 4: LED Status Indicators. Update `/docs/ai-runner-ui-progress.md` after completing each phase, checking off items as you finish. Test thoroughly after each phase to ensure no regressions.
 ```
 
 **When to use**: Starting the feature implementation from scratch
@@ -19,7 +19,7 @@ Implement the AI Watcher UI Enhancement following the plan in `/docs/ai-watcher-
 - Builds atoms for reactive state management
 - Creates Issues Modal UI with keyboard shortcuts
 - **Implements git worktree operations** - creates isolated worktrees per issue with branch name `issue#<number>`
-- Integrates AI watcher launching from shortlisted issues **in dedicated worktrees**
+- Integrates AI runner launching from shortlisted issues **in dedicated worktrees**
 - Fixes 'claude-code' command bug (should use 'claude' bash process)
 - Implements LED status indicators in top-right quadrant
 - Updates progress tracker after each phase
@@ -30,9 +30,9 @@ Implement the AI Watcher UI Enhancement following the plan in `/docs/ai-watcher-
 - ✅ GitHub Issues integration complete with hexagonal architecture
 - ✅ Issues modal with keyboard-driven shortlist
 - ✅ **Git worktree creation** - isolated worktrees for each issue with proper branch management
-- ✅ AI watchers launchable from issue shortlist **in dedicated worktrees**
+- ✅ AI runners launchable from issue shortlist **in dedicated worktrees**
 - ✅ Command bug fixed
-- ✅ Beautiful LED status indicators showing watcher states
+- ✅ Beautiful LED status indicators showing runner states
 - ✅ All phases marked complete in progress tracker
 
 ---
@@ -40,13 +40,13 @@ Implement the AI Watcher UI Enhancement following the plan in `/docs/ai-watcher-
 ## 2. Continue Progress Prompt
 
 ```
-Continue implementing the AI Watcher UI Enhancement from where you left off. First, read `/docs/ai-watcher-ui-progress.md` to see which phases and sections are completed. Then proceed with the next uncompleted phase from `/docs/ai-watcher-ui-plan.md`. Work through each checklist item systematically, testing as you go. Follow hexagonal architecture patterns - ports are abstract interfaces, adapters are concrete Effect Services, schemas use Schema.parse not validate. Handle all errors in an Effectful way using Effect.fail and tagged errors. Keep the implementation clean and simple for the best DX. Update the progress document after completing each section, checking off items and adding notes. If you encounter issues, document them in the progress file.
+Continue implementing the AI Runner UI Enhancement from where you left off. First, read `/docs/ai-runner-ui-progress.md` to see which phases and sections are completed. Then proceed with the next uncompleted phase from `/docs/ai-runner-ui-plan.md`. Work through each checklist item systematically, testing as you go. Follow hexagonal architecture patterns - ports are abstract interfaces, adapters are concrete Effect Services, schemas use Schema.parse not validate. Handle all errors in an Effectful way using Effect.fail and tagged errors. Keep the implementation clean and simple for the best DX. Update the progress document after completing each section, checking off items and adding notes. If you encounter issues, document them in the progress file.
 ```
 
 **When to use**: Continuing work in the same or a new session
 
 **What it does**:
-- Reads current progress from `ai-watcher-ui-progress.md`
+- Reads current progress from `ai-runner-ui-progress.md`
 - Identifies next incomplete phase/section
 - Continues implementation from that point
 - Tests each change incrementally
@@ -62,7 +62,7 @@ Continue implementing the AI Watcher UI Enhancement from where you left off. Fir
 **Phases it might continue**:
 - Phase 1: Backend - GitHub Issues Integration
 - Phase 2: Issues Modal UI
-- Phase 3: AI Watcher Integration with Git Worktrees
+- Phase 3: AI Runner Integration with Git Worktrees
 - Phase 4: LED Status Indicators
 
 ---
@@ -70,7 +70,7 @@ Continue implementing the AI Watcher UI Enhancement from where you left off. Fir
 ## 3. Resume After Context Loss Prompt
 
 ```
-Resume the AI Watcher UI Enhancement implementation. First, analyze the current state by: 1) Reading `/docs/ai-watcher-ui-progress.md` to see what phases are marked complete, 2) Checking which files from the plan exist by running `git status` and looking for new files in `src/main/github/issues/`, `src/renderer/components/ai-watchers/`, `src/shared/schemas/github/`, 3) Running `git log --oneline --all -20` to see recent commits related to this feature, 4) Scanning key files to verify actual implementation: check for IssuePort in `src/main/github/issues/ports.ts`, IssuesModal in `src/renderer/components/ai-watchers/IssuesModal.tsx`, WatcherStatusLED in `src/renderer/components/ai-watchers/WatcherStatusLED.tsx`, and the command fix in `src/main/ai-watchers/ai-watcher-service.ts`. Compare the actual code state against what's marked complete in the progress document. Then continue from the next uncompleted item in `/docs/ai-watcher-ui-plan.md`. Follow CLAUDE.md patterns exactly - hexagonal architecture with ports & adapters, Schema.parse, and Effectful error handling.
+Resume the AI Runner UI Enhancement implementation. First, analyze the current state by: 1) Reading `/docs/ai-runner-ui-progress.md` to see what phases are marked complete, 2) Checking which files from the plan exist by running `git status` and looking for new files in `src/main/github/issues/`, `src/renderer/components/ai-runners/`, `src/shared/schemas/github/`, 3) Running `git log --oneline --all -20` to see recent commits related to this feature, 4) Scanning key files to verify actual implementation: check for IssuePort in `src/main/github/issues/ports.ts`, IssuesModal in `src/renderer/components/ai-runners/IssuesModal.tsx`, RunnerStatusLED in `src/renderer/components/ai-runners/RunnerStatusLED.tsx`, and the command fix in `src/main/ai-runners/ai-runner-service.ts`. Compare the actual code state against what's marked complete in the progress document. Then continue from the next uncompleted item in `/docs/ai-runner-ui-plan.md`. Follow CLAUDE.md patterns exactly - hexagonal architecture with ports & adapters, Schema.parse, and Effectful error handling.
 ```
 
 **When to use**: Starting a new conversation after losing context
@@ -100,10 +100,10 @@ Resume the AI Watcher UI Enhancement implementation. First, analyze the current 
 - `src/shared/ipc-contracts.ts` - Issue & worktree IPC contracts
 - `src/renderer/atoms/github-issue-atoms.ts` - Issue atoms
 - `src/main/source-control/git-command-service.ts` - **Git worktree operations**
-- `src/renderer/hooks/useAiWatcherLauncher.ts` - **Watcher launcher with worktree support**
-- `src/renderer/components/ai-watchers/IssuesModal.tsx` - Modal UI
-- `src/renderer/components/ai-watchers/WatcherStatusLED.tsx` - LED indicators
-- `src/main/ai-watchers/ai-watcher-service.ts` - Command fix
+- `src/renderer/hooks/useAiRunnerLauncher.ts` - **Runner launcher with worktree support**
+- `src/renderer/components/ai-runners/IssuesModal.tsx` - Modal UI
+- `src/renderer/components/ai-runners/RunnerStatusLED.tsx` - LED indicators
+- `src/main/ai-runners/ai-runner-service.ts` - Command fix
 
 **Expected outcome**:
 - Accurate understanding of current state
@@ -160,7 +160,7 @@ pnpm dev
 pnpm compile:app
 
 # Check progress
-cat docs/ai-watcher-ui-progress.md | grep "Status:"
+cat docs/ai-runner-ui-progress.md | grep "Status:"
 
 # See recent changes
 git status
@@ -168,13 +168,13 @@ git diff --stat
 
 # Check for new files
 ls -la src/main/github/issues/
-ls -la src/renderer/components/ai-watchers/
+ls -la src/renderer/components/ai-runners/
 ls -la src/shared/schemas/github/
 
 # Search for specific implementations
 grep -r "IssuePort" src/main
-grep -r "claude-code" src/main/ai-watchers
-grep -r "WatcherStatusLED" src/renderer
+grep -r "claude-code" src/main/ai-runners
+grep -r "RunnerStatusLED" src/renderer
 ```
 
 ---

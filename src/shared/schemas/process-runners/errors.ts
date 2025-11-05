@@ -1,46 +1,40 @@
-import { Schema as S } from 'effect'
+import { Schema as S } from "effect";
 
 /**
  * Process Runner IPC Error Schemas
  * These are the error types that can cross the main/renderer boundary
  */
 
-export class ProcessError extends S.TaggedError<ProcessError>('ProcessError')(
-  'ProcessError',
+export class ProcessError extends S.TaggedError<ProcessError>("ProcessError")(
+  "ProcessError",
   {
     message: S.String,
     processId: S.optional(S.String),
     pid: S.optional(S.Number),
-  }
+  },
 ) {}
 
 export class RunnerNotFoundError extends S.TaggedError<RunnerNotFoundError>(
-  'RunnerNotFoundError'
-)('RunnerNotFoundError', {
+  "RunnerNotFoundError",
+)("RunnerNotFoundError", {
   message: S.String,
   runnerId: S.String,
 }) {}
 
-// Backwards compatibility alias for Phase B
-export const WatcherNotFoundError = RunnerNotFoundError
-
 export class RunnerOperationError extends S.TaggedError<RunnerOperationError>(
-  'RunnerOperationError'
-)('RunnerOperationError', {
+  "RunnerOperationError",
+)("RunnerOperationError", {
   message: S.String,
   runnerId: S.optional(S.String),
   operation: S.String, // 'create', 'start', 'stop', etc.
 }) {}
 
-// Backwards compatibility alias for Phase B
-export const WatcherOperationError = RunnerOperationError
-
-export class TmuxError extends S.TaggedError<TmuxError>('TmuxError')(
-  'TmuxError',
+export class TmuxError extends S.TaggedError<TmuxError>("TmuxError")(
+  "TmuxError",
   {
     message: S.String,
     sessionName: S.optional(S.String),
-  }
+  },
 ) {}
 
 /**
@@ -50,7 +44,7 @@ export type ProcessRunnerIpcError =
   | ProcessError
   | RunnerNotFoundError
   | RunnerOperationError
-  | TmuxError
+  | TmuxError;
 
 // Backwards compatibility alias for Phase B
-export type AiWatcherIpcError = ProcessRunnerIpcError
+export type AiRunnerIpcError = ProcessRunnerIpcError;

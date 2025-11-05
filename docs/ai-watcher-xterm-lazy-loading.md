@@ -1,4 +1,4 @@
-# AI Watcher XTerm.js - Lazy Loading Strategy
+# AI Runner XTerm.js - Lazy Loading Strategy
 
 > **Goal**: Minimize startup impact and memory usage by loading terminal dependencies only when needed
 
@@ -351,7 +351,7 @@ class LazyTerminalSubscriptionManager {
 export const lazyTerminalSubscriptionManager = new LazyTerminalSubscriptionManager()
 
 // Lazy atom that only loads IPC client when accessed
-export const lazyActiveWatchersAtom = Atom.make(() =>
+export const lazyActiveRunnersAtom = Atom.make(() =>
   Effect.gen(function* () {
     // Check if terminal is being used
     const terminalInUse = yield* Effect.sync(() =>
@@ -370,7 +370,7 @@ export const lazyActiveWatchersAtom = Atom.make(() =>
     })
 
     const ipc = yield* ElectronIpcClient
-    return yield* ipc.terminal.listActiveWatchers()
+    return yield* ipc.terminal.listActiveRunners()
   }).pipe(
     Effect.map(Result.success),
     Effect.catchAll((error) => Effect.succeed(Result.fail(error)))
@@ -526,20 +526,20 @@ export class TerminalCleanupService extends Effect.Service<TerminalCleanupServic
       const cleanupInactive = Effect.gen(function* () {
         const now = new Date()
         const activities = yield* Ref.get(lastActivity)
-        const watchers = yield* terminalService.listActiveWatchers()
+        const runners = yield* terminalService.listActiveRunners()
 
-        for (const watcher of watchers) {
-          const activity = HashMap.get(activities, watcher.processId)
+        for (const runner of runners) {
+          const activity = HashMap.get(activities, runner.processId)
 
           if (Option.isSome(activity)) {
             const idleTime = now.getTime() - activity.value.getTime()
 
             // Kill if idle for more than 30 minutes
             if (idleTime > 30 * 60 * 1000) {
-              yield* terminalService.killWatcher(watcher.processId).pipe(
+              yield* terminalService.killRunner(runner.processId).pipe(
                 Effect.catchAll(() => Effect.void)
               )
-              yield* Ref.update(lastActivity, HashMap.remove(watcher.processId))
+              yield* Ref.update(lastActivity, HashMap.remove(runner.processId))
             }
           }
         }
@@ -698,11 +698,11 @@ export function useTerminalAvailable() {
 export function IssuesModal() {
   const terminalAvailable = useTerminalAvailable()
 
-  const handleLaunchWatcher = async () => {
+  const handleLaunchRunner = async () => {
     if (terminalAvailable) {
       // Use terminal
-      const { spawnWatcher } = await import('../hooks/useTerminalOperations')
-      await spawnWatcher(config)
+      const { spawnRunner } = await import('../hooks/useTerminalOperations')
+      await spawnRunner(config)
     } else {
       // Fallback to tmux or external terminal
       await launchInSystemTerminal(config)
