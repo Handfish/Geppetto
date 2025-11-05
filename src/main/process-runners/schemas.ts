@@ -27,15 +27,19 @@ export const AiAgentType = S.Literal('claude-code', 'codex', 'cursor', 'custom')
 export type AiAgentType = S.Schema.Type<typeof AiAgentType>
 
 /**
- * Watcher status - lifecycle states of an AI watcher
+ * Process Runner status - lifecycle states of a process runner
  */
-export const AiWatcherStatus = S.Literal('starting', 'running', 'idle', 'stopped', 'errored')
-export type AiWatcherStatus = S.Schema.Type<typeof AiWatcherStatus>
+export const ProcessRunnerStatus = S.Literal('starting', 'running', 'idle', 'stopped', 'errored')
+export type ProcessRunnerStatus = S.Schema.Type<typeof ProcessRunnerStatus>
+
+// Backwards compatibility alias
+export const AiWatcherStatus = ProcessRunnerStatus
+export type AiWatcherStatus = ProcessRunnerStatus
 
 /**
- * AI watcher configuration
+ * Process Runner configuration
  */
-export class AiWatcherConfig extends S.Class<AiWatcherConfig>('AiWatcherConfig')({
+export class ProcessRunnerConfig extends S.Class<ProcessRunnerConfig>('ProcessRunnerConfig')({
   type: AiAgentType,
   name: S.optional(S.String),
   workingDirectory: S.String,
@@ -50,22 +54,28 @@ export class AiWatcherConfig extends S.Class<AiWatcherConfig>('AiWatcherConfig')
       issueNumber: S.Number,
       issueTitle: S.String,
     })
-  ), // GitHub issue context when watcher is launched from issue
+  ), // GitHub issue context when runner is launched from issue
 }) {}
 
+// Backwards compatibility alias
+export const AiWatcherConfig = ProcessRunnerConfig
+
 /**
- * AI watcher - represents a monitored AI agent instance
+ * Process Runner - represents a monitored process instance
  */
-export class AiWatcher extends S.Class<AiWatcher>('AiWatcher')({
+export class ProcessRunner extends S.Class<ProcessRunner>('ProcessRunner')({
   id: S.String,
   name: S.String,
   type: AiAgentType,
   processHandle: ProcessHandle,
-  status: AiWatcherStatus,
-  config: AiWatcherConfig,
+  status: ProcessRunnerStatus,
+  config: ProcessRunnerConfig,
   createdAt: S.Date,
   lastActivityAt: S.Date,
 }) {}
+
+// Backwards compatibility alias
+export const AiWatcher = ProcessRunner
 
 /**
  * Tmux session information

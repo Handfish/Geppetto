@@ -68,13 +68,13 @@ import {
   ProcessMonitorError,
   ProcessKillError,
   ProcessNotFoundError,
-  AiWatcherCreateError,
-  AiWatcherStartError,
-  AiWatcherStopError,
-  WatcherNotFoundError as DomainWatcherNotFoundError,
+  ProcessRunnerCreateError,
+  ProcessRunnerStartError,
+  ProcessRunnerStopError,
+  RunnerNotFoundError as DomainRunnerNotFoundError,
   TmuxSessionNotFoundError,
   TmuxCommandError,
-} from '../ai-watchers/errors'
+} from '../process-runners/errors'
 import {
   ProcessError,
   WatcherNotFoundError as IpcWatcherNotFoundError,
@@ -144,18 +144,18 @@ type AiDomainError =
   | AiAccountNotFoundError
 
 /**
- * Union of all AI Watcher domain errors
+ * Union of all Process Runner domain errors
  */
-type AiWatcherDomainError =
+type ProcessRunnerDomainError =
   | ProcessSpawnError
   | ProcessAttachError
   | ProcessMonitorError
   | ProcessKillError
   | ProcessNotFoundError
-  | AiWatcherCreateError
-  | AiWatcherStartError
-  | AiWatcherStopError
-  | DomainWatcherNotFoundError
+  | ProcessRunnerCreateError
+  | ProcessRunnerStartError
+  | ProcessRunnerStopError
+  | DomainRunnerNotFoundError
   | TmuxSessionNotFoundError
   | TmuxCommandError
 
@@ -234,19 +234,19 @@ const isAiDomainError = (error: unknown): error is AiDomainError => {
 }
 
 /**
- * Type guard to check if an error is an AI Watcher domain error
+ * Type guard to check if an error is a Process Runner domain error
  */
-const isAiWatcherDomainError = (error: unknown): error is AiWatcherDomainError => {
+const isProcessRunnerDomainError = (error: unknown): error is ProcessRunnerDomainError => {
   return (
     error instanceof ProcessSpawnError ||
     error instanceof ProcessAttachError ||
     error instanceof ProcessMonitorError ||
     error instanceof ProcessKillError ||
     error instanceof ProcessNotFoundError ||
-    error instanceof AiWatcherCreateError ||
-    error instanceof AiWatcherStartError ||
-    error instanceof AiWatcherStopError ||
-    error instanceof DomainWatcherNotFoundError ||
+    error instanceof ProcessRunnerCreateError ||
+    error instanceof ProcessRunnerStartError ||
+    error instanceof ProcessRunnerStopError ||
+    error instanceof DomainRunnerNotFoundError ||
     error instanceof TmuxSessionNotFoundError ||
     error instanceof TmuxCommandError
   )
@@ -301,8 +301,8 @@ export const mapDomainErrorToIpcError = (
     })
   }
 
-  // Handle AI Watcher errors
-  if (isAiWatcherDomainError(error)) {
+  // Handle Process Runner errors
+  if (isProcessRunnerDomainError(error)) {
     // Process errors
     if (
       error instanceof ProcessSpawnError ||
@@ -321,32 +321,32 @@ export const mapDomainErrorToIpcError = (
       })
     }
 
-    // Watcher not found
-    if (error instanceof DomainWatcherNotFoundError) {
+    // Runner not found
+    if (error instanceof DomainRunnerNotFoundError) {
       return Effect.succeed({
         _tag: 'Error' as const,
         error: new IpcWatcherNotFoundError({
           message: error.message,
-          watcherId: error.watcherId,
+          watcherId: error.runnerId,
         }),
       })
     }
 
-    // Watcher operation errors
+    // Runner operation errors
     if (
-      error instanceof AiWatcherCreateError ||
-      error instanceof AiWatcherStartError ||
-      error instanceof AiWatcherStopError
+      error instanceof ProcessRunnerCreateError ||
+      error instanceof ProcessRunnerStartError ||
+      error instanceof ProcessRunnerStopError
     ) {
       return Effect.succeed({
         _tag: 'Error' as const,
         error: new WatcherOperationError({
           message: error.message,
-          watcherId: 'watcherId' in error ? error.watcherId : undefined,
+          watcherId: 'runnerId' in error ? error.runnerId : undefined,
           operation:
-            error instanceof AiWatcherCreateError
+            error instanceof ProcessRunnerCreateError
               ? 'create'
-              : error instanceof AiWatcherStartError
+              : error instanceof ProcessRunnerStartError
                 ? 'start'
                 : 'stop',
         }),

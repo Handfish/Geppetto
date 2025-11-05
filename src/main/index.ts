@@ -20,7 +20,7 @@ import { AiAdaptersLayer } from './ai/adapters-layer'
 import { AiProviderRegistryService } from './ai/registry'
 import { AiProviderService } from './ai/ai-provider-service'
 import { setupAiProviderIpcHandlers } from './ipc/ai-provider-handlers'
-import { setupAiWatcherIpcHandlers } from './ipc/ai-watcher-handlers'
+import { setupProcessRunnerIpcHandlers } from './ipc/process-runner-handlers'
 import {
   GitCommandService,
   RepositoryService,
@@ -31,7 +31,7 @@ import {
 import { setupSourceControlIpcHandlers } from './ipc/source-control-handlers'
 import { WorkspaceDomainLayer } from './workspace/workspace-layer'
 import { setupWorkspaceIpcHandlers } from './ipc/workspace-handlers'
-import { AiWatchersLayer } from './ai-watchers'
+import { ProcessRunnersLayer } from './process-runners'
 import {
   CoreInfrastructureLayer,
   CoreSecureStoreLayer,
@@ -131,11 +131,11 @@ const MainLayer = Layer.mergeAll(
   ),
 
   // ═══════════════════════════════════════════════════════════════════════
-  // AI WATCHERS DOMAIN (Single Implementation Pattern)
+  // PROCESS RUNNERS DOMAIN (Single Implementation Pattern)
   // ═══════════════════════════════════════════════════════════════════════
 
-  // AI Watchers (independent domain with own adapters)
-  AiWatchersLayer,                        // Process monitoring + Tmux session management
+  // Process Runners (independent domain with own adapters)
+  ProcessRunnersLayer,                    // Process monitoring + Tmux session management
 
   // ═══════════════════════════════════════════════════════════════════════
   // TERMINAL DOMAIN (Hexagonal Architecture with Registry)

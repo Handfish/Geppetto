@@ -3,18 +3,18 @@ import { NodeProcessMonitorAdapter } from './process-monitor'
 import { TmuxSessionManagerAdapter } from './tmux-session-manager'
 
 /**
- * AI Watchers Adapters Layer - Hexagonal Architecture Adapter Layer
+ * Process Runners Adapters Layer - Hexagonal Architecture Adapter Layer
  *
  * This layer composes all process monitoring and session management adapters.
  *
  * Unlike AI/VCS providers which have MULTIPLE implementations per port
  * (OpenAI/Claude/Cursor for AI, GitHub/GitLab/Bitbucket for VCS),
- * AI Watchers have SINGLE implementations per port:
+ * Process Runners have SINGLE implementations per port:
  * - ProcessMonitorPort → NodeProcessMonitorAdapter (Node.js child_process)
  * - SessionManagerPort → TmuxSessionManagerAdapter (tmux multiplexer)
  *
  * Therefore, we don't need a registry service. Adapters are directly
- * injected into AiWatcherService via dependencies.
+ * injected into ProcessRunnerService via dependencies.
  *
  * Benefits of this architecture:
  * - **Hot-swappable**: Can replace adapters for testing (mock process monitor, mock tmux)
@@ -34,12 +34,12 @@ import { TmuxSessionManagerAdapter } from './tmux-session-manager'
  *   }
  * )
  *
- * const TestLayer = WatcherAdaptersLayer.pipe(
+ * const TestLayer = RunnerAdaptersLayer.pipe(
  *   Layer.provide(MockProcessMonitor)
  * )
  * ```
  */
-export const WatcherAdaptersLayer = Layer.mergeAll(
+export const RunnerAdaptersLayer = Layer.mergeAll(
   NodeProcessMonitorAdapter.Default,
   TmuxSessionManagerAdapter.Default
 )

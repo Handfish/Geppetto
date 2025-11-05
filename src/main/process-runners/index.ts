@@ -1,5 +1,5 @@
 /**
- * AI Watchers module - Process monitoring and AI agent lifecycle management
+ * Process Runners module - Process monitoring and background task lifecycle management
  *
  * HEXAGONAL ARCHITECTURE:
  * This module follows the ports and adapters pattern similar to AI/VCS providers:
@@ -7,49 +7,49 @@
  * ```
  * Ports (contracts)          Adapters (implementations)       Services (orchestration)
  * ─────────────────         ────────────────────────────     ─────────────────────────
- * ProcessMonitorPort   ←──  NodeProcessMonitorAdapter   ←──  AiWatcherService
+ * ProcessMonitorPort   ←──  NodeProcessMonitorAdapter   ←──  ProcessRunnerService
  * SessionManagerPort   ←──  TmuxSessionManagerAdapter   ←──  (uses both adapters)
- * AiWatcherPort        ←──  AiWatcherService
+ * ProcessRunnerPort    ←──  ProcessRunnerService
  * ```
  *
  * KEY DIFFERENCE from AI/VCS providers:
  * - AI Providers: Multiple implementations per port (OpenAI, Claude, Cursor)
  * - VCS Providers: Multiple implementations per port (GitHub, GitLab, Bitbucket)
- * - AI Watchers: Single implementation per port (NodeProcessMonitor, TmuxSessionManager)
+ * - Process Runners: Single implementation per port (NodeProcessMonitor, TmuxSessionManager)
  *
  * Therefore: NO registry service needed. Adapters are directly injected via dependencies.
  *
  * This module provides:
  * - Process monitoring with silence detection (Node.js child_process implementation)
  * - Session management (Tmux multiplexer implementation, can be swapped with Screen/Docker)
- * - AI agent lifecycle orchestration
+ * - Background task lifecycle orchestration
  * - Log streaming and batching
  */
 
 import { Layer } from 'effect'
-import { WatcherAdaptersLayer } from './adapters'
-import { AiWatcherService } from './services'
+import { RunnerAdaptersLayer } from './adapters'
+import { ProcessRunnerService } from './services'
 
 /**
- * Complete AI Watchers layer with all dependencies
+ * Complete Process Runners layer with all dependencies
  *
  * LAYER COMPOSITION: All adapters and services are merged at the top level.
  * This makes adapters available to:
- * 1. AiWatcherService (via dependencies array)
+ * 1. ProcessRunnerService (via dependencies array)
  * 2. IPC handlers (for adapter-specific operations like listing tmux sessions)
  *
  * This follows the same pattern as AI/VCS domains, just without the registry layer.
  *
  * MEMOIZATION: Adapters are constructed once and shared across all consumers.
  */
-export const AiWatchersLayer = Layer.mergeAll(
-  WatcherAdaptersLayer,
-  AiWatcherService.Default
+export const ProcessRunnersLayer = Layer.mergeAll(
+  RunnerAdaptersLayer,
+  ProcessRunnerService.Default
 )
 
 // Re-export for convenient access
-export { WatcherAdaptersLayer }
-export { AiWatcherService }
+export { RunnerAdaptersLayer }
+export { ProcessRunnerService }
 export { NodeProcessMonitorAdapter } from './adapters/process-monitor'
 export { TmuxSessionManagerAdapter } from './adapters/tmux-session-manager'
 

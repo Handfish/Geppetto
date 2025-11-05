@@ -36,10 +36,10 @@ export class ProcessNotFoundError extends Data.TaggedError('ProcessNotFoundError
 }> {}
 
 /**
- * AI Watcher-related errors
+ * Process Runner-related errors
  */
 
-export class AiWatcherCreateError extends Data.TaggedError('AiWatcherCreateError')<{
+export class ProcessRunnerCreateError extends Data.TaggedError('ProcessRunnerCreateError')<{
   message: string
   config: {
     type: string
@@ -48,22 +48,28 @@ export class AiWatcherCreateError extends Data.TaggedError('AiWatcherCreateError
   cause?: unknown
 }> {}
 
-export class AiWatcherStartError extends Data.TaggedError('AiWatcherStartError')<{
+export class ProcessRunnerStartError extends Data.TaggedError('ProcessRunnerStartError')<{
   message: string
-  watcherId: string
+  runnerId: string
   cause?: unknown
 }> {}
 
-export class AiWatcherStopError extends Data.TaggedError('AiWatcherStopError')<{
+export class ProcessRunnerStopError extends Data.TaggedError('ProcessRunnerStopError')<{
   message: string
-  watcherId: string
+  runnerId: string
   cause?: unknown
 }> {}
 
-export class WatcherNotFoundError extends Data.TaggedError('WatcherNotFoundError')<{
+export class RunnerNotFoundError extends Data.TaggedError('RunnerNotFoundError')<{
   message: string
-  watcherId: string
+  runnerId: string
 }> {}
+
+// Backwards compatibility aliases (for IPC error mapper during Phase A)
+export const AiWatcherCreateError = ProcessRunnerCreateError
+export const AiWatcherStartError = ProcessRunnerStartError
+export const AiWatcherStopError = ProcessRunnerStopError
+export const WatcherNotFoundError = RunnerNotFoundError
 
 /**
  * Tmux-related errors
@@ -100,12 +106,18 @@ export type ProcessError =
   | ProcessKillError
   | ProcessNotFoundError
 
-export type AiWatcherError =
-  | AiWatcherCreateError
-  | AiWatcherStartError
-  | AiWatcherStopError
-  | WatcherNotFoundError
+export type ProcessRunnerError =
+  | ProcessRunnerCreateError
+  | ProcessRunnerStartError
+  | ProcessRunnerStopError
+  | RunnerNotFoundError
+
+// Backwards compatibility alias
+export type AiWatcherError = ProcessRunnerError
 
 export type TmuxError = TmuxSessionNotFoundError | TmuxCommandError
 
-export type AllAiWatcherDomainErrors = ProcessError | AiWatcherError | TmuxError | ProviderNotRegisteredError
+export type AllProcessRunnerDomainErrors = ProcessError | ProcessRunnerError | TmuxError | ProviderNotRegisteredError
+
+// Backwards compatibility alias
+export type AllAiWatcherDomainErrors = AllProcessRunnerDomainErrors

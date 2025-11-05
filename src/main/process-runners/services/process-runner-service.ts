@@ -7,28 +7,28 @@ import * as Scope from 'effect/Scope'
 import * as Exit from 'effect/Exit'
 import { pipe } from 'effect/Function'
 import { randomUUID } from 'node:crypto'
-import type { AiWatcherPort } from '../ports'
-import type { AiWatcherStatus } from '../schemas'
-import { AiWatcher, AiWatcherConfig, ProcessEvent, ProcessHandle, LogEntry } from '../schemas'
+import type { ProcessRunnerPort } from '../ports'
+import type { ProcessRunnerStatus } from '../schemas'
+import { ProcessRunner, ProcessRunnerConfig, ProcessEvent, ProcessHandle, LogEntry } from '../schemas'
 import {
-  AiWatcherCreateError,
-  AiWatcherStartError,
-  AiWatcherStopError,
-  WatcherNotFoundError,
+  ProcessRunnerCreateError,
+  ProcessRunnerStartError,
+  ProcessRunnerStopError,
+  RunnerNotFoundError,
 } from '../errors'
 import { NodeProcessMonitorAdapter } from '../adapters/process-monitor'
 import { TmuxSessionManagerAdapter } from '../adapters/tmux-session-manager'
 
 /**
- * Internal watcher state tracked by the service
+ * Internal runner state tracked by the service
  */
-interface WatcherState {
-  watcher: AiWatcher
-  scope: Scope.CloseableScope // Scope for the watcher's lifecycle
-  fiber: Fiber.RuntimeFiber<void, never> // Monitoring fiber (scoped to the watcher's scope)
+interface RunnerState {
+  runner: ProcessRunner
+  scope: Scope.CloseableScope // Scope for the runner's lifecycle
+  fiber: Fiber.RuntimeFiber<void, never> // Monitoring fiber (scoped to the runner's scope)
   logs: LogEntry[]
   logQueue: Queue.Queue<LogEntry>
-  statusRef: Ref.Ref<AiWatcherStatus>
+  statusRef: Ref.Ref<ProcessRunnerStatus>
   lastActivityRef: Ref.Ref<Date>
 }
 
@@ -38,10 +38,10 @@ interface WatcherState {
 const MAX_LOG_ENTRIES = 1000
 
 /**
- * Get the command and args to run for a specific AI agent type
+ * Get the command and args to run for a specific process runner type
  */
-const getAiAgentCommand = (
-  config: AiWatcherConfig
+const getRunnerCommand = (
+  config: ProcessRunnerConfig
 ): { command: string; args?: string[] } => {
   // If custom command provided, use it
   if (config.command) {
@@ -71,7 +71,7 @@ const getAiAgentCommand = (
  */
 const processEventToLogEntry = (
   event: ProcessEvent,
-  watcherId: string
+  runnerId: string
 ): LogEntry => {
   let level: LogEntry['level'] = 'info'
   let message = ''
@@ -103,76 +103,76 @@ const processEventToLogEntry = (
     timestamp: event.timestamp,
     level,
     message,
-    watcherId,
+    runnerId,
   }
 }
 
 /**
- * AiWatcherService - implements AiWatcherPort
+ * ProcessRunnerService - implements ProcessRunnerPort
  *
- * Provides high-level AI agent management:
- * - Creating and configuring AI watchers
- * - Starting and stopping watchers
+ * Provides high-level process runner management:
+ * - Creating and configuring process runners
+ * - Starting and stopping runners
  * - Status tracking
  * - Log streaming with batching
- * - Integration with TmuxSessionManager and ProcessMonitorService
+ * - Integration with TmuxSessionManager and ProcessMonitor
  */
-export class AiWatcherService extends Effect.Service<AiWatcherService>()(
-  'AiWatcherService',
+export class ProcessRunnerService extends Effect.Service<ProcessRunnerService>()(
+  'ProcessRunnerService',
   {
     dependencies: [TmuxSessionManagerAdapter.Default, NodeProcessMonitorAdapter.Default],
     effect: Effect.gen(function* () {
       const tmuxManager = yield* TmuxSessionManagerAdapter
       const processMonitor = yield* NodeProcessMonitorAdapter
 
-      // Map of watcher ID to watcher state
-      const watchers = new Map<string, WatcherState>()
+      // Map of runner ID to runner state
+      const runners = new Map<string, RunnerState>()
 
       /**
-       * Update watcher status
+       * Update runner status
        */
-      const updateWatcherStatus = (
-        watcherId: string,
-        status: AiWatcherStatus
+      const updateRunnerStatus = (
+        runnerId: string,
+        status: ProcessRunnerStatus
       ): Effect.Effect<void> =>
         Effect.gen(function* () {
-          const state = watchers.get(watcherId)
+          const state = runners.get(runnerId)
           if (!state) {
             return yield* Effect.void
           }
           yield* Ref.set(state.statusRef, status)
-          state.watcher = new AiWatcher({
-            ...state.watcher,
+          state.runner = new ProcessRunner({
+            ...state.runner,
             status,
           })
         })
 
       /**
-       * Update watcher last activity time
+       * Update runner last activity time
        */
-      const updateLastActivity = (watcherId: string): Effect.Effect<void> =>
+      const updateLastActivity = (runnerId: string): Effect.Effect<void> =>
         Effect.gen(function* () {
-          const state = watchers.get(watcherId)
+          const state = runners.get(runnerId)
           if (!state) {
             return yield* Effect.void
           }
           const now = new Date()
           yield* Ref.set(state.lastActivityRef, now)
-          state.watcher = new AiWatcher({
-            ...state.watcher,
+          state.runner = new ProcessRunner({
+            ...state.runner,
             lastActivityAt: now,
           })
         })
 
       /**
-       * Add a log entry to a watcher
+       * Add a log entry to a runner
        */
       const addLogEntry = (
-        watcherId: string,
+        runnerId: string,
         logEntry: LogEntry
       ): Effect.Effect<void> =>
         Effect.gen(function* () {
-          const state = watchers.get(watcherId)
+          const state = runners.get(runnerId)
           if (!state) {
             return yield* Effect.void
           }
@@ -190,78 +190,78 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
         })
 
       /**
-       * Handle process events and update watcher state
+       * Handle process events and update runner state
        */
       const handleProcessEvent = (
-        watcherId: string,
+        runnerId: string,
         event: ProcessEvent
       ): Effect.Effect<void> =>
         Effect.gen(function* () {
           // Convert to log entry
-          const logEntry = processEventToLogEntry(event, watcherId)
-          yield* addLogEntry(watcherId, logEntry)
+          const logEntry = processEventToLogEntry(event, runnerId)
+          yield* addLogEntry(runnerId, logEntry)
 
           // Update status based on event type
           switch (event.type) {
             case 'stdout':
             case 'stderr':
-              yield* updateWatcherStatus(watcherId, 'running')
-              yield* updateLastActivity(watcherId)
+              yield* updateRunnerStatus(runnerId, 'running')
+              yield* updateLastActivity(runnerId)
               break
 
             case 'silence':
-              yield* updateWatcherStatus(watcherId, 'idle')
+              yield* updateRunnerStatus(runnerId, 'idle')
               break
 
             case 'error':
-              yield* updateWatcherStatus(watcherId, 'errored')
+              yield* updateRunnerStatus(runnerId, 'errored')
               break
 
             case 'exit':
-              yield* updateWatcherStatus(watcherId, 'stopped')
+              yield* updateRunnerStatus(runnerId, 'stopped')
               break
           }
         })
 
       /**
-       * Start monitoring a process for a watcher within the watcher's scope
-       * This ensures the monitoring fiber is properly cleaned up when the watcher stops
+       * Start monitoring a process for a runner within the runner's scope
+       * This ensures the monitoring fiber is properly cleaned up when the runner stops
        */
       const startMonitoring = (
-        watcherId: string,
-        watcher: AiWatcher,
+        runnerId: string,
+        runner: ProcessRunner,
         scope: Scope.Scope
       ): Effect.Effect<Fiber.RuntimeFiber<void, never>> =>
         pipe(
-          processMonitor.monitor(watcher.processHandle),
-          Stream.tap((event) => handleProcessEvent(watcherId, event)),
+          processMonitor.monitor(runner.processHandle),
+          Stream.tap((event) => handleProcessEvent(runnerId, event)),
           Stream.runDrain,
           Effect.catchAll(() => Effect.void), // Catch and ignore all errors from monitoring
-          Effect.forkIn(scope) // Fork into the watcher's specific scope
+          Effect.forkIn(scope) // Fork into the runner's specific scope
         )
 
-      const implementation: AiWatcherPort = {
-        create: (config: AiWatcherConfig) =>
+      const implementation: ProcessRunnerPort = {
+        create: (config: ProcessRunnerConfig) =>
           Effect.gen(function* () {
             // Normalize config into the local schema to avoid constructor parse errors
             const baseConfig =
-              config instanceof AiWatcherConfig ? config : new AiWatcherConfig(config)
+              config instanceof ProcessRunnerConfig ? config : new ProcessRunnerConfig(config)
 
-            const watcherId = yield* Effect.sync(() => randomUUID())
+            const runnerId = yield* Effect.sync(() => randomUUID())
 
             let processHandle: ProcessHandle | undefined = baseConfig.processHandle
 
-            // Create a dedicated scope for this watcher's lifecycle
-            // This scope will live until the watcher is explicitly stopped
-            const watcherScope = yield* Scope.make()
+            // Create a dedicated scope for this runner's lifecycle
+            // This scope will live until the runner is explicitly stopped
+            const runnerScope = yield* Scope.make()
 
             // If no process handle provided, create a new tmux session
             if (!processHandle) {
-              const sessionName = `ai-${baseConfig.type}-${watcherId.slice(0, 8)}`
-              const { command, args } = getAiAgentCommand(baseConfig)
+              const sessionName = `runner-${baseConfig.type}-${runnerId.slice(0, 8)}`
+              const { command, args } = getRunnerCommand(baseConfig)
 
-              // Extend the createSession scope into the watcher's scope
-              // This ensures tmux lifecycle is bound to watcher lifecycle
+              // Extend the createSession scope into the runner's scope
+              // This ensures tmux lifecycle is bound to runner lifecycle
               processHandle = yield* Scope.extend(
                 tmuxManager.createSession(
                   sessionName,
@@ -270,7 +270,7 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
                   baseConfig.workingDirectory
                 ).pipe(
                   Effect.mapError((error: unknown) =>
-                    new AiWatcherCreateError({
+                    new ProcessRunnerCreateError({
                       message: `Failed to create tmux session: ${error instanceof Error ? error.message : String(error)}`,
                       config: {
                         type: baseConfig.type,
@@ -280,14 +280,14 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
                     })
                   )
                 ),
-                watcherScope
+                runnerScope
               )
             }
 
             // At this point, processHandle must be defined
             if (!processHandle) {
               return yield* Effect.fail(
-                new AiWatcherCreateError({
+                new ProcessRunnerCreateError({
                   message: 'Failed to create or obtain process handle',
                   config: {
                     type: baseConfig.type,
@@ -298,71 +298,71 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
               )
             }
 
-            const watcherConfig =
+            const runnerConfig =
               baseConfig.processHandle === processHandle
                 ? baseConfig
-                : new AiWatcherConfig({
+                : new ProcessRunnerConfig({
                     ...baseConfig,
                     processHandle,
                   })
 
-            const watcher = new AiWatcher({
-              id: watcherId,
-              name: watcherConfig.name ?? `${watcherConfig.type}-watcher`,
-              type: watcherConfig.type,
+            const runner = new ProcessRunner({
+              id: runnerId,
+              name: runnerConfig.name ?? `${runnerConfig.type}-runner`,
+              type: runnerConfig.type,
               processHandle,
               status: 'starting',
-              config: watcherConfig,
+              config: runnerConfig,
               createdAt: new Date(),
               lastActivityAt: new Date(),
             })
 
             // Create log queue and refs
             const logQueue = yield* Queue.unbounded<LogEntry>()
-            const statusRef = yield* Ref.make<AiWatcherStatus>('starting')
+            const statusRef = yield* Ref.make<ProcessRunnerStatus>('starting')
             const lastActivityRef = yield* Ref.make(new Date())
 
-            // Start monitoring in the watcher's scope
-            const fiber = yield* startMonitoring(watcherId, watcher, watcherScope)
+            // Start monitoring in the runner's scope
+            const fiber = yield* startMonitoring(runnerId, runner, runnerScope)
 
-            // Store watcher state
-            const state: WatcherState = {
-              watcher,
-              scope: watcherScope,
+            // Store runner state
+            const state: RunnerState = {
+              runner,
+              scope: runnerScope,
               fiber,
               logs: [],
               logQueue,
               statusRef,
               lastActivityRef,
             }
-            watchers.set(watcherId, state)
+            runners.set(runnerId, state)
 
-            // Transition to running after a short delay (using forkIn to scope to watcher)
+            // Transition to running after a short delay (using forkIn to scope to runner)
             yield* Effect.forkIn(
               Effect.gen(function* () {
                 yield* Effect.sleep(1000) // 1 second
                 const currentStatus = yield* Ref.get(statusRef)
                 if (currentStatus === 'starting') {
-                  yield* updateWatcherStatus(watcherId, 'running')
+                  yield* updateRunnerStatus(runnerId, 'running')
                 }
               }),
-              watcherScope
+              runnerScope
             )
 
-            return watcher
+            return runner
           }),
 
-        start: (watcher: AiWatcher) =>
+        start: (runner: ProcessRunner) =>
           Effect.gen(function* () {
-            const state = watchers.get(watcher.id)
+            const state = runners.get(runner.id)
             if (!state) {
               return yield* Effect.fail(
-                new AiWatcherStartError({
-                  message: `Watcher ${watcher.id} not found`,
-                  watcherId: watcher.id,
-                  cause: new WatcherNotFoundError({
-                    message: `Watcher ${watcher.id} not found`,
-                    watcherId: watcher.id,
+                new ProcessRunnerStartError({
+                  message: `Runner ${runner.id} not found`,
+                  runnerId: runner.id,
+                  cause: new RunnerNotFoundError({
+                    message: `Runner ${runner.id} not found`,
+                    runnerId: runner.id,
                   }),
                 })
               )
@@ -374,86 +374,86 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
               return
             }
 
-            // Restart monitoring in the watcher's scope
-            const fiber = yield* startMonitoring(watcher.id, watcher, state.scope)
+            // Restart monitoring in the runner's scope
+            const fiber = yield* startMonitoring(runner.id, runner, state.scope)
             state.fiber = fiber
 
-            yield* updateWatcherStatus(watcher.id, 'running')
+            yield* updateRunnerStatus(runner.id, 'running')
           }),
 
-        stop: (watcher: AiWatcher) =>
+        stop: (runner: ProcessRunner) =>
           Effect.gen(function* () {
-            const state = watchers.get(watcher.id)
+            const state = runners.get(runner.id)
             if (!state) {
               return yield* Effect.fail(
-                new AiWatcherStopError({
-                  message: `Watcher ${watcher.id} not found`,
-                  watcherId: watcher.id,
-                  cause: new WatcherNotFoundError({
-                    message: `Watcher ${watcher.id} not found`,
-                    watcherId: watcher.id,
+                new ProcessRunnerStopError({
+                  message: `Runner ${runner.id} not found`,
+                  runnerId: runner.id,
+                  cause: new RunnerNotFoundError({
+                    message: `Runner ${runner.id} not found`,
+                    runnerId: runner.id,
                   }),
                 })
               )
             }
 
-            // Close the watcher's scope - this will interrupt all fibers in that scope
+            // Close the runner's scope - this will interrupt all fibers in that scope
             // including the monitoring fiber and any other background tasks
             yield* Scope.close(state.scope, Exit.void)
 
             // Kill the process
-            yield* processMonitor.kill(watcher.processHandle).pipe(
+            yield* processMonitor.kill(runner.processHandle).pipe(
               Effect.catchAll(() => Effect.void) // Ignore errors if already dead
             )
 
             // Update status
-            yield* updateWatcherStatus(watcher.id, 'stopped')
+            yield* updateRunnerStatus(runner.id, 'stopped')
 
             // Clean up queue
             yield* Queue.shutdown(state.logQueue)
 
-            // Remove from watchers map
-            watchers.delete(watcher.id)
+            // Remove from runners map
+            runners.delete(runner.id)
           }),
 
-        getStatus: (watcher: AiWatcher) =>
+        getStatus: (runner: ProcessRunner) =>
           Effect.gen(function* () {
-            const state = watchers.get(watcher.id)
+            const state = runners.get(runner.id)
             if (!state) {
-              return 'stopped' as AiWatcherStatus
+              return 'stopped' as ProcessRunnerStatus
             }
 
             return yield* Ref.get(state.statusRef)
           }),
 
-        get: (watcherId: string) =>
+        get: (runnerId: string) =>
           Effect.gen(function* () {
-            const state = watchers.get(watcherId)
+            const state = runners.get(runnerId)
             if (!state) {
               return yield* Effect.fail(
-                new WatcherNotFoundError({
-                  message: `Watcher ${watcherId} not found`,
-                  watcherId,
+                new RunnerNotFoundError({
+                  message: `Runner ${runnerId} not found`,
+                  runnerId,
                 })
               )
             }
 
-            return state.watcher
+            return state.runner
           }),
 
         listAll: () =>
           Effect.gen(function* () {
-            return Array.from(watchers.values()).map((state) => state.watcher)
+            return Array.from(runners.values()).map((state) => state.runner)
           }),
 
-        getLogs: (watcherId: string, limit?: number) =>
+        getLogs: (runnerId: string, limit?: number) =>
           Effect.gen(function* () {
-            const state = watchers.get(watcherId)
+            const state = runners.get(runnerId)
             if (!state) {
               return yield* Effect.fail(
-                new WatcherNotFoundError({
-                  message: `Watcher ${watcherId} not found`,
-                  watcherId,
+                new RunnerNotFoundError({
+                  message: `Runner ${runnerId} not found`,
+                  runnerId,
                 })
               )
             }
@@ -467,12 +467,12 @@ export class AiWatcherService extends Effect.Service<AiWatcherService>()(
             return logs
           }),
 
-        streamLogs: (watcher: AiWatcher) =>
+        streamLogs: (runner: ProcessRunner) =>
           Stream.unwrap(
             Effect.sync(() => {
-              const state = watchers.get(watcher.id)
+              const state = runners.get(runner.id)
               if (!state) {
-                // Return empty stream if watcher not found
+                // Return empty stream if runner not found
                 return Stream.empty as Stream.Stream<LogEntry, never, never>
               }
 
