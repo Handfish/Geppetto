@@ -253,47 +253,47 @@ export class WorkspaceClient extends Effect.Service<WorkspaceClient>()(
   }
 ) {}
 
-export class AiWatcherClient extends Effect.Service<AiWatcherClient>()(
-  'AiWatcherClient',
+export class ProcessRunnerClient extends Effect.Service<ProcessRunnerClient>()(
+  'ProcessRunnerClient',
   {
     dependencies: [ElectronIpcClient.Default],
     effect: Effect.gen(function* () {
       const ipc = yield* ElectronIpcClient
-      type CreateWatcherInput = S.Schema.Type<
-        (typeof IpcContracts)['ai-watcher:create']['input']
+      type CreateRunnerInput = S.Schema.Type<
+        (typeof IpcContracts)['process-runner:create']['input']
       >
       type AttachTmuxInput = S.Schema.Type<
-        (typeof IpcContracts)['ai-watcher:attach-tmux']['input']
+        (typeof IpcContracts)['process-runner:attach-tmux']['input']
       >
-      type GetWatcherInput = S.Schema.Type<
-        (typeof IpcContracts)['ai-watcher:get']['input']
+      type GetRunnerInput = S.Schema.Type<
+        (typeof IpcContracts)['process-runner:get']['input']
       >
-      type StopWatcherInput = S.Schema.Type<
-        (typeof IpcContracts)['ai-watcher:stop']['input']
+      type StopRunnerInput = S.Schema.Type<
+        (typeof IpcContracts)['process-runner:stop']['input']
       >
-      type StartWatcherInput = S.Schema.Type<
-        (typeof IpcContracts)['ai-watcher:start']['input']
+      type StartRunnerInput = S.Schema.Type<
+        (typeof IpcContracts)['process-runner:start']['input']
       >
       type GetLogsInput = S.Schema.Type<
-        (typeof IpcContracts)['ai-watcher:get-logs']['input']
+        (typeof IpcContracts)['process-runner:get-logs']['input']
       >
 
       type SwitchTmuxInput = S.Schema.Type<
-        (typeof IpcContracts)['ai-watcher:switch-tmux']['input']
+        (typeof IpcContracts)['process-runner:switch-tmux']['input']
       >
 
       return {
-        createRunner: (config: CreateWatcherInput) =>
+        createRunner: (config: CreateRunnerInput) =>
           ipc.invoke('process-runner:create', config),
         listRunners: () => ipc.invoke('process-runner:list', undefined),
-        getRunner: (runnerId: GetWatcherInput['watcherId']) =>
+        getRunner: (runnerId: GetRunnerInput['runnerId']) =>
           ipc.invoke('process-runner:get', { runnerId }),
-        stopRunner: (runnerId: StopWatcherInput['watcherId']) =>
+        stopRunner: (runnerId: StopRunnerInput['runnerId']) =>
           ipc.invoke('process-runner:stop', { runnerId }),
-        startRunner: (runnerId: StartWatcherInput['watcherId']) =>
+        startRunner: (runnerId: StartRunnerInput['runnerId']) =>
           ipc.invoke('process-runner:start', { runnerId }),
-        getWatcherLogs: (
-          runnerId: GetLogsInput['watcherId'],
+        getRunnerLogs: (
+          runnerId: GetLogsInput['runnerId'],
           limit?: GetLogsInput['limit']
         ) => ipc.invoke('process-runner:get-logs', { runnerId, limit }),
         listTmuxSessions: () => ipc.invoke('process-runner:list-tmux', undefined),
@@ -437,5 +437,3 @@ export class SourceControlClient extends Effect.Service<SourceControlClient>()(
     }),
   }
 ) {}
-
-export const ProcessRunnerClient = AiWatcherClient

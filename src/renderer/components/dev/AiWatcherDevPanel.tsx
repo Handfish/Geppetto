@@ -10,7 +10,7 @@ import { Result } from "@effect-atom/atom-react";
 import {
   useProcessRunners,
   useTmuxSessions,
-  useWatcherLogs,
+  useRunnerLogs,
 } from "../../hooks/useProcessRunners";
 import type {
   ProcessRunnerConfig,
@@ -69,7 +69,7 @@ function RunnerLogsDisplay({
   runnerId: string;
   autoRefresh: boolean;
 }) {
-  const { logsResult, refreshLogs } = useWatcherLogs(runnerId, 50);
+  const { logsResult, refreshLogs } = useRunnerLogs(runnerId, 50);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const renderCountRef = useRef(0);
   const refreshCountRef = useRef(0);
@@ -639,6 +639,3 @@ export function ProcessRunnerDevPanel() {
     </div>
   );
 }
-
-// Backwards compatibility alias
-export const AiWatcherDevPanel = ProcessRunnerDevPanel

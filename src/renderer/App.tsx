@@ -6,7 +6,7 @@ import { useProviderAuth } from './hooks/useProviderAtoms'
 import { AiUsageCard } from './components/AiUsageCard'
 import { ToastViewport } from './components/ui/ToastViewport'
 import { ErrorTester } from './components/dev/ErrorTester'
-import { AiWatcherDevPanel } from './components/dev/AiWatcherDevPanel'
+import { ProcessRunnerDevPanel } from './components/dev/AiWatcherDevPanel'
 import { WorkspaceSelector } from './components/WorkspaceSelector'
 import { SourceControlDevPanel } from './components/dev/SourceControlDevPanel'
 import { TerminalPanel } from './components/terminal/TerminalPanel'
@@ -22,7 +22,7 @@ export function App() {
       <WorkspaceSelector />
       {process.env.NODE_ENV === 'development' && (
         <>
-          <AiWatcherDevPanel />
+          <ProcessRunnerDevPanel />
           <SourceControlDevPanel />
         </>
       )}

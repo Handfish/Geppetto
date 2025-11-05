@@ -175,6 +175,3 @@ export function useProcessRunnerLauncher() {
     terminalType,
   }
 }
-
-// Backwards compatibility alias
-export const useAiWatcherLauncher = useProcessRunnerLauncher

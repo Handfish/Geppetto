@@ -67,7 +67,7 @@ export const processRunnerLogsAtom = Atom.family(
         Effect.gen(function* () {
           console.log(`[processRunnerLogsAtom] Effect running for runnerId=${params.runnerId}`)
           const client = yield* ProcessRunnerClient
-          const result = yield* client.getWatcherLogs(params.runnerId, params.limit)
+          const result = yield* client.getRunnerLogs(params.runnerId, params.limit)
           console.log(`[processRunnerLogsAtom] Got ${result.length} logs for runnerId=${params.runnerId}`)
           return result
         })

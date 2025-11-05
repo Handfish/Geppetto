@@ -66,11 +66,11 @@ export function useProcessRunners() {
  * Returns full Result for exhaustive error handling.
  * Use Result.builder in components to handle all states.
  */
-export function useWatcher(watcherId: string) {
-  const watcherResult = useAtomValue(aiWatcherAtom(watcherId))
-  const refreshWatcher = useAtomRefresh(aiWatcherAtom(watcherId))
+export function useRunner(runnerId: string) {
+  const runnerResult = useAtomValue(processRunnerAtom(runnerId))
+  const refreshRunner = useAtomRefresh(processRunnerAtom(runnerId))
 
-  const watcher = Result.match(watcherResult, {
+  const runner = Result.match(runnerResult, {
     onSuccess: (data) => data.value,
     onFailure: () => null,
     onInitial: () => null,
@@ -78,27 +78,27 @@ export function useWatcher(watcherId: string) {
 
   return {
     // Primary: Full Result for exhaustive error handling
-    watcherResult,
+    runnerResult,
 
     // Actions
-    refreshWatcher,
+    refreshRunner,
 
     // Computed convenience properties
-    watcher,
-    isLoading: watcherResult._tag === 'Initial' && watcherResult.waiting,
+    runner,
+    isLoading: runnerResult._tag === 'Initial' && runnerResult.waiting,
   }
 }
 
 /**
- * Hook for watcher logs
+ * Hook for runner logs
  *
  * Returns full Result for exhaustive error handling.
  * Use Result.builder in components to handle all states.
  *
  * IMPORTANT: Includes rate limiting to prevent IPC spam (max 1 request per 500ms)
  */
-export function useWatcherLogs(runnerId: string, limit?: number) {
-  console.log(`[useWatcherLogs] Called with runnerId=${runnerId}, limit=${limit}`)
+export function useRunnerLogs(runnerId: string, limit?: number) {
+  console.log(`[useRunnerLogs] Called with runnerId=${runnerId}, limit=${limit}`)
 
   // Memoize params to ensure stable atom identity
   const params = useMemo(() => ({ runnerId, limit }), [runnerId, limit])
@@ -120,21 +120,21 @@ export function useWatcherLogs(runnerId: string, limit?: number) {
 
       if (timeSinceLastRefresh < 200) {
         console.warn(
-          `[useWatcherLogs] RATE LIMITED - Attempted refresh only ${timeSinceLastRefresh}ms after last refresh (min 200ms). Ignoring.`
+          `[useRunnerLogs] RATE LIMITED - Attempted refresh only ${timeSinceLastRefresh}ms after last refresh (min 200ms). Ignoring.`
         )
         return
       }
 
-      console.log(`[useWatcherLogs] Refresh allowed (${timeSinceLastRefresh}ms since last)`)
+      console.log(`[useRunnerLogs] Refresh allowed (${timeSinceLastRefresh}ms since last)`)
       lastRefreshTimeRef.current = now
     } else {
-      console.log(`[useWatcherLogs] Refresh (rate limiter disabled)`)
+      console.log(`[useRunnerLogs] Refresh (rate limiter disabled)`)
     }
 
     rawRefreshLogsRef.current()  // Use ref instead of closure
   }, [])  // ✅ No dependencies - completely stable
 
-  console.log(`[useWatcherLogs] logsResult:`, {
+  console.log(`[useRunnerLogs] logsResult:`, {
     tag: logsResult._tag,
     waiting: logsResult.waiting,
     dataLength: logsResult._tag === 'Success' ? (logsResult.value as readonly unknown[]).length : 0,
