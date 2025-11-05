@@ -4,10 +4,10 @@ import * as Scope from 'effect/Scope'
 import * as Stream from 'effect/Stream'
 import { Command } from '@effect/platform'
 import { NodeContext } from '@effect/platform-node'
-import type { ProcessConfig } from '../ports'
-import { ProcessHandle, type TmuxSession } from '../schemas'
-import { TmuxSessionNotFoundError, TmuxCommandError } from '../errors'
-import { NodeProcessMonitorAdapter } from './node-process-monitor-adapter'
+import type { ProcessConfig } from '../../ports'
+import { ProcessHandle, type TmuxSession } from '../../schemas'
+import { TmuxSessionNotFoundError, TmuxCommandError } from '../../errors'
+import { NodeProcessMonitorAdapter } from '../process-monitor'
 
 /**
  * Execute a tmux command and return the output

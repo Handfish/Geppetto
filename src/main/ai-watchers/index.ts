@@ -27,8 +27,8 @@
  */
 
 import { Layer } from 'effect'
-import { WatcherAdaptersLayer } from './adapters-layer'
-import { AiWatcherService } from './ai-watcher-service'
+import { WatcherAdaptersLayer } from './adapters'
+import { AiWatcherService } from './services'
 
 /**
  * Complete AI Watchers layer with all dependencies
@@ -50,8 +50,12 @@ export const AiWatchersLayer = Layer.mergeAll(
 // Re-export for convenient access
 export { WatcherAdaptersLayer }
 export { AiWatcherService }
-export { NodeProcessMonitorAdapter } from './adapters/node-process-monitor-adapter'
-export { TmuxSessionManagerAdapter } from './adapters/tmux-session-manager-adapter'
+export { NodeProcessMonitorAdapter } from './adapters/process-monitor'
+export { TmuxSessionManagerAdapter } from './adapters/tmux-session-manager'
+
+// Re-export from submodules
+export * from './adapters'
+export * from './services'
 
 // Re-export types
 export * from './ports'

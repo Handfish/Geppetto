@@ -1,6 +1,6 @@
 import { Layer } from 'effect'
-import { NodeProcessMonitorAdapter } from './adapters/node-process-monitor-adapter'
-import { TmuxSessionManagerAdapter } from './adapters/tmux-session-manager-adapter'
+import { NodeProcessMonitorAdapter } from './process-monitor'
+import { TmuxSessionManagerAdapter } from './tmux-session-manager'
 
 /**
  * AI Watchers Adapters Layer - Hexagonal Architecture Adapter Layer

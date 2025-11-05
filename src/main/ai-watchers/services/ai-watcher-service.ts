@@ -7,17 +7,17 @@ import * as Scope from 'effect/Scope'
 import * as Exit from 'effect/Exit'
 import { pipe } from 'effect/Function'
 import { randomUUID } from 'node:crypto'
-import type { AiWatcherPort } from './ports'
-import type { AiWatcherStatus } from './schemas'
-import { AiWatcher, AiWatcherConfig, ProcessEvent, ProcessHandle, LogEntry } from './schemas'
+import type { AiWatcherPort } from '../ports'
+import type { AiWatcherStatus } from '../schemas'
+import { AiWatcher, AiWatcherConfig, ProcessEvent, ProcessHandle, LogEntry } from '../schemas'
 import {
   AiWatcherCreateError,
   AiWatcherStartError,
   AiWatcherStopError,
   WatcherNotFoundError,
-} from './errors'
-import { NodeProcessMonitorAdapter } from './adapters/node-process-monitor-adapter'
-import { TmuxSessionManagerAdapter } from './adapters/tmux-session-manager-adapter'
+} from '../errors'
+import { NodeProcessMonitorAdapter } from '../adapters/process-monitor'
+import { TmuxSessionManagerAdapter } from '../adapters/tmux-session-manager'
 
 /**
  * Internal watcher state tracked by the service

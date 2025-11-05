@@ -15,16 +15,16 @@ import * as Fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 import { exec } from 'node:child_process'
-import type { ProcessMonitorPort, ProcessConfig } from '../ports'
-import { ProcessHandle, ProcessEvent, TmuxPipeConfig } from '../schemas'
+import type { ProcessMonitorPort, ProcessConfig } from '../../ports'
+import { ProcessHandle, ProcessEvent, TmuxPipeConfig } from '../../schemas'
 import {
   ProcessSpawnError,
   ProcessAttachError,
   ProcessMonitorError,
   ProcessKillError,
   ProcessNotFoundError,
-} from '../errors'
-import { TmuxControlClient } from './tmux-control-client-adapter'
+} from '../../errors'
+import { TmuxControlClient } from '../tmux-session-manager/tmux-control-client-adapter'
 
 const execAsync = promisify(exec)
 

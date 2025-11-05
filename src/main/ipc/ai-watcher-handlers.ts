@@ -7,8 +7,7 @@
 
 import { Effect, Duration, Cache } from 'effect'
 import { AiWatcherIpcContracts } from '../../shared/ipc-contracts'
-import { AiWatcherService } from '../ai-watchers/ai-watcher-service'
-import { TmuxSessionManagerAdapter } from '../ai-watchers/adapters/tmux-session-manager-adapter'
+import { AiWatcherService, TmuxSessionManagerAdapter } from '../ai-watchers'
 import { registerIpcHandler } from './ipc-handler-setup'
 
 /**

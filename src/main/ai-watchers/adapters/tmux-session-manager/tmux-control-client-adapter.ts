@@ -2,8 +2,8 @@ import * as Effect from 'effect/Effect'
 import * as Stream from 'effect/Stream'
 import * as Option from 'effect/Option'
 import type * as pty from 'node-pty'
-import { ProcessMonitorError } from '../errors'
-import { ProcessEvent } from '../schemas'
+import { ProcessMonitorError } from '../../errors'
+import { ProcessEvent } from '../../schemas'
 
 // Lazy import of node-pty to avoid loading native module at startup
 const getPty = () => Effect.sync(() => require('node-pty') as typeof pty)
