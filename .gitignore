@@ -24,3 +24,17 @@ yarn-debug.log*
 yarn-error.log*
 
 claudeoutput.md
+
+# Ignore all files ending with .log
+*.log
+
+# Ignore a specific directory
+build/
+
+# Ignore Vim temporary files
+*~
+*.swp
+*.swo
+
+wcf.ts
+input.txt
