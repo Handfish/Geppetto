@@ -4,8 +4,6 @@
 
 Geppetto is a modern desktop application for managing Git-oriented workflows with seamless worktree management, multi-agent orchestration, and team collaboration. Built for developers who think in keyboard shortcuts and need AI agents working alongside them on GitHub/GitLab issues.
 
-[![Watch the video](GeppettoThumbnail.jpg)](https://drive.google.com/file/d/1S6wbT_0SuZVjtQbAZM1wi9qU4lKYolQ5/preview)
-
 ## Overview
 
 Geppetto combines the best of traditional Git clients with AI-powered automation:
