@@ -144,6 +144,17 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
             )
             return validUsage
           }),
+
+        getProviderAccounts: (provider: AiProviderType) =>
+          Effect.gen(function* () {
+            const context = yield* accountService.getContext()
+            const accounts = context.getAccountsByProvider(provider)
+            return accounts.map(account => ({
+              id: account.id,
+              provider: account.provider,
+              label: account.label,
+            }))
+          }),
       }
     }),
   }

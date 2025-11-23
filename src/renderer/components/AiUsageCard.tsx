@@ -16,6 +16,7 @@ import type {
   NetworkError,
 } from '../../shared/schemas/errors'
 import { tierLimitsAtom } from '../atoms/account-atoms'
+import { aiProviderAccountsAtom } from '../atoms/ai-provider-atoms'
 import { ErrorAlert, TierLimitAlert, LoadingSpinner } from './ui/ErrorAlert'
 import {
   showProFeatureLockedToast,
@@ -132,6 +133,9 @@ function ProviderUsageSection({
     refreshUsage,
   } = useAiProviderAuth(provider, { loadUsage: enabled })
 
+  // Get accounts list independently of usage (for showing disconnect buttons)
+  const accountsResult = useAtomValue(aiProviderAccountsAtom(provider))
+
   // Refresh usage after successful sign-in to update with new account
   React.useEffect(() => {
     if (enabled && signInResult._tag === 'Success') {
@@ -242,6 +246,29 @@ function ProviderUsageSection({
     })
   }, [provider, usageResult])
 
+  // Helper to render disconnect buttons for accounts (even when usage fails)
+  const renderAccountsWithDisconnect = () => {
+    const accounts = Result.getOrElse(accountsResult, () => [])
+    if (accounts.length === 0) return null
+
+    return (
+      <div className="space-y-3 mt-4">
+        <div className="text-sm text-gray-400">Connected accounts:</div>
+        {accounts.map(account => (
+          <div key={account.id} className="flex items-center justify-between text-sm text-gray-400">
+            <span>{account.label} ({account.id})</span>
+            <button
+              className="px-3 py-1 text-xs bg-gray-700 text-gray-200 rounded hover:bg-gray-600 transition-colors"
+              onClick={() => signOut(account.id)}
+            >
+              Disconnect
+            </button>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   const usageContent = Result.builder(
     usageResult as Result.Result<readonly AiUsageSnapshot[], UsageError>
   )
@@ -249,42 +276,71 @@ function ProviderUsageSection({
       usageResult.waiting ? <LoadingSpinner size="sm" /> : null
     )
     .onErrorTag('AiAuthenticationError', error => (
-      <ErrorAlert
-        message={error.message ?? copy.authenticationFallback}
-        error={error}
-      />
+      <div>
+        <ErrorAlert
+          message={error.message ?? copy.authenticationFallback}
+          error={error}
+        />
+        {renderAccountsWithDisconnect()}
+      </div>
     ))
     .onErrorTag('AiProviderUnavailableError', error => (
-      <ErrorAlert
-        message={error.message ?? copy.providerUnavailableFallback}
-        error={error}
-      />
+      <div>
+        <ErrorAlert
+          message={error.message ?? copy.providerUnavailableFallback}
+          error={error}
+        />
+        {renderAccountsWithDisconnect()}
+      </div>
     ))
     .onErrorTag('AiUsageUnavailableError', error => (
-      <ErrorAlert
-        message={error.message ?? copy.usageUnavailableFallback}
-        error={error}
-      />
+      <div>
+        <ErrorAlert
+          message={error.message ?? copy.usageUnavailableFallback}
+          error={error}
+        />
+        {renderAccountsWithDisconnect()}
+      </div>
     ))
     .onErrorTag('NetworkError', error => (
-      <ErrorAlert
-        action={
-          <button
-            className="mt-2 px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500"
-            onClick={() => refreshUsage()}
-            type="button"
-          >
-            Retry
-          </button>
-        }
-        error={error}
-      />
+      <div>
+        <ErrorAlert
+          action={
+            <button
+              className="mt-2 px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-500"
+              onClick={() => refreshUsage()}
+              type="button"
+            >
+              Retry
+            </button>
+          }
+          error={error}
+        />
+        {renderAccountsWithDisconnect()}
+      </div>
     ))
     .onDefect(defect => (
-      <ErrorAlert message={String(defect)} />
+      <div>
+        <ErrorAlert message={String(defect)} />
+        {renderAccountsWithDisconnect()}
+      </div>
     ))
     .onSuccess((snapshots: readonly AiUsageSnapshot[]) => {
+      const accounts = Result.getOrElse(accountsResult, () => [])
+
       if (snapshots.length === 0) {
+        // Check if we have accounts but no usage data
+        if (accounts.length > 0) {
+          return (
+            <div>
+              <div className="text-yellow-400 text-sm mb-4">
+                Unable to fetch usage data. This may happen if your account tier doesn't support usage tracking.
+              </div>
+              {renderAccountsWithDisconnect()}
+            </div>
+          )
+        }
+
         return (
           <div className="text-gray-400 text-sm">{copy.noAccountsMessage}</div>
         )

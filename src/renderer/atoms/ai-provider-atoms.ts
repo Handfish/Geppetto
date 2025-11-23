@@ -118,6 +118,31 @@ export const selectAiProviderUsageAtom = (
 ) =>
   enabled ? aiProviderUsageQueryAtom(provider) : disabledUsageAtom(provider)
 
+/**
+ * Query AI provider accounts list (independent of usage)
+ *
+ * Returns the list of accounts for a provider regardless of whether
+ * usage fetching succeeds. This allows disconnecting accounts even
+ * when usage scraping fails.
+ */
+export const aiProviderAccountsAtom = Atom.family((provider: AiProviderType) =>
+  aiProviderRuntime
+    .atom(
+      Effect.gen(function* () {
+        const client = yield* AiProviderClient
+        return yield* client.getProviderAccounts(provider)
+      })
+    )
+    .pipe(
+      Atom.withReactivity([
+        `ai-provider:${provider}:auth`,
+        `ai-provider:${provider}:usage`,
+        'ai-provider:usage',
+      ]),
+      Atom.setIdleTTL(Duration.minutes(5))
+    )
+)
+
 export const aiProviderSignOutAtom = aiProviderRuntime.fn(
   (params: { accountId: AiAccountId }) =>
     Effect.gen(function* () {

@@ -227,41 +227,103 @@ function parseOpenAiUsagePage(html: string): UsageBarSnapshot[] {
 function parseClaudeUsagePage(html: string): UsageBarSnapshot[] {
   const bars: UsageBarSnapshot[] = []
 
-  // Strategy 1: Tailwind-based card layout (flex containers)
-  const cardRegex =
-    /<div class="flex flex-col[^"]*">([\s\S]*?)<\/div>\s*<div class="flex[^"]*">\s*<span[^>]*>([\d.]+)\s*%[\s\S]*?(used|remaining)<\/span>/gi
+  // Strategy 1: Look for percentage with "left" or "remaining" keywords
+  // Claude uses patterns like: <p class="...text-right">98% left</p>
+  const percentRegex =
+    /<p[^>]*class="[^"]*text-text-400[^"]*text-right[^"]*"[^>]*>([\d.]+)%\s*(left|remaining|used)<\/p>/gi
 
-  for (const match of html.matchAll(cardRegex)) {
-    const headerBlock = match[1] ?? ''
-    const percentValue = clampPercent(Number.parseFloat(match[2] ?? '0'))
-    const mode =
-      match[3]?.toLowerCase() === 'remaining'
-        ? ('remaining' as const)
-        : ('used' as const)
+  const percentMatches = Array.from(html.matchAll(percentRegex))
+  console.log(`[ClaudeParser] Found ${percentMatches.length} percentage matches`)
 
-    const titleMatch =
-      headerBlock.match(
-        /<p[^>]*class="[^"]*(?:font-medium|text-text-100|text-base|text-lg)[^"]*"[^>]*>([^<]+)<\/p>/i
-      ) ??
-      headerBlock.match(
-        /<span[^>]*class="[^"]*(?:font-medium|text-text-100|text-base|text-lg)[^"]*"[^>]*>([^<]+)<\/span>/i
+  for (const match of percentMatches) {
+    const percentValue = clampPercent(Number.parseFloat(match[1] ?? '0'))
+    const keyword = (match[2] ?? '').toLowerCase()
+
+    console.log(`[ClaudeParser] Processing match: ${percentValue}% ${keyword}`)
+
+    // "left" and "remaining" both mean remaining
+    const mode: 'used' | 'remaining' =
+      keyword === 'used' ? 'used' : 'remaining'
+
+    // Look backwards to find the title and detail
+    // Increased context window to handle deeply nested structures
+    const index = match.index ?? 0
+    const contextStart = Math.max(0, index - 1500)
+    const context = html.slice(contextStart, index)
+
+    // Find title with more flexible patterns
+    // Try multiple patterns to handle different class orderings
+    const titlePatterns = [
+      // Exact pattern: font-base text-text-100
+      /<p[^>]*class="[^"]*font-base[^"]*text-text-100[^"]*"[^>]*>([^<]+)<\/p>/i,
+      // Reversed: text-text-100 font-base
+      /<p[^>]*class="[^"]*text-text-100[^"]*font-base[^"]*"[^>]*>([^<]+)<\/p>/i,
+      // Just text-text-100 (more permissive)
+      /<p[^>]*class="[^"]*text-text-100[^"]*"[^>]*>([^<]+)<\/p>/i,
+      // Any <p> with text-text-100 or font-medium
+      /<p[^>]*class="[^"]*(?:text-text-100|font-medium)[^"]*"[^>]*>([^<]+)<\/p>/i,
+    ]
+
+    let title = ''
+    let titleMatch: RegExpMatchArray | null = null
+    for (const pattern of titlePatterns) {
+      titleMatch = context.match(pattern)
+      if (titleMatch?.[1]) {
+        title = sanitizeText(titleMatch[1])
+        console.log(`[ClaudeParser] Found title with pattern ${pattern}: "${title}"`)
+        if (title) break
+      }
+    }
+
+    if (!title) {
+      console.log(`[ClaudeParser] WARNING: No title found for ${percentValue}% ${keyword}`)
+      console.log(`[ClaudeParser] Context (last 500 chars): ${context.slice(-500)}`)
+
+      // Try to find ANY <p> tag with text in the context
+      const anyPTag = context.match(/<p[^>]*>([^<]+)<\/p>/gi)
+      if (anyPTag) {
+        console.log(`[ClaudeParser] All <p> tags found in context:`, anyPTag.slice(-5))
+      }
+      continue
+    }
+
+    // Find detail/subtitle: <p class="...text-text-400 whitespace-nowrap">Resets in...</p>
+    // Look for the one that has "Resets" or comes right after the title
+    const detailMatches = Array.from(
+      context.matchAll(
+        /<p[^>]*class="[^"]*(?:font-base[^"]*)?text-text-400[^"]*whitespace-nowrap[^"]*"[^>]*>([^<]+)<\/p>/gi
       )
-
-    const subtitleMatch = headerBlock.match(
-      /<p[^>]*class="[^"]*(?:text-text-500|text-sm|text-xs|text-text-300)[^"]*"[^>]*>([^<]+)<\/p>/i
     )
 
-    const title = sanitizeText(titleMatch?.[1] ?? '')
-    if (!title) continue
+    console.log(`[ClaudeParser] Found ${detailMatches.length} detail matches for "${title}"`)
 
-    const subtitle = subtitleMatch ? sanitizeText(subtitleMatch[1]) : undefined
+    // Prefer the one with "Resets" or the last one found
+    let detail: string | undefined
+    for (const detailMatch of detailMatches) {
+      const detailText = sanitizeText(detailMatch[1] ?? '')
+      if (detailText.toLowerCase().includes('resets') || detailText.toLowerCase().includes('reset')) {
+        detail = detailText
+        console.log(`[ClaudeParser] Found reset detail: "${detail}"`)
+        break
+      }
+    }
+
+    // If no "Resets" found, use the last match
+    if (!detail && detailMatches.length > 0) {
+      const lastMatch = detailMatches[detailMatches.length - 1]
+      if (lastMatch?.[1]) {
+        detail = sanitizeText(lastMatch[1])
+        console.log(`[ClaudeParser] Using last detail match: "${detail}"`)
+      }
+    }
+
+    console.log(`[ClaudeParser] Adding bar: ${title} - ${percentValue}% ${mode} - ${detail ?? 'no detail'}`)
 
     bars.push({
       title,
-      subtitle,
       percent: percentValue,
       mode,
-      detail: subtitle,
+      detail,
     })
   }
 
@@ -269,30 +331,29 @@ function parseClaudeUsagePage(html: string): UsageBarSnapshot[] {
     return dedupeBars(bars)
   }
 
-  // Strategy 2: Generic percentage search with nearby titles
-  const percentRegex =
-    /<span[^>]*>([\d.]+)\s*%\s*(?:<\/span>|<\/span>\s*<span[^>]*>)?[\s\S]{0,120}?(used|remaining)/gi
-  for (const match of html.matchAll(percentRegex)) {
+  // Strategy 2: Fallback - look for any percentage patterns with flexible keywords
+  const fallbackRegex = /([\d.]+)%\s*(?:left|remaining|used)/gi
+
+  for (const match of html.matchAll(fallbackRegex)) {
     const percentValue = clampPercent(Number.parseFloat(match[1] ?? '0'))
-    const mode =
-      match[2]?.toLowerCase() === 'remaining'
-        ? ('remaining' as const)
-        : ('used' as const)
-    const index = match.index ?? 0
-    const contextStart = Math.max(0, index - 600)
-    const contextEnd = Math.min(html.length, index + 400)
-    const context = html.slice(contextStart, contextEnd)
+    const context = match[0].toLowerCase()
+
+    const mode: 'used' | 'remaining' =
+      context.includes('used') ? 'used' : 'remaining'
+
+    // Try to find a title nearby (look backwards in HTML)
+    const matchIndex = match.index ?? 0
+    const before = html.substring(Math.max(0, matchIndex - 1500), matchIndex)
 
     const titlePatterns = [
-      /<p[^>]*class="[^"]*(?:font-medium|text-text-100|text-lg|text-base)[^"]*"[^>]*>([^<]+)<\/p>/i,
-      /<span[^>]*class="[^"]*(?:font-medium|text-text-100|text-lg|text-base)[^"]*"[^>]*>([^<]+)<\/span>/i,
-      /<h\d[^>]*>([^<]+)<\/h\d>/i,
-      /aria-label="([^"]+Usage[^"]*)"/i,
+      /<p[^>]*class="[^"]*(?:font-medium|text-text-100|font-large-bold)[^"]*"[^>]*>([^<]+)<\/p>/i,
+      /<h\d[^>]*class="[^"]*font-large-bold[^"]*"[^>]*>([^<]+)<\/h\d>/i,
+      /<span[^>]*class="[^"]*(?:font-medium|text-text-100)[^"]*"[^>]*>([^<]+)<\/span>/i,
     ]
 
     let title = ''
     for (const pattern of titlePatterns) {
-      const titleMatch = context.match(pattern)
+      const titleMatch = before.match(pattern)
       if (titleMatch?.[1]) {
         title = sanitizeText(titleMatch[1])
         if (title) break
@@ -301,17 +362,11 @@ function parseClaudeUsagePage(html: string): UsageBarSnapshot[] {
 
     if (!title) continue
 
-    const subtitleMatch = context.match(
-      /<p[^>]*class="[^"]*(?:text-text-500|text-sm|text-xs|text-text-300)[^"]*"[^>]*>([^<]+)<\/p>/i
-    )
-    const detailMatch = context.match(/Resets[^<]*(?:<\/span>|<\/p>)/i)
-
-    const subtitle = subtitleMatch ? sanitizeText(subtitleMatch[1]) : undefined
-    const detail = detailMatch ? sanitizeText(detailMatch[0]) : subtitle
+    const detailMatch = before.match(/Resets[^<]*(?:<\/span>|<\/p>)/i)
+    const detail = detailMatch ? sanitizeText(detailMatch[0]) : undefined
 
     bars.push({
       title,
-      subtitle,
       percent: percentValue,
       mode,
       detail,

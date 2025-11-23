@@ -236,6 +236,17 @@ export const AiProviderIpcContracts = {
       NetworkError
     ),
   },
+
+  'aiProvider:getProviderAccounts': {
+    channel: 'aiProvider:getProviderAccounts' as const,
+    input: S.Struct({ provider: AiProviderType }),
+    output: S.Array(S.Struct({
+      id: AiAccountId,
+      provider: AiProviderType,
+      label: S.String,
+    })),
+    errors: S.Union(NetworkError),
+  },
 } as const
 
 /**

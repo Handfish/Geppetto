@@ -41,4 +41,10 @@ export const setupAiProviderIpcHandlers = Effect.gen(function* () {
     AiProviderIpcContracts['aiProvider:getProviderUsage'],
     (input) => aiProviderService.getUsageByProvider(input.provider)
   )
+
+  // Get AI accounts for a provider (independent of usage)
+  registerIpcHandler(
+    AiProviderIpcContracts['aiProvider:getProviderAccounts'],
+    (input) => aiProviderService.getProviderAccounts(input.provider)
+  )
 })

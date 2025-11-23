@@ -176,6 +176,9 @@ export class AiProviderClient extends Effect.Service<AiProviderClient>()(
       type AiProviderUsageInput = S.Schema.Type<
         (typeof IpcContracts)['aiProvider:getProviderUsage']['input']
       >
+      type AiProviderAccountsInput = S.Schema.Type<
+        (typeof IpcContracts)['aiProvider:getProviderAccounts']['input']
+      >
 
       return {
         signIn: (provider: AiSignInInput['provider']) =>
@@ -188,6 +191,8 @@ export class AiProviderClient extends Effect.Service<AiProviderClient>()(
           ipc.invoke('aiProvider:getUsage', { accountId }),
         getProviderUsage: (provider: AiProviderUsageInput['provider']) =>
           ipc.invoke('aiProvider:getProviderUsage', { provider }),
+        getProviderAccounts: (provider: AiProviderAccountsInput['provider']) =>
+          ipc.invoke('aiProvider:getProviderAccounts', { provider }),
       } as const
     }),
   }
